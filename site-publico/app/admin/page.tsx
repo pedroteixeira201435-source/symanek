@@ -9,6 +9,7 @@ import {
   listApplications,
   approveApplication,
   markPaid,
+  proofDownloadUrl,
   type AdminApplication,
 } from "@/lib/api";
 import { college, formatN, programmeBySlug } from "@/lib/content";
@@ -33,6 +34,29 @@ const STAGE_STYLE: Record<AdminApplication["stage"], string> = {
 
 function programmeName(slug: string) {
   return programmeBySlug(slug)?.name ?? slug;
+}
+
+// Generated in-app; the office sends it manually (no email integration).
+function approvalEmail(a: AdminApplication): string {
+  return [
+    `Subject: Your application to ${college.name} has been approved (${a.reference})`,
+    ``,
+    `Dear ${a.fullName},`,
+    ``,
+    `Congratulations! Your application for the ${programmeName(a.programmeSlug)} at ${college.name} has been approved.`,
+    ``,
+    `Your student reference is: ${a.reference}`,
+    a.amountDue ? `Amount due: ${formatN(a.amountDue)}` : ``,
+    ``,
+    `Please pay your fees by EFT using this exact reference, then upload your proof of payment on our student portal (/portal) so we can confirm your payment and enrol you. The banking details are in your attached approval letter.`,
+    ``,
+    `Kind regards,`,
+    `Admissions Office`,
+    college.name,
+    college.contact.emails[0],
+  ]
+    .filter((l) => l !== null && l !== undefined)
+    .join("\n");
 }
 
 export default function AdminPage() {
@@ -130,8 +154,22 @@ function Console({ email, onSignedOut }: { email: string; onSignedOut: () => voi
     }
   }
 
+  function onCopyEmail(a: AdminApplication) {
+    const text = approvalEmail(a);
+    navigator.clipboard?.writeText(text).catch(() => {});
+    window.alert("Approval email copied — paste it into your email client to send.");
+  }
+
+  async function onViewProof(a: AdminApplication) {
+    if (!a.proofPath) return;
+    const url = await proofDownloadUrl(a.proofPath);
+    if (url) window.open(url, "_blank", "noopener");
+    else setError("Could not open the proof file.");
+  }
+
   async function onMarkPaid(a: AdminApplication) {
-    const input = window.prompt(`Record EFT payment for ${a.fullName}.\nAmount due: ${formatN(a.amountDue)}\n\nAmount received (N$):`, String(a.amountDue));
+    const preset = a.proofAmount ?? a.amountDue;
+    const input = window.prompt(`Record EFT payment for ${a.fullName}.\nAmount due: ${formatN(a.amountDue)}${a.proofAmount ? `\nApplicant uploaded proof of: ${formatN(a.proofAmount)}` : ""}\n\nAmount received (N$):`, String(preset));
     if (input == null) return;
     const amount = Number(input.replace(/[^\d.]/g, ""));
     if (!amount || amount <= 0) {
@@ -211,7 +249,16 @@ function Console({ email, onSignedOut }: { email: string; onSignedOut: () => voi
                         {a.amountDue > 0 && a.stage !== "enrolled" && (
                           <div className="mb-1 font-mono text-sm text-petrol-700">{formatN(a.amountDue)}</div>
                         )}
+                        {a.proofPath && (
+                          <div className="mb-1 text-xs text-accent">📎 Proof uploaded{a.proofAmount ? ` · ${formatN(a.proofAmount)}` : ""}</div>
+                        )}
                         <div className="flex justify-end gap-2">
+                          {a.reference && (
+                            <button onClick={() => onCopyEmail(a)} className="btn btn-ghost btn-sm">Copy email</button>
+                          )}
+                          {a.proofPath && (
+                            <button onClick={() => onViewProof(a)} className="btn btn-ghost btn-sm">View proof</button>
+                          )}
                           {(a.stage === "submitted" || a.stage === "under_review") && (
                             <button disabled={busy === a.id} onClick={() => onApprove(a)} className="btn btn-primary btn-sm disabled:opacity-60">
                               {busy === a.id ? "…" : "Approve"}

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Field, Input, SubmitButton } from "@/components/form";
-import { lookupApplication, type ApplicationStatus } from "@/lib/api";
+import { lookupApplication, submitPaymentProof, type ApplicationStatus } from "@/lib/api";
 import { college, formatN } from "@/lib/content";
 import { CheckIcon, ArrowRight } from "@/components/icons";
 
@@ -118,6 +118,8 @@ function ResultCard({ status }: { status: Extract<ApplicationStatus, { found: tr
             </div>
           ) : null}
 
+          {!enrolled && status.reference ? <ProofBlock reference={status.reference} submitted={status.proofSubmitted} /> : null}
+
           <div className="flex flex-wrap gap-3">
             <a href={status.approvalLetterUrl ?? "#"} className="btn btn-primary btn-md">
               Download approval letter <ArrowRight />
@@ -153,5 +155,56 @@ function Row({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
       <dt className="text-petrol-500">{k}</dt>
       <dd className={`font-medium text-petrol-900 ${mono ? "font-mono" : ""}`}>{v}</dd>
     </div>
+  );
+}
+
+// Manual EFT — the applicant uploads their proof of payment; the office confirms.
+function ProofBlock({ reference, submitted }: { reference: string; submitted?: boolean }) {
+  const [done, setDone] = useState(!!submitted);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (done) {
+    return (
+      <div className="flex items-center gap-2 rounded-2xl bg-accent-soft px-4 py-3 text-sm text-accent">
+        <CheckIcon className="h-4 w-4" /> Proof of payment received — our office will confirm and enrol you within 1–2 business days.
+      </div>
+    );
+  }
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const file = fd.get("file") as File | null;
+    const amount = Number(fd.get("amount"));
+    if (!file || !file.size) return setError("Choose your proof-of-payment file.");
+    if (!amount || amount <= 0) return setError("Enter the amount you paid.");
+    setPending(true);
+    setError(null);
+    const res = await submitPaymentProof(reference, file, amount);
+    setPending(false);
+    if (res.ok) setDone(true);
+    else setError(res.error ?? "Upload failed");
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-3 rounded-2xl border border-petrol-100 p-5">
+      <div>
+        <h4 className="font-semibold">Already paid? Upload your proof of payment</h4>
+        <p className="mt-1 text-xs text-petrol-500">
+          After your EFT, upload the bank confirmation (image or PDF) and the amount paid, using your reference{" "}
+          <span className="font-mono">{reference}</span>. Our office will confirm it and enrol you.
+        </p>
+      </div>
+      <Field label="Amount paid (N$)">
+        <Input name="amount" type="number" min="1" step="0.01" required placeholder="e.g. 19670" />
+      </Field>
+      <label className="block">
+        <span className="mb-1.5 block text-sm font-medium text-petrol-700">Proof of payment</span>
+        <input name="file" type="file" accept="image/*,application/pdf" required className="block w-full text-sm text-petrol-700 file:mr-3 file:rounded-lg file:border-0 file:bg-petrol-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-petrol-700" />
+      </label>
+      {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      <SubmitButton pending={pending}>Submit proof of payment</SubmitButton>
+    </form>
   );
 }
