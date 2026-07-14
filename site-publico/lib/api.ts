@@ -248,6 +248,16 @@ export async function approveApplication(id: string): Promise<string> {
   return "SYM-2026-0099";
 }
 
+export async function rejectApplication(id: string): Promise<{ ok: boolean; error?: string }> {
+  if (useSupabase()) {
+    const { error } = await supabase!.from("applications").update({ stage: "rejected" }).eq("id", id);
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }
+  await wait(300);
+  return { ok: true };
+}
+
 export async function markPaid(id: string, amount: number): Promise<string> {
   if (useSupabase()) {
     const { data, error } = await supabase!.rpc("mark_paid", { p_app: id, p_amount: amount });

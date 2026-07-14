@@ -13,6 +13,19 @@ Only the frontend hosting remains.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | `sb_publishable_yGOmYZdogELoA4souInSsA_jx24j8dg` | browser |
 | `SUPABASE_URL` | `https://zbtxhyxwtemproeomtzu.supabase.co` | **server only** |
 | `SUPABASE_SERVICE_ROLE_KEY` | *(the service_role key — see .env.production.local)* | **server only** |
+| `NEXT_PUBLIC_SITE_URL` | your deployed URL, e.g. `https://symanek.vercel.app` | browser |
+
+> `NEXT_PUBLIC_SITE_URL` is used to build the absolute portal link in the generated
+> approval email. Set it after the first deploy gives you the domain, then redeploy.
+
+## Two Vercel projects, one GitHub repo
+
+Import `pedroteixeira201435-source/symanek` twice:
+
+1. **Public website** — Root Directory = **`site-publico`** (Next.js, auto-detected). Env vars above.
+2. **Management system (Suite)** — Root Directory = **`.`** (repo root). Uses the root `vercel.json`
+   (Vite → `dist`). **No env vars needed** — the Suite runs in demo/mock mode by default
+   (`VITE_API_MODE` unset ⇒ mock). Login is the on-screen role picker.
 
 ## Deploy (CLI, no git repo needed)
 

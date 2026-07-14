@@ -8,10 +8,13 @@ import {
   currentAdminEmail,
   listApplications,
   approveApplication,
+  rejectApplication,
   markPaid,
   proofDownloadUrl,
   type AdminApplication,
 } from "@/lib/api";
+
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "";
 import { college, formatN, programmeBySlug } from "@/lib/content";
 
 const STAGE_LABEL: Record<AdminApplication["stage"], string> = {
@@ -48,7 +51,7 @@ function approvalEmail(a: AdminApplication): string {
     `Your student reference is: ${a.reference}`,
     a.amountDue ? `Amount due: ${formatN(a.amountDue)}` : ``,
     ``,
-    `Please pay your fees by EFT using this exact reference, then upload your proof of payment on our student portal (/portal) so we can confirm your payment and enrol you. The banking details are in your attached approval letter.`,
+    `Please pay your fees by EFT using this exact reference, then upload your proof of payment on our student portal (${SITE_URL || "https://<your-domain>"}/portal) so we can confirm your payment and enrol you. The banking details are in your attached approval letter.`,
     ``,
     `Kind regards,`,
     `Admissions Office`,
@@ -160,6 +163,21 @@ function Console({ email, onSignedOut }: { email: string; onSignedOut: () => voi
     window.alert("Approval email copied — paste it into your email client to send.");
   }
 
+  async function onReject(a: AdminApplication) {
+    if (!window.confirm(`Reject the application from ${a.fullName}? This cannot be undone from here.`)) return;
+    setBusy(a.id);
+    setError(null);
+    try {
+      const res = await rejectApplication(a.id);
+      if (!res.ok) setError(res.error ?? "Reject failed");
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Reject failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function onViewProof(a: AdminApplication) {
     if (!a.proofPath) return;
     const url = await proofDownloadUrl(a.proofPath);
@@ -260,9 +278,14 @@ function Console({ email, onSignedOut }: { email: string; onSignedOut: () => voi
                             <button onClick={() => onViewProof(a)} className="btn btn-ghost btn-sm">View proof</button>
                           )}
                           {(a.stage === "submitted" || a.stage === "under_review") && (
-                            <button disabled={busy === a.id} onClick={() => onApprove(a)} className="btn btn-primary btn-sm disabled:opacity-60">
-                              {busy === a.id ? "…" : "Approve"}
-                            </button>
+                            <>
+                              <button disabled={busy === a.id} onClick={() => onApprove(a)} className="btn btn-primary btn-sm disabled:opacity-60">
+                                {busy === a.id ? "…" : "Approve"}
+                              </button>
+                              <button disabled={busy === a.id} onClick={() => onReject(a)} className="btn btn-ghost btn-sm text-red-700 disabled:opacity-60">
+                                Reject
+                              </button>
+                            </>
                           )}
                           {(a.stage === "approved" || a.stage === "paid") && (
                             <button disabled={busy === a.id} onClick={() => onMarkPaid(a)} className="btn btn-accent btn-sm disabled:opacity-60">
