@@ -4,91 +4,141 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**Symanek Suite** — a front-end-only, clickable prototype of a **university/tertiary management SaaS**
-for private Namibian higher-education institutions (demo tenant: Symanek Specialized College, Semester 2
-2026). Built for client presentation: **no backend, no persistence** — all data is mock and every "save"
-is local React state + a toast. Do not add a real backend/auth/network calls unless explicitly asked;
-that is the deliberate Phase-2 boundary (see **BACKEND.md** for the migration plan and `src/api.js`/
-`src/config.js` for the seam already staged for it).
+A **monorepo for Symanek Specialized College** (private Namibian higher-ed) with three parts that
+**share one Supabase backend**:
 
-It began as a K-12 school prototype and was converted to higher education: student portal, admissions,
-NQF programmes/curriculum, exam board, degree audit, graduation/clearance, accommodation, LMS, and
-Namibian tax/compliance. Nomenclature is now university (Students/Programmes/Semesters/Credits/GPA), not
-school (avoid reintroducing "learner/grade/guardian/term" in UI copy).
+1. **Symanek Suite** (repo root, `src/`) — a **Vite + React** internal management SaaS: student
+   portal, admissions, NQF programmes, exam board, degree audit, graduation/clearance, finance,
+   HR/payroll, accommodation, LMS, library, canteen POS, and Namibian tax/compliance.
+2. **Public site** (`site-publico/`) — a **Next.js 14** marketing site rebuilding symanekacademy.com
+   plus the applicant flow `apply → approve → EFT proof → mark paid → enrolled`.
+3. **Backend** (`supabase/`) — Postgres schema, RLS, auth, storage, and **server-authoritative RPCs**,
+   shared by both apps. **Live on the cloud project `zbtxhyxwtemproeomtzu`** (region eu-north-1).
+
+> **Phase 2 is DONE, not a future boundary.** Older comments (and `BACKEND.md`) describe Phase 2 as
+> "not yet built" — that is stale. Auth, RLS, and the write RPCs exist and are deployed. When you see
+> "mock only / no backend" in a comment, verify against the current code before trusting it.
 
 ## Commands
 
 ```bash
-npm run dev      # Vite dev server (usually: npm run dev -- --port 5199)
-npm run build    # production build — the verification step (no tests/lint configured)
-node --check src/<file>.js   # syntax-check a standalone module (e.g. api.js)
+# Suite (repo root) — Vite 5, Node 18 (do NOT bump Vite; v6+ needs Node 20)
+npm run dev                      # dev server (mock mode by default)
+npm run build                    # production build = the verification step (no tests/lint configured)
+node --check src/api.js          # syntax-check an ESM module (copy to /tmp/x.mjs if node treats .js as CJS)
+
+# Public site
+cd site-publico && npm run dev   # dev (uses .env.local → local Supabase)
+cd site-publico && npm run build # prod build (uses .env.production.local → CLOUD); 70+ static pages
+cd site-publico && npm run start # serve the production build
+
+# Supabase (invoked via npx; the CLI is not on PATH)
+npx supabase status
+npx supabase db push             # apply migrations to the LINKED cloud project (needs SUPABASE_ACCESS_TOKEN)
 ```
 
-- **Node 18** on this machine — Vite is pinned to v5 (Vite 6+ needs Node 20). Don't bump Vite.
-- Path contains a space (`…/symanek college`) — quote it in shell commands.
-- Visual check: `firefox --headless --profile /tmp/ffprof-sym --screenshot out.png --window-size 1440,900 "http://localhost:5199/#student"` (temp profile required; the user's Firefox is running). Headless Firefox can be flaky here (GLX/framebuffer errors); if screenshots fail, fall back to `npm run build` + static/grep verification.
-- Deep-link any role via URL hash: `#admin`, `#bursar`, `#hr`, `#teacher`, `#seller`, `#librarian`, `#student`, `#registrar`, `#applicant` (and `#admin/accounting` to open a module).
+- The repo path contains a space (`…/symanek college`) — **quote it** in every shell command.
+- Deep-link any Suite role via URL hash in mock mode: `#admin`, `#bursar`, `#hr`, `#teacher`,
+  `#seller`, `#librarian`, `#student`, `#registrar`, `#applicant` (and `#admin/accounting`).
 
-## Architecture
+## The data-access seam (the core architecture)
 
-No router, no state library, no CSS framework. Layers:
+Both apps talk to the backend **only through a seam** that switches between a local mock and Supabase,
+so UI components never change when flipping backends:
 
-1. **`src/App.jsx`** — role picker (login). `ROLES` (in `data.js`) drives everything; the grid renders
-   automatically from it, so a new role only needs a `ROLES` entry + a stroke SVG in `ROLE_ICONS`.
-   **Invariant:** the `seller` role never mounts Shell — it routes straight to fullscreen `POS.jsx`.
-2. **`src/Shell.jsx`** — sidebar + topbar chrome, and the access-control registries at the top:
-   - `MODULES`: id → {label, icon, group, comp, subtitle, count}
-   - `ROLE_NAV`: role id → ordered module ids (**this IS the access control**)
-   - `SEARCH_INDEX`: global search rows, filtered to the role's nav
-   - **Multi-tenant filter:** `INSTITUTION_HIDE[getInstType()]` (from `data.js`, backed by
-     `localStorage['sym.insttype']`) removes modules per institution type — e.g. "Distance / open
-     learning" hides `accommodation` + `canteen`. Set from the **Compliance** module (writes localStorage
-     + `window.location.reload()`).
-   - `isStudent` (student **or** applicant) hides the staff-oriented Messages/Notifications dropdowns.
-   - `goTo(mod, payload)` is the only navigation path; it refuses modules outside the role's nav. The
-     `payload` lands in the module as a `focus` prop (searching a student opens their Student 360°).
-3. **`src/modules/*.jsx`** — one self-contained file per module (own tabs + local state). Cross-tab
-   state that must stay consistent is lifted to the module's parent (e.g. `StudentPortal` lifts
-   `registered` so Registration charges flow into My Finance; Finance lifts payments/expenses; Library
-   lifts books/loans/fines).
+- **Suite**: `src/config.js` (`API_MODE`), `src/api.js` (every read/write), `src/supabaseClient.js`.
+  Flip with `VITE_API_MODE=mock|http`. Each `api.js` function has a `useHttp()` branch (Supabase) and
+  a `mock()` branch (returns `data.js`), **mapping DB rows back to the exact shapes the modules expect**.
+- **Public site**: `lib/api.ts` (`API_MODE`), `lib/supabase.ts` (browser client), `lib/supabase-admin.ts`
+  (server-only service-role client — never import into a Client Component). Flip with
+  `NEXT_PUBLIC_API_MODE=mock|supabase`.
 
-**`src/data.js`** — the single mock database (all datasets + `fmtN()` + `gradeOf()` + PAYE/tax helpers).
-**Datasets join by student NAME**, not id (e.g. `INVOICES.learner === "Gabriel !Naruseb"`) — deliberately
-cross-linked so Student 360° and the Student Portal can assemble one student's file. This name-join is
-the main tech debt the backend must replace with `student_id` FKs (noted in `api.js`/BACKEND.md). The
-demo student for `#student` is **Gabriel !Naruseb** (CVT-4), chosen for maximal dataset coverage.
+When migrating a Suite module from mock to backend: convert its top-level **synchronous `data.js`
+reads into an async `useEffect` load via `api.js`**, keep the same prop/`ctx` shape so child components
+are untouched, and add loading/error state. `StudentPortal.jsx`, `Academics.jsx` (ExamBoard tab) and
+`Graduation.jsx` are the migrated reference examples; the other ~16 modules still read `data.js`.
 
-**`src/ui.jsx`** — shared primitives: `StatCard`, `Tabs`, `Panel`, `Badge`, `Progress`, `Avatar`,
-`Modal`, `Donut`, `Toast` + `useToast()`. Reuse these; every flow follows table/row → `Modal` → state
-update → toast.
+## Backend (`supabase/`)
 
-**`src/api.js` + `src/config.js`** — the Phase-2 seam (async data layer + `API_MODE='mock'|'http'`
-switch). **Not yet wired** — modules still import `data.js` directly; migrating them to `api.js` is the
-first Phase-2 step. Keep new data access going through `api.js` where practical.
+- **Migrations** `supabase/migrations/*.sql` — schema, RLS, and RPCs. Applied in timestamp order.
+- **Auth model**: `profiles.role` (coarse: `admin|staff|student|applicant`, drives `is_admin()` and RLS)
+  **plus** `profiles.suite_role` (fine: the 9 Suite workspaces). `src/auth.js` resolves the signed-in
+  user's Suite role from their profile; `App.jsx` shows `EmailLogin` in http mode, the role-picker in
+  mock. Students are linked to their record via `students.user_id` (enables RLS owner-reads).
+- **Server-authoritative rules are RPCs, not client logic** (SECURITY DEFINER, resolve the actor via
+  `auth.uid()`): `register_course` (holds → prereq → credit-cap → capacity/waitlist → charge),
+  `pay_invoice` (records payment, reduces balance, **auto-releases financial holds** when cleared),
+  `graduation_clearance`/`issue_certificate` (finance+library+academic, gated), `publish_exam_results`
+  (`final = 0.4*CA + 0.6*exam`, locks marks — RLS blocks editing a published result), `graduation_board`.
+  Public/anon RPCs: `submit_application`, `submit_contact`, `get_application_status`, and admin
+  `approve_application`/`mark_paid`.
+- **Storage buckets** (private): `approval-letters` (generated PDFs), `application-docs`,
+  `payment-proofs` (applicant EFT proofs). Uploads/signing happen server-side via the service role.
+- **Seeds**: `seed_programmes.sql` (auto-generated from `site-publico/lib/content.ts` — slugs MUST match
+  or `submit_application` rejects), `seed.sql`, `seed_suite.sql` (demo slice around student
+  **Gabriel !Naruseb**, CVT-4), `seed_auth.sh` (9 demo accounts, password `symanek123`). `db push` does
+  NOT run seed files — they are bundled into a migration for cloud, or applied directly.
 
-## Design system (`src/styles.css`)
+### Public-site server routes (Next, `nodejs` runtime, service-role)
 
-- Institutional steel-blue theme (corporate; the client rejected the earlier warm/amber look).
-- Keyed on CSS variables in `:root`. **Naming quirk:** `--petrol-*` is the steel-blue scale and
-  `--amber` is now the **blue accent** (real amber survives only in `.banner`). Don't "fix" the names.
-- Emojis are icons rendered monochrome via `.gs`; exception: **POS food emojis** keep color. The login
-  uses inline **stroke SVG icons** (`ROLE_ICONS`) — no emojis there by client request.
-- Fonts: Inter everywhere + JetBrains Mono for numbers (class `mono`). Charts are dependency-free (CSS
-  bars, conic-gradient `Donut`, hand-rolled SVG).
-- Timetables use `<TimetableGrid data={...}>` (exported from `Scheduling.jsx`); grid data is
-  `{P1..P6: [Mon..Fri slots]}` where a slot is `{s, r}` or null; `PERIODS` includes `BRK`.
+- `app/api/letter/route.ts` — lazily generates the approval-letter PDF (`lib/letter.ts`, `pdf-lib`) into
+  `approval-letters` and redirects to a signed URL. Portal links here via `/api/letter?ref=…`.
+- `app/api/payment-proof/route.ts` — applicant uploads EFT proof (file + amount); validates the ref is
+  approved, stores it, flags the application. Admin reviews it in `/admin` and records the payment.
+
+## Suite front-end structure
+
+No router, no state library, no CSS framework. `src/App.jsx` (login/role) → `src/Shell.jsx` (chrome +
+**access-control registries**: `MODULES`, `ROLE_NAV` *is* the access control, `SEARCH_INDEX`,
+`INSTITUTION_HIDE` multi-tenant filter) → `src/modules/*.jsx` (one self-contained file per module).
+**Invariants:** the `seller` role never mounts Shell — it routes straight to fullscreen `POS.jsx`;
+`goTo(mod, payload)` is the only navigation path and refuses modules outside the role's nav.
+
+`src/data.js` is the single mock database. Its datasets historically **join by student NAME** (e.g.
+`INVOICES.learner === "Gabriel !Naruseb"`) — the backend replaces this with `student_id` FKs (the seed
+carries real ids). `src/ui.jsx` holds shared primitives (`StatCard`, `Tabs`, `Panel`, `Modal`,
+`Donut`, `useToast`, …) — reuse these; every flow is table/row → `Modal` → state → toast.
+
+## Design systems
+
+- **Suite** (`src/styles.css`): institutional steel-blue theme keyed on CSS vars. **Naming quirk:**
+  `--petrol-*` is the steel-blue scale and `--amber` is the **blue accent** (real amber only in
+  `.banner`) — don't "fix" the names. Emojis render monochrome via `.gs` (exception: POS food emojis
+  keep color); login uses stroke SVG icons, no emojis. Charts are dependency-free.
+- **Public site** (`app/globals.css`, Tailwind): `petrol`/`accent` palette, `.card`, `.btn-*` (built
+  with skills **emil-design-eng** + **apple-design**). `lib/content.ts` is the single source of truth —
+  content is REAL (see `CONTENT-SOURCE.md`); **do not invent programmes, fees or contacts**.
 
 ## Domain conventions
 
-- Currency N$ via `fmtN()`; UI copy is English. Compliance anchors: **NamRA** (tax), **NCHE**/NQA/NTA
-  (higher-ed accreditation/returns), **Labour Act 2007** (PAYE/SSC in payroll).
-- Academic calendar is **semesters** (S1/S2), marks are **continuous assessment** (CA), final =
-  `0.4*CA + 0.6*exam`; do not reintroduce school "terms".
-- "Today" in the demo is fixed around 3 Jul 2026 (topbar, Library fines, POS shift) — keep new dates in
-  that window.
-- Rules demonstrated in-UI that are **server-authoritative in Phase 2**: registration engine
-  (holds → prereq → capacity/waitlist → credit cap → charge), financial holds, graduation clearance
-  (derived from invoices/loans/results), NamRA tax. Keep these coherent across modules.
-- When adding mock rows, reuse existing student names or add to **all** relevant datasets, and keep
-  headline numbers reconciled (`SCHOOL.learners`, `ENROLMENT_BY_GRADE`, `FEE_STRUCTURE`,
-  `PROGRAMMES.enrolled` currently agree — 476 total).
+- Currency **N$** (`fmtN`/`formatN`); UI copy is English. Compliance: **NamRA** (tax), **NCHE/NQA/NTA**
+  (accreditation), **Labour Act 2007** (PAYE/SSC/VET in payroll).
+- Academic calendar is **semesters** (S1/S2); marks are **continuous assessment** (CA);
+  `final = 0.4*CA + 0.6*exam`. University nomenclature (Student/Programme/Semester/Credit/GPA) — avoid
+  reintroducing school terms (learner/grade/guardian/term).
+- "Today" in the demo is fixed around **3 Jul 2026**; keep new dates in that window. Headline numbers are
+  reconciled (476 total enrolment across `SCHOOL`/`PROGRAMMES`/`FEE_STRUCTURE`) — keep them consistent.
+- **Payments are manual EFT + uploaded proof — no gateway.** Emails are **generated in-app but sent
+  manually** (admin "Copy email"). Real bank details in `content.ts` `college.bank` are still PLACEHOLDER.
+
+## Env & deploy
+
+- `.env.local` (both apps) → **local** Supabase (`supabase start`, `http://127.0.0.1:54321`).
+  `site-publico/.env.production.local` → **cloud**; `next build` (production) prefers it over `.env.local`,
+  so `dev` stays local and `build`/`start` hit cloud. `.env*.local` are gitignored — never commit secrets.
+- Public-site prod needs the server-only vars `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (for the two
+  API routes). See `site-publico/VERCEL-DEPLOY.md`. Deploy is via GitHub → Vercel (root dir `site-publico`).
+
+## Local-dev gotchas (verified, will bite you)
+
+- `supabase db reset` **hangs** waiting for the `analytics` (logflare) container to become healthy.
+  Workaround: apply migrations/seeds directly —
+  `docker exec -i supabase_db_symanek_college psql -U postgres -d postgres -f - < file.sql`.
+- After DDL, PostgREST caches the schema — run `notify pgrst, 'reload schema';` (cloud: via Management API
+  `POST /v1/projects/{ref}/database/query`) before the new function/column is callable over REST.
+- `@supabase/supabase-js` **throws on Node 18** (no native WebSocket) — it works in the browser/Vite;
+  test the backend from Node via `curl`/PostgREST, not a Node script.
+- In Next route handlers on Node 18 the **`File` global is undefined** — duck-type on `Blob`.
+- `supabase db push` connects to cloud via the access token (no DB password needed); a `pg-delta`
+  certificate warning is **non-fatal** — the migration still applies. Changing an RPC's return type needs
+  `drop function` first (a bare `create or replace` errors).
