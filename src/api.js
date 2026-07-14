@@ -142,7 +142,18 @@ export async function getResultsForStudent(studentName) {
     rows.filter((r) => r.learner === studentName).map((r) => ({ code, ...r }))))
 }
 
-export const listGraduands = () => mock(db.GRADUANDS)
+export async function listGraduands() {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('graduation_board')
+    if (error) throw error
+    return (data ?? []).map((g) => ({
+      studentId: g.student_id, student: g.student, prog: g.programme, gpa: Number(g.gpa),
+      finance: g.finance, library: g.library, academic: g.academic,
+      cleared: g.cleared, hasCertificate: g.has_certificate,
+    }))
+  }
+  return mock(db.GRADUANDS)
+}
 export const listExamSchedule = () => mock(db.EXAM_SCHEDULE)
 
 // Exam board — per-course result aggregate + publication status. http computes
