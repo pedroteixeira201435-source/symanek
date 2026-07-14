@@ -35,6 +35,10 @@ cd site-publico && npm run start # serve the production build
 # Supabase (invoked via npx; the CLI is not on PATH)
 npx supabase status
 npx supabase db push             # apply migrations to the LINKED cloud project (needs SUPABASE_ACCESS_TOKEN)
+
+# Vercel (both apps already deployed; redeploy from the app's dir)
+cd site-publico && npx --yes vercel --prod --token "$VERCEL_TOKEN"   # public site
+npx --yes vercel --prod --token "$VERCEL_TOKEN"                      # Suite (from repo root)
 ```
 
 - The repo path contains a space (`…/symanek college`) — **quote it** in every shell command.
@@ -55,8 +59,10 @@ so UI components never change when flipping backends:
 
 When migrating a Suite module from mock to backend: convert its top-level **synchronous `data.js`
 reads into an async `useEffect` load via `api.js`**, keep the same prop/`ctx` shape so child components
-are untouched, and add loading/error state. `StudentPortal.jsx`, `Academics.jsx` (ExamBoard tab) and
-`Graduation.jsx` are the migrated reference examples; the other ~16 modules still read `data.js`.
+are untouched, and add loading/error state. Migrated reference examples: `StudentPortal.jsx`,
+`Academics.jsx` (ExamBoard tab), `Graduation.jsx`, `Finance.jsx` (PendingProofs panel); the other ~16
+modules still read `data.js`. **For UAT the Suite runs in mock** (demo) — the http path is wired + verified
+but student data is RLS-gated, so it only fully works once signed in (`B3`).
 
 ## Backend (`supabase/`)
 
@@ -70,6 +76,9 @@ are untouched, and add loading/error state. `StudentPortal.jsx`, `Academics.jsx`
   `pay_invoice` (records payment, reduces balance, **auto-releases financial holds** when cleared),
   `graduation_clearance`/`issue_certificate` (finance+library+academic, gated), `publish_exam_results`
   (`final = 0.4*CA + 0.6*exam`, locks marks — RLS blocks editing a published result), `graduation_board`.
+  **Manual-EFT proof model** (no gateway): `submit_invoice_proof` (student, sits PENDING, balance
+  unchanged) → `confirm_invoice_payment` (staff → reduces balance + releases holds); `pending_payment_proofs`
+  lists them for the bursar (Suite `Finance → Payments`).
   Public/anon RPCs: `submit_application`, `submit_contact`, `get_application_status`, and admin
   `approve_application`/`mark_paid`.
 - **Storage buckets** (private): `approval-letters` (generated PDFs), `application-docs`,
@@ -126,8 +135,15 @@ carries real ids). `src/ui.jsx` holds shared primitives (`StatCard`, `Tabs`, `Pa
 - `.env.local` (both apps) → **local** Supabase (`supabase start`, `http://127.0.0.1:54321`).
   `site-publico/.env.production.local` → **cloud**; `next build` (production) prefers it over `.env.local`,
   so `dev` stays local and `build`/`start` hit cloud. `.env*.local` are gitignored — never commit secrets.
-- Public-site prod needs the server-only vars `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (for the two
-  API routes). See `site-publico/VERCEL-DEPLOY.md`. Deploy is via GitHub → Vercel (root dir `site-publico`).
+- **Live on Vercel (two projects, one GitHub repo `pedroteixeira201435-source/symanek`):**
+  - **`https://symanek-site.vercel.app`** — public site, Root Directory `site-publico`. Needs 6 env vars
+    incl. server-only `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (for `/api/letter`, `/api/payment-proof`)
+    and `NEXT_PUBLIC_SITE_URL` (absolute portal link in the generated email). See `site-publico/VERCEL-DEPLOY.md`.
+  - **`https://symanek-suite.vercel.app`** — Suite, Root Directory `.` (repo root `vercel.json`, Vite→`dist`),
+    **no env vars** ⇒ mock/demo mode, role-picker login.
+- **Vercel CLI works here** (`npx --yes vercel …`, v56): `vercel link --yes --project NAME`,
+  `printf '%s' VALUE | vercel env add NAME production`, `vercel --prod --yes` (all need `--token` or `VERCEL_TOKEN`).
+  Both apps build clean on Vercel's Node 20. UAT test scripts + staff runbook are in `UAT-GUIA.md`.
 
 ## Local-dev gotchas (verified, will bite you)
 
