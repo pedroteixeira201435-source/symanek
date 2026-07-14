@@ -20,3 +20,5 @@ supabase/.env
 *.log
 .DS_Store
 /tmp/
+.vercel
+.env*
