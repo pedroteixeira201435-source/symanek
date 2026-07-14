@@ -1,0 +1,121 @@
+SYMANEK SUITE
+Client Report — What Your Platform Does
+Prepared for: Symanek Specialized College
+Date: 13 July 2026
+Stage: Working demonstration (clickable prototype). Live data and payments
+       come in the next build phase.
+
+============================================================
+IN ONE PARAGRAPH
+============================================================
+
+Symanek Suite is a single, integrated platform to run your entire institution —
+from the day a student applies, through registration, classes, fees, exams and
+graduation, plus the staff, finance, library, residence and canteen operations
+behind it. It is built specifically for Namibian higher education: fees, tax and
+payroll follow NamRA and the Labour Act, and accreditation follows NCHE/NQA/NTA.
+Everyone sees only what their role allows. This report explains, in plain terms,
+what the platform now does for each group of people who use it.
+
+============================================================
+FOR YOUR LEADERSHIP (Principal / Director / Board)
+============================================================
+
+- One dashboard for the health of the whole institution: enrolment, fee
+  collection, cash position and a prioritised list of what needs attention.
+- Full academic lifecycle in one place: Admissions → Registration → Exams →
+  Graduation, with clear rules at every step.
+- Namibian compliance built in: NamRA tax, NCHE statutory returns, and
+  programme accreditation status (NQA/NTA) tracked in the system.
+- Configurable for your institution type — the platform can be tailored (for a
+  vocational college, a full university, or distance learning), turning modules
+  on or off to match how you operate.
+- Complete audit trail of sensitive actions (who did what, and when).
+
+============================================================
+FOR YOUR STUDENTS (Student Portal)
+============================================================
+
+Students log in to a portal of their own and can:
+- Register for courses themselves, with the system automatically checking
+  eligibility — outstanding fees, prerequisites, class capacity (offering a
+  waitlist when full) and the credit limit — and showing the cost as they go.
+- See their marks, grade point average and academic transcript.
+- Track their progress towards their qualification, requirement by requirement.
+- View their timetable, their invoices and sponsorships, and pay online.
+- See any holds on their record and request official documents (transcript,
+  proof of registration).
+
+New applicants also get their own online application: they submit and then
+track the status of their application without needing to visit the office.
+
+============================================================
+FOR YOUR LECTURERS
+============================================================
+
+- A personal workspace: their own timetable, class lists and gradebook.
+- Courseware (online learning): publish materials, set assignments, and receive
+  and grade student submissions.
+- Continuous-assessment and exam marks feed into a controlled results process —
+  once the exam board publishes, marks lock and flow into student transcripts.
+- Daily attendance, leave requests and payslips, all self-service.
+
+============================================================
+FOR YOUR ADMINISTRATION AND FINANCE
+============================================================
+
+- Admissions: a visual application pipeline for the 2027 intake, document
+  checklists and capacity per programme.
+- Registrar (academic records): course registration, examinations logistics
+  (timetable, venues, seating, invigilation) and graduation.
+- Graduation & clearance: a student can only receive a certificate once finance,
+  library and academic requirements are all cleared — checked automatically.
+- Finance: fees, invoices, payments, debtor follow-up, payment plans, budgets
+  and sponsorships (NSFAF/NTA/corporate), with claims tracked to the funder.
+- Accounting: double-entry ledger with a Namibian tax engine (company tax, VAT
+  on mixed supplies — tuition exempt, canteen taxable — and provisional tax).
+- HR & Payroll: staff records, contracts, recruitment, and payroll calculated to
+  the current PAYE tables, Social Security and the VET levy.
+
+============================================================
+FOR YOUR CAMPUS OPERATIONS
+============================================================
+
+- Accommodation / residences: room occupancy, allocation and waitlist.
+- Library: catalogue, lending, reservations and fines.
+- Canteen: a point-of-sale till (prepaid student accounts), stock control and
+  end-of-shift reconciliation, with sales reporting for management.
+
+============================================================
+HOW ACCESS AND SAFETY WORK
+============================================================
+
+- Each person signs in to a workspace limited to their role — a student never
+  sees institutional finance; a lecturer sees only their own classes; the
+  canteen till is a locked, full-screen point of sale with no admin access.
+- Every important action is recorded for accountability.
+
+============================================================
+WHAT THIS IS TODAY — AND WHAT COMES NEXT
+============================================================
+
+Today you have a complete, clickable demonstration: you can walk through every
+screen and every workflow exactly as staff and students would. This lets you
+confirm the design and the workflows before we invest in the engine behind it.
+
+Because this stage is a demonstration, the information shown is sample data and
+actions are not yet saved permanently. The next phase adds the "engine":
+- secure sign-in with real accounts,
+- permanent storage of every record,
+- online payments through a Namibian payment provider,
+- document uploads (certificates, transcripts, course material),
+- and email/SMS notifications.
+
+The foundations for that engine have already been prepared, so the next phase is
+about connecting a live system to screens you have already approved — not
+rebuilding.
+
+We would value your feedback on the workflows in this demonstration; it directly
+shapes the build that follows.
+
+— Symanek Suite

@@ -1,0 +1,22 @@
+# deps / builds
+node_modules/
+dist/
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# env & secrets — NEVER commit (keep .env.example)
+.env
+.env.*
+!.env.example
+
+# supabase local artifacts
+supabase/.temp/
+supabase/.branches/
+supabase/.env
+
+# logs / os
+*.log
+.DS_Store
+/tmp/

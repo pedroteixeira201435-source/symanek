@@ -1,0 +1,118 @@
+SYMANEK SUITE — RELATÓRIO DE DESENVOLVIMENTO
+Sessão de trabalho: 13 de Julho de 2026
+Estado: protótipo de demonstração (visual, sem backend) — coerente e pronto para arrancar a Fase 2
+
+============================================================
+SUMÁRIO EXECUTIVO
+============================================================
+
+A sessão fechou o ciclo de vida universitário do produto e, tão importante
+quanto, elevou a COERÊNCIA do protótipo ao nível de demonstração credível:
+os números passam a bater entre ecrãs, os módulos deixam de ser tabelas
+isoladas e começam a integrar-se, e a identidade escolar remanescente foi
+convertida para ensino superior. Foram ainda preparadas as fundações técnicas
+para o backend (Fase 2), de modo que a próxima etapa seja ligação, não
+reescrita. O produto continua sem backend — todo dado é simulado.
+
+============================================================
+1. NOVOS PERFIS E MÓDULOS
+============================================================
+
+- PORTAL DO ESTUDANTE (novo perfil "Student"): auto-inscrição em cadeiras com
+  motor de regras (retenções → pré-requisitos → vagas/lista de espera →
+  limite de créditos → cobrança), notas e histórico com GPA, degree audit,
+  horário, faturas com pagamento e bolsas, e retenções/pedidos de documentos.
+- PERFIL REGISTRAR (Secretaria Académica): registos, exames, graduação e
+  conformidade.
+- CANDIDATURA ONLINE (novo perfil "Applicant"): submissão e acompanhamento da
+  candidatura pelo próprio candidato.
+- COURSEWARE / LMS: um único módulo partilhado por docente e estudante —
+  materiais, trabalhos e submissões.
+- GESTÃO DE EXAMES: calendário, salas, lugares e escala de vigilância.
+- GRADUAÇÃO E CLEARANCE: apuramento de elegibilidade e emissão de certificado.
+- ALOJAMENTO / RESIDÊNCIAS: ocupação, alocação de quartos e lista de espera.
+- CONFORMIDADE (NCHE): retornos estatutários ao regulador de ensino superior,
+  estado de acreditação dos programas e PERFIL DE INSTITUIÇÃO configurável.
+
+============================================================
+2. MULTI-INSTITUIÇÃO (SaaS CONFIGURÁVEL) — AGORA FUNCIONAL
+============================================================
+
+O seletor de tipo de instituição (college vocacional / universidade plena /
+ensino a distância) deixou de ser decorativo: passa a ESCONDER módulos de
+verdade em toda a suite e a persistir a escolha — ex.: "Ensino a distância"
+remove Alojamento e Cantina de todos os perfis. É a base do produto vendido a
+várias instituições namibianas.
+
+============================================================
+3. CONVERSÃO DA IDENTIDADE: DE ESCOLA PARA UNIVERSIDADE
+============================================================
+
+Removido o "DNA escolar" que contradizia o posicionamento:
+- Alunos/faturas por PROGRAMA E ANO (ex.: "CVT-4 Y2"), não por série "10B".
+- Trimestres → SEMESTRES; notas por AVALIAÇÃO CONTÍNUA (CA), não "Term".
+- Coortes de turma → coortes de programa; escalas de "portão/recreio/autocarro"
+  → funções de IES (vigilância, supervisão de laboratório, advising).
+- Incidentes disciplinares escolares → conduta/integridade académica.
+- Terminologia "Learner/Guardian/Whole-school" → "Student/Next of kin/
+  Whole-institution" em toda a interface.
+
+============================================================
+4. COERÊNCIA E INTEGRAÇÃO (RIGOR PARA A DEMO)
+============================================================
+
+Correções que impedem um cliente atento de derrubar a demonstração:
+- NÚMEROS RECONCILIAM: matrícula total (476), matrícula por programa e
+  estrutura de propinas passam a bater com o número de inscritos por programa.
+- GRADUAÇÃO DERIVADA DE DADOS REAIS: a elegibilidade (finanças, biblioteca,
+  académico) é calculada a partir de faturas/empréstimos/resultados — fim das
+  contradições (um estudante com fatura em aberto é bloqueado para graduar mas
+  continua a poder matricular-se, como é realista).
+- MATRÍCULA LIGADA À TESOURARIA: a cobrança gerada na inscrição flui para o
+  "My Finance" do estudante e soma ao saldo.
+- PROFUNDIDADE: currículo completo do programa CVT-4 acrescentado, tornando a
+  inscrição, o horário e o degree audit consistentes com dados reais.
+
+============================================================
+5. FUNDAÇÕES PARA O BACKEND (FASE 2)
+============================================================
+
+Preparado o terreno para deixar de ser "só visual", sem ainda construir
+backend:
+- src/config.js — interruptor único mock/http.
+- src/api.js — camada de acesso assíncrona (leituras, escritas e autenticação)
+  que hoje devolve os dados simulados e, na Fase 2, passa a chamar a API sem
+  alterar os ecrãs.
+- BACKEND.md — o contrato: esquema de base de dados (tabelas, chaves,
+  multi-inquilino), regras que têm de ser validadas no servidor, mapa de
+  operações → endpoints, requisitos não-funcionais (pagamentos, uploads,
+  notificações) e ordem de execução recomendada sobre Supabase.
+- CLAUDE.md atualizado ao estado atual do produto.
+
+============================================================
+NOTA DE TRANSPARÊNCIA
+============================================================
+
+- Verificação: todos os "builds" de produção passaram e a coerência de dados
+  foi conferida; porém a verificação VISUAL (capturas de ecrã) não foi possível
+  nesta sessão por limitação do ambiente headless. Recomenda-se um passe visual
+  manual antes da apresentação.
+- A camada api.js/config.js está pronta mas ainda NÃO ligada aos módulos (eles
+  leem os dados diretamente) — ligá-los é o primeiro passo da Fase 2, agora
+  mecânico graças à interface já definida.
+- Persiste a dívida técnica principal para o backend: as ligações entre dados
+  são feitas por NOME do estudante e devem passar a identificador (chave
+  estrangeira).
+
+============================================================
+PRÓXIMOS PASSOS RECOMENDADOS (FASE 2)
+============================================================
+
+1. Criar o esquema no Supabase + carga inicial a partir dos dados simulados
+   (com identificadores e multi-inquilino).
+2. Ligar api.js ao Supabase (leituras primeiro) e migrar módulo a módulo.
+3. Autenticação + controlo de acesso no servidor (RLS).
+4. Escritas + motor de matrícula no servidor.
+5. Armazenamento de ficheiros + pagamentos + notificações.
+
+— Equipa de Desenvolvimento, Symanek Suite

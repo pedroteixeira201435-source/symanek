@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #ffffff;
+  --foreground: #0f2740;
+
+  /* Strong custom easing curves (emil-design-eng skill) */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Apple-design typography: tracking is size-specific. Tighten large display text. */
+@layer base {
+  h1, h2, h3 {
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+  h1 { line-height: 1.05; }
+  h2 { line-height: 1.1; }
+  p { text-wrap: pretty; }
+}
+
+@layer components {
+  /* Buttons must feel responsive: instant scale on press (emil-design-eng) */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full font-medium
+           transition-[transform,background-color,box-shadow] duration-150 ease-out-strong
+           active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2
+           focus-visible:ring-petrol-400 focus-visible:ring-offset-2 select-none;
+  }
+  .btn-primary {
+    @apply btn bg-petrol-700 text-white hover:bg-petrol-800 shadow-card hover:shadow-card-hover;
+  }
+  .btn-accent {
+    @apply btn bg-accent text-white hover:brightness-95 shadow-card hover:shadow-card-hover;
+  }
+  .btn-ghost {
+    @apply btn bg-white/70 text-petrol-800 ring-1 ring-petrol-200 hover:bg-white hover:ring-petrol-300;
+  }
+  .btn-lg { @apply h-12 px-7 text-[15px]; }
+  .btn-md { @apply h-11 px-5 text-sm; }
+  .btn-sm { @apply h-9 px-4 text-sm; }
+
+  .container-max { @apply mx-auto w-full max-w-content px-5 sm:px-8; }
+
+  .eyebrow {
+    @apply inline-flex items-center gap-2 rounded-full bg-accent-soft px-3 py-1
+           text-xs font-semibold uppercase tracking-wider text-accent;
+  }
+
+  .card {
+    @apply rounded-2xl bg-white ring-1 ring-petrol-100 shadow-card
+           transition-[transform,box-shadow] duration-200 ease-out-strong;
+  }
+}
+
+/* Reveal-on-scroll base state; the client component adds .is-visible */
+.reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 600ms var(--ease-out), transform 600ms var(--ease-out);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Reduced motion: keep comprehension cues, drop movement (apple-design §14) */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .reveal {
+    transition: opacity 300ms ease;
+    transform: none;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+/* Hover effects only on real pointers (emil-design-eng: avoid touch false-positives) */
+@media (hover: hover) and (pointer: fine) {
+  .card-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 2px 4px rgba(15, 39, 64, 0.06), 0 16px 40px -12px rgba(15, 39, 64, 0.22);
+  }
+}

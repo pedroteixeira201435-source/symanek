@@ -1,0 +1,113 @@
+SYMANEK SUITE — RELATÓRIO DE DESENVOLVIMENTO AOS ACIONISTAS
+Sessão de trabalho: 12 de Julho de 2026
+Estado: protótipo de demonstração (visual, sem backend) — pronto para apresentação a clientes
+
+============================================================
+SUMÁRIO EXECUTIVO
+============================================================
+
+Numa única sessão, o Symanek Suite evoluiu de um protótipo de gestão
+escolar com 6 módulos para uma plataforma de gestão universitária com
+12 módulos, cobrindo todo o ciclo de vida académico e financeiro de
+uma instituição de ensino superior privada na Namíbia. O produto está
+agora ao nível funcional (em demonstração) dos líderes internacionais
+de mercado, com conformidade fiscal namibiana incorporada — um
+diferencial que os concorrentes globais não oferecem localmente.
+
+============================================================
+1. NOVA CAMADA UNIVERSITÁRIA (CICLO DE VIDA ACADÉMICO)
+============================================================
+
+- ADMISSÕES: pipeline visual de candidaturas (Candidatou → Em análise
+  → Oferta → Matriculado), checklist de documentos, gestão de vagas do
+  intake 2027 e captação de candidatos walk-in.
+- PROGRAMAS E CURRÍCULO: programas com nível NQF e estado de
+  acreditação (NQA/NTA), catálogo de disciplinas com créditos e
+  pré-requisitos, inscrições semestrais com capacidade e lista de espera.
+- EXAM BOARD E TRANSCRIPTS: aprovação de resultados por júri; ao
+  publicar, as notas ficam bloqueadas e alimentam o histórico académico
+  (transcript) com GPA cumulativo no ficheiro 360° de cada estudante.
+- BOLSAS E PATROCÍNIOS: gestão de NSFAF, NTA e bolsas corporativas,
+  com faturação ao patrocinador e acompanhamento de claims até ao
+  pagamento.
+
+============================================================
+2. CONTABILIDADE E CONFORMIDADE FISCAL NAMIBIANA
+============================================================
+
+Novo módulo de CONTABILIDADE, espelhando os modelos Excel da empresa
+(Genesis HR e Namibia Financial Model), agora integrados no produto:
+
+- Diário de partidas dobradas → balancete → demonstração de resultados,
+  tudo calculado ao vivo a partir dos lançamentos.
+- MOTOR FISCAL NamRA: apuramento do imposto (taxa de 30% para college
+  privado), add-backs não dedutíveis (s17), wear & tear (s17B),
+  provisional tax P1/P2 e calendário completo de obrigações.
+- IVA: tratamento correto de suprimentos mistos — propinas ISENTAS de
+  IVA (VAT Act 10 de 2000) e cantina tributável a 15%.
+- FOLHA DE PAGAMENTO: PAYE calculado ao vivo com as tabelas 2024/25
+  (primeiros N$ 100.000/ano isentos), SSC 0,9% e VET levy 1% — os
+  valores antigos do modelo Excel foram atualizados à lei em vigor.
+
+============================================================
+3. PARIDADE COM CONCORRENTES INTERNACIONAIS (CLASSE WORKDAY)
+============================================================
+
+Funcionalidades de SIS de elite incorporadas em demonstração:
+
+- HOLDS (retenções): dívidas ou pendências bloqueiam automaticamente
+  matrícula e transcript, com libertação automática após pagamento.
+- MATRÍCULA COM MOTOR DE REGRAS: o registo numa disciplina valida ao
+  vivo elegibilidade, holds, pré-requisitos, vagas, limite de créditos
+  e conflito de horário; calcula o encargo automaticamente e oferece
+  lista de espera quando a turma está cheia.
+- DEGREE AUDIT: progresso visual do estudante para o grau, requisito a
+  requisito, avaliado pelo ano de catálogo do seu cohort.
+- WORKTAGS: cada lançamento contabilístico carrega metadados
+  multidimensionais (centro de custo, fundo, projeto).
+- MOTOR DE PROCESSOS: processos de negócio configuráveis (matrícula,
+  holds, publicação de resultados, licenças, claims) com passos,
+  aprovações e notificações visíveis.
+
+============================================================
+4. REFORÇO DAS ÁREAS OPERACIONAIS
+============================================================
+
+- PORTAL DO LECTURER: disciplinas próprias com nota final (40% contínua
+  + 60% exame) e submissão ao júri; registo diário de presenças que
+  alimenta a assiduidade do estudante.
+- RECURSOS HUMANOS: pipeline de recrutamento, contratos com alerta de
+  expiração, qualificações/compliance NQA-NTA e carga horária docente.
+- FINANÇAS: orçamento vs. realizado por categoria, aging de devedores
+  (30/60/90 dias) e planos de pagamento.
+- BIBLIOTECA: reservas com fila de espera, avisos de atraso em massa e
+  encomenda de exemplares.
+- PONTO DE VENDA (CANTINA): pagamento por conta de estudante pré-paga
+  (encarregado carrega, aluno consome), recibo imprimível, descontos e
+  reconciliação de turno com três meios de pagamento.
+
+============================================================
+5. EXPERIÊNCIA DE UTILIZAÇÃO E IMAGEM
+============================================================
+
+- Ecrã de entrada redesenhado com identidade institucional: iconografia
+  profissional (sem emojis), painel fotográfico com métricas da escola
+  e selos de conformidade.
+- Navegação de nível empresarial: indicadores do dashboard com
+  drill-down, pesquisa global, menu de utilizador, ligações diretas por
+  URL a qualquer módulo e ações de criação em todos os ecrãs.
+- Controlo de acessos por perfil (RBAC) demonstrável e configurável em
+  ecrã, com registo de auditoria de todas as operações sensíveis.
+- Terminologia alinhada ao ensino superior ("Lecturer").
+
+============================================================
+PRÓXIMOS PASSOS RECOMENDADOS
+============================================================
+
+1. Demonstração ao cliente com o roteiro: Admissões → Matrícula com
+   regras → Degree Audit → Contabilidade NamRA → POS.
+2. Decisão de Fase 2: backend real (persistência, autenticação,
+   pagamentos) sobre a arquitetura já validada visualmente.
+3. Avaliar o role adicional "Registrar/Admissions Officer".
+
+— Equipa de Desenvolvimento, Symanek Suite
