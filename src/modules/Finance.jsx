@@ -1,7 +1,8 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { StatCard, Tabs, Panel, Badge, Progress, Modal, Toast, useToast } from '../ui.jsx'
 import { FIN_STATS, EXPENSE_BREAKDOWN, COLLECTION_BY_BAND, INVOICES, FEE_STRUCTURE, PAYMENTS, DEBTORS, SPONSORS, BUDGET, fmtN } from '../data.js'
 import { Donut } from '../ui.jsx'
+import * as api from '../api.js'
 
 const INV_TONE = { Paid: 'green', Partial: 'orange', Overdue: 'red', Pending: 'gray' }
 const PAY_TONE = { 'Bank transfer': 'teal', Cash: 'green', Card: 'blue' }
@@ -31,7 +32,7 @@ export default function Finance() {
       {tab === 'Collections' && <Collections />}
       {tab === 'Budget' && <Budget />}
       {tab === 'Invoices' && <Invoices onPayment={addPayment} />}
-      {tab === 'Payments' && <Payments payments={payments} />}
+      {tab === 'Payments' && <><PendingProofs /><Payments payments={payments} /></>}
       {tab === 'Sponsorships' && <Sponsorships />}
       {tab === 'Fee Structure' && <FeeStructure />}
       {tab === 'Expenses' && <Expenses expenses={expenses} onAdd={addExpense} />}
@@ -282,6 +283,53 @@ function Budget() {
       </Panel>
       <Toast msg={toast} />
     </>
+  )
+}
+
+// Manual EFT — students upload proof of payment; the bursar confirms it here,
+// which reduces the balance and releases financial holds (server-authoritative).
+function PendingProofs() {
+  const [rows, setRows] = useState([])
+  const [busy, setBusy] = useState(null)
+  const [toast, showToast] = useToast()
+  const load = () => api.listPendingProofs().then(setRows).catch(() => {})
+  useEffect(() => { load() }, [])
+
+  const view = async (r) => {
+    const url = await api.proofUrl(r.proofPath)
+    if (url && url !== '#') window.open(url, '_blank', 'noopener')
+  }
+  const confirm = async (r) => {
+    setBusy(r.paymentId)
+    try {
+      const res = await api.confirmInvoicePayment(r.paymentId)
+      if (res && res.ok === false) { showToast(res.message || 'Could not confirm'); return }
+      showToast((res && res.message) || 'Payment confirmed')
+      await load()
+    } catch (e) { showToast(e?.message || 'Confirm failed') } finally { setBusy(null) }
+  }
+
+  if (rows.length === 0) return null
+  return (
+    <Panel title="Pending proof of payment" subtitle={`${rows.length} awaiting confirmation — EFT paid manually by students`} flush>
+      <table className="data">
+        <thead>
+          <tr><th>Student</th><th className="num">Amount claimed</th><th className="num">Invoice balance</th><th>Proof</th><th style={{ width: 130 }}>Action</th></tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.paymentId}>
+              <td style={{ fontWeight: 600 }}>{r.student}</td>
+              <td className="num mono">{fmtN(r.amount)}</td>
+              <td className="num mono">{fmtN(r.balance)}</td>
+              <td>{r.proofPath ? <button className="btn ghost sm" onClick={() => view(r)}>View</button> : '—'}</td>
+              <td><button className="btn primary sm" disabled={busy === r.paymentId} onClick={() => confirm(r)}>{busy === r.paymentId ? '…' : 'Confirm paid'}</button></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <Toast msg={toast} />
+    </Panel>
   )
 }
 

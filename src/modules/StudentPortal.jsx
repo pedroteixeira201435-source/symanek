@@ -288,22 +288,25 @@ function MyFinance({ myInvoices, balance, mySponsors, registered = [], reload })
   const pending = regCharges.reduce((s, c) => s + c.credits * CREDIT_RATE, 0)
   const totalDue = balance + pending
 
-  // Payment is server-authoritative in http mode (RPC pay_invoice): it records the
-  // payment, reduces the balance and auto-releases financial holds when cleared.
-  const pay = async (e) => {
+  // Manual EFT — no gateway. The student uploads their proof of payment (file +
+  // amount); it sits pending until the bursar confirms it (confirm_invoice_payment),
+  // which then reduces the balance and releases any financial hold.
+  const submitProof = async (e) => {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
     const amount = Number(fd.get('amt'))
-    const method = String(fd.get('method'))
+    const file = fd.get('proof')
+    if (!file || !file.size) { showToast('Attach your proof of payment'); return }
+    if (!amount || amount <= 0) { showToast('Enter the amount you paid'); return }
     setPaying(true)
     try {
-      const res = await api.payInvoice({ invoiceId: payFor?.id, amount, method })
-      if (res && res.ok === false) { showToast(res.message || 'Payment was declined'); return }
-      showToast((res && res.message) || 'Payment initiated — a receipt will be emailed once it clears (demo)')
+      const res = await api.submitInvoiceProof({ invoiceId: payFor?.id, amount, file })
+      if (res && res.ok === false) { showToast(res.message || 'Could not submit proof'); return }
+      showToast((res && res.message) || 'Proof of payment submitted — the bursar will confirm it shortly.')
       setPayFor(null)
       reload && reload()
     } catch (err) {
-      showToast(err?.message || 'Payment failed')
+      showToast(err?.message || 'Upload failed')
     } finally {
       setPaying(false)
     }
@@ -333,7 +336,7 @@ function MyFinance({ myInvoices, balance, mySponsors, registered = [], reload })
       <Panel
         title="My invoices"
         subtitle="Tuition is VAT-exempt (VAT Act 10 of 2000)"
-        actions={myInvoices.some((i) => i.balance > 0) && <button className="btn primary sm" onClick={() => setPayFor(myInvoices.find((i) => i.balance > 0))}>Pay now</button>}
+        actions={myInvoices.some((i) => i.balance > 0 && !i.proofPending) && <button className="btn primary sm" onClick={() => setPayFor(myInvoices.find((i) => i.balance > 0 && !i.proofPending))}>Upload proof of payment</button>}
         flush
       >
         <table className="data">
@@ -350,7 +353,7 @@ function MyFinance({ myInvoices, balance, mySponsors, registered = [], reload })
                   {i.balance > 0 ? fmtN(i.balance) : 'Paid'}
                 </td>
                 <td><Badge tone={i.status === 'Paid' ? 'green' : i.status === 'Overdue' ? 'red' : 'amber'}>{i.status}</Badge></td>
-                <td>{i.balance > 0 && <button className="btn ghost sm" onClick={() => setPayFor(i)}>Pay</button>}</td>
+                <td>{i.proofPending ? <Badge tone="amber">Proof pending</Badge> : i.balance > 0 ? <button className="btn ghost sm" onClick={() => setPayFor(i)}>Upload proof</button> : null}</td>
               </tr>
             ))}
           </tbody>
@@ -379,14 +382,15 @@ function MyFinance({ myInvoices, balance, mySponsors, registered = [], reload })
       )}
 
       {payFor != null && (
-        <Modal title="Pay tuition" onClose={() => setPayFor(null)} width={420}>
-          <form onSubmit={pay}>
-            <div className="field"><label>Amount (N$)</label><input name="amt" type="number" defaultValue={payFor.balance} min="1" max={payFor.balance} required /></div>
-            <div className="field">
-              <label>Method</label>
-              <select name="method"><option>Card</option><option>Bank transfer / EFT</option><option>e-Wallet</option></select>
-            </div>
-            <button className="btn primary" type="submit" disabled={paying}>{paying ? 'Processing…' : `Pay ${fmtN(payFor.balance)}`}</button>
+        <Modal title="Upload proof of payment" onClose={() => setPayFor(null)} width={440}>
+          <form onSubmit={submitProof}>
+            <p className="di-sub" style={{ marginBottom: 10 }}>
+              Pay by EFT using the reference on your invoice, then upload the bank confirmation and the
+              amount paid. The bursar will confirm it and update your balance.
+            </p>
+            <div className="field"><label>Amount paid (N$)</label><input name="amt" type="number" defaultValue={payFor.balance} min="1" max={payFor.balance} required /></div>
+            <div className="field"><label>Proof of payment</label><input name="proof" type="file" accept="image/*,application/pdf" required /></div>
+            <button className="btn primary" type="submit" disabled={paying}>{paying ? 'Uploading…' : 'Submit proof of payment'}</button>
           </form>
         </Modal>
       )}

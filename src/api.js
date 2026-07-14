@@ -85,11 +85,12 @@ export async function getInvoicesForStudent(studentName) {
     const sid = await studentIdByName(studentName)
     if (!sid) return []
     const { data, error } = await supabase.from('invoices')
-      .select('id,amount,balance,due,status').eq('student_id', sid)
+      .select('id,amount,balance,due,status,invoice_payments(status)').eq('student_id', sid)
     if (error) throw error
     return (data ?? []).map((i) => ({
       id: i.id, learner: studentName, amount: Number(i.amount), balance: Number(i.balance),
       due: i.due, status: i.status[0].toUpperCase() + i.status.slice(1),
+      proofPending: (i.invoice_payments ?? []).some((p) => p.status === 'pending'),
     }))
   }
   return mock(db.INVOICES.filter((i) => i.learner === studentName))
@@ -207,6 +208,52 @@ export async function payInvoice({ invoiceId, amount, method, studentId }) {
     return data // { ok, paid, balance, total_open, holds_released, message }
   }
   return mock({ ok: true, ref: 'PAY-' + Date.now(), studentId, invoiceId, amount, method })
+}
+
+// Manual EFT (no gateway): student uploads a proof file + amount against an
+// invoice; it sits PENDING until a staff member confirms it.
+export async function submitInvoiceProof({ invoiceId, amount, file }) {
+  if (useHttp()) {
+    const { data: { user } } = await supabase.auth.getUser()
+    const ext = ((file?.name || '').split('.').pop() || 'bin').toLowerCase().replace(/[^a-z0-9]/g, '')
+    const path = `${user?.id || 'anon'}/${invoiceId}/${Date.now()}.${ext}`
+    const up = await supabase.storage.from('payment-proofs').upload(path, file, { contentType: file?.type || 'application/octet-stream', upsert: true })
+    if (up.error) throw up.error
+    const { data, error } = await supabase.rpc('submit_invoice_proof', { p_invoice_id: invoiceId, p_amount: amount, p_path: path })
+    if (error) throw error
+    return data
+  }
+  await delay(); return { ok: true, code: 'submitted', message: 'Proof of payment submitted — the bursar will confirm it shortly (demo).' }
+}
+
+// Staff (bursar): review + confirm pending proofs.
+export async function listPendingProofs() {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('pending_payment_proofs')
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      paymentId: r.payment_id, student: r.student, invoiceId: r.invoice_id,
+      amount: Number(r.amount), proofPath: r.proof_path, balance: Number(r.invoice_balance), submittedAt: r.submitted_at,
+    }))
+  }
+  return mock([])
+}
+
+export async function confirmInvoicePayment(paymentId) {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('confirm_invoice_payment', { p_payment_id: paymentId })
+    if (error) throw error
+    return data
+  }
+  return mock({ ok: true, message: 'Payment confirmed (demo)' })
+}
+
+export async function proofUrl(path) {
+  if (useHttp()) {
+    const { data } = await supabase.storage.from('payment-proofs').createSignedUrl(path, 120)
+    return data?.signedUrl ?? null
+  }
+  return '#'
 }
 export const submitAssignment = ({ studentId, assignmentId }) => mock({ ok: true, studentId, assignmentId, at: Date.now() })
 export const submitApplication = (payload) => mock({ ok: true, id: 'APP-' + Date.now(), ...payload, stage: 'Applied' })
