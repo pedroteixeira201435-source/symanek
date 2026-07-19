@@ -15,9 +15,83 @@ export default function Admissions({ go }) {
   const [apps, setApps] = useState(APPLICANTS)
   return (
     <>
-      <Tabs tabs={['Pipeline', '2027 Intake']} active={tab} onChange={setTab} />
+      <Tabs tabs={['Pipeline', 'Manual Admission', '2027 Intake']} active={tab} onChange={setTab} />
       {tab === 'Pipeline' && <Pipeline apps={apps} setApps={setApps} go={go} />}
+      {tab === 'Manual Admission' && <ManualAdmission apps={apps} setApps={setApps} go={go} />}
       {tab === '2027 Intake' && <Intake />}
+    </>
+  )
+}
+
+// Manual Admission — flat list of all applicants with their status and a single
+// Action button to process (advance) each application, or reject it.
+function ManualAdmission({ apps, setApps, go }) {
+  const [toast, showToast] = useToast()
+  const [sel, setSel] = useState(null)
+
+  const process = (app) => {
+    const next = NEXT[app.stage]
+    if (!next) return
+    setApps((as) => as.map((a) => (a.id === app.id ? { ...a, stage: next } : a)))
+    setSel(null)
+    showToast(next === 'Enrolled' ? `${app.name} enrolled in ${app.prog} — student file created` : `${app.name} → ${next}`)
+  }
+  const reject = (app) => {
+    setApps((as) => as.map((a) => (a.id === app.id ? { ...a, stage: 'Rejected' } : a)))
+    setSel(null)
+    showToast(`${app.name}'s application rejected — rejection letter available in Students · Documents`)
+  }
+  const docsMissing = (app) => Object.values(app.docs).filter((v) => !v).length
+
+  return (
+    <>
+      <div className="note-banner">
+        <span>ℹ️</span>
+        <div>Process applications manually — advance a candidate to the next stage or reject. Application fee N$200 · registration fee N$500 (Caregiving N$1650).</div>
+      </div>
+      <Panel title="All applications" subtitle={`${apps.length} applications · click Process to action`} flush>
+        <table className="data">
+          <thead>
+            <tr><th>Applicant</th><th>ID</th><th>Programme</th><th className="num">Points</th><th>Docs</th><th>Status</th><th style={{ width: 160 }}>Action</th></tr>
+          </thead>
+          <tbody>
+            {apps.map((a) => (
+              <tr key={a.id}>
+                <td>
+                  <div className="emp-cell"><Avatar name={a.name} size={26} /><span className="en">{a.name}</span></div>
+                </td>
+                <td className="mono" style={{ fontSize: 12 }}>{a.id}</td>
+                <td>{progName(a.prog)}</td>
+                <td className="num">{a.points}</td>
+                <td>{docsMissing(a) > 0 ? <Badge tone="red">{docsMissing(a)} missing</Badge> : <Badge tone="green">✓</Badge>}</td>
+                <td><Badge tone={a.stage === 'Rejected' ? 'red' : STAGE_TONE[a.stage]}>{a.stage}</Badge></td>
+                <td>
+                  {NEXT[a.stage] ? (
+                    <button className="btn primary sm" onClick={() => setSel(a)}>Process</button>
+                  ) : a.stage === 'Enrolled' ? (
+                    <button className="btn ghost sm" onClick={() => go && go('students', a.name)}>View student</button>
+                  ) : (
+                    <span style={{ color: 'var(--ink-faint)', fontSize: 12 }}>—</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Panel>
+
+      {sel && (
+        <Modal title={`Process — ${sel.name}`} onClose={() => setSel(null)} width={420}>
+          <div className="cf-row"><span>Programme</span><span style={{ fontWeight: 600 }}>{progName(sel.prog)}</span></div>
+          <div className="cf-row"><span>Current stage</span><Badge tone={STAGE_TONE[sel.stage]}>{sel.stage}</Badge></div>
+          <div className="cf-row"><span>Next stage</span><Badge tone={STAGE_TONE[NEXT[sel.stage]] || 'green'}>{NEXT[sel.stage]}</Badge></div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+            <button className="btn primary" onClick={() => process(sel)}>{NEXT_LABEL[sel.stage]} →</button>
+            <button className="btn red-ghost" onClick={() => reject(sel)}>Reject</button>
+          </div>
+        </Modal>
+      )}
+      <Toast msg={toast} />
     </>
   )
 }

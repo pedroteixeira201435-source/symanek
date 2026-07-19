@@ -8,7 +8,12 @@ export const metadata: Metadata = {
   description: "Life and learning at Symanek Specialized College.",
 };
 
-const photos = Array.from({ length: 8 }, (_, i) => `/images/gallery/g${i + 1}.jpg`);
+// Curated gallery. TODO(pedro): remover fotos repetidas e acrescentar as novas fotos
+// de graduação do Jeremia à medida que chegarem.
+const photos = [
+  "/images/gallery/mental-health-students.jpg",
+  ...Array.from({ length: 8 }, (_, i) => `/images/gallery/g${i + 1}.jpg`),
+];
 
 export default function GalleryPage() {
   return (

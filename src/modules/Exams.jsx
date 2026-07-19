@@ -1,6 +1,7 @@
 import React from 'react'
 import { StatCard, Panel, Badge, Toast, useToast } from '../ui.jsx'
 import { EXAM_SCHEDULE } from '../data.js'
+import { SUBJECT_TYPES, EXAM_CONFIG, PASS, WEIGHTS, POLICY_SUMMARY } from '../lib/academics.js'
 
 // Examinations logistics — sittings, venues, seat allocation, invigilation.
 export default function Exams() {
@@ -16,6 +17,39 @@ export default function Exams() {
         <StatCard icon="👤" label="Invigilators" value={String(new Set(EXAM_SCHEDULE.map((e) => e.invigilator)).size)} delta="assigned" deltaTone="up" />
         <StatCard icon="🏫" label="Venues" value={String(new Set(EXAM_SCHEDULE.map((e) => e.venue)).size)} delta="halls / labs / workshop" deltaTone="neutral" />
       </div>
+
+      <Panel title="Assessment & examination policy" subtitle="Institutional marking rules applied across every module">
+        <div className="note-banner" style={{ marginTop: 0 }}>
+          <span>📐</span>
+          <div>{POLICY_SUMMARY}</div>
+        </div>
+        <div className="grid2" style={{ gap: 14, marginTop: 8 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)', marginBottom: 8 }}>SUBJECT TYPES · FORMATIVE ASSESSMENTS</div>
+            {Object.values(SUBJECT_TYPES).map((t) => (
+              <div key={t.key} className="cf-row" style={{ padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
+                <span style={{ fontWeight: 600 }}>{t.label}</span>
+                <span className="mono" style={{ fontSize: 12.5 }}>{t.formativeCount} assessments · {t.tests} tests + {t.assignments} assignment{t.assignments > 1 ? 's' : ''}</span>
+              </div>
+            ))}
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-soft)', marginBottom: 8 }}>MARKS & THRESHOLDS</div>
+            {[
+              ['Weighting', `${Math.round(WEIGHTS.ca * 100)}% CA + ${Math.round(WEIGHTS.exam * 100)}% exam`],
+              ['Examination', `Out of ${EXAM_CONFIG.outOf} marks · ${EXAM_CONFIG.durationHours} hours`],
+              ['Formative pass', `${PASS.formativeMin}% minimum per assessment`],
+              ['Module pass', `${PASS.moduleFinalMin}% final mark`],
+              ['Exam paper pass', `${PASS.examPaperMin}% minimum`],
+              ['Second opportunity', `${PASS.secondOppLow}–${PASS.secondOppHigh}% final mark`],
+            ].map(([k, v]) => (
+              <div key={k} className="cf-row" style={{ padding: '6px 0', borderBottom: '1px solid var(--line)' }}>
+                <span>{k}</span><span className="mono" style={{ fontSize: 12.5, fontWeight: 600 }}>{v}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Panel>
       <Panel
         title="Exam timetable & venues"
         subtitle="Seat allocation and invigilation roster for the November 2026 sitting"

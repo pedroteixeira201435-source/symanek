@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Panel, Badge, Avatar, Toast, useToast } from '../ui.jsx'
 import { SCHOOL, ROLES, AUDIT_LOG, BP_DEFS, staffEmail } from '../data.js'
+import { CONTROL_WINDOWS, INTAKES } from '../lib/controls.js'
 
 const TERMS = [
   { term: 'Term 1', dates: '14 Jan – 25 Apr 2026', status: 'Closed' },
@@ -28,6 +29,17 @@ export default function Settings() {
   const [enabled, setEnabled] = useState(Object.fromEntries(MODULE_LIST.map((m) => [m, true])))
   const [matrix, setMatrix] = useState(MATRIX)
   const [users, setUsers] = useState(ROLES.map((r) => ({ role: r.name, user: r.user, active: true })))
+  const [windows, setWindows] = useState(CONTROL_WINDOWS)
+  const [intake, setIntake] = useState('july')
+
+  const toggleWindow = (key) => {
+    setWindows((ws) => ws.map((w) => (w.key === key ? { ...w, open: !w.open } : w)))
+    const w = windows.find((x) => x.key === key)
+    showToast(`${w.label} ${w.open ? 'closed' : 'opened'} — audit log updated`)
+  }
+  const setWindowDate = (key, field, value) => {
+    setWindows((ws) => ws.map((w) => (w.key === key ? { ...w, [field]: value } : w)))
+  }
 
   // click cycles — → Full → Read → — (POS-only is locked by design)
   const cycle = (roleName, i) => {
@@ -92,6 +104,38 @@ export default function Settings() {
           </Panel>
         </div>
       </div>
+
+      <Panel
+        title="Academic control windows"
+        subtitle="Open or close functions per intake — marks insertion, marks release, applications, registration, second-opportunity, clearance"
+        actions={
+          <select className="inline" value={intake} onChange={(e) => { setIntake(e.target.value); showToast(`Active intake set to ${INTAKES.find((i) => i.key === e.target.value)?.label}`) }}>
+            {INTAKES.map((i) => <option key={i.key} value={i.key}>{i.label}</option>)}
+          </select>
+        }
+        flush
+      >
+        <table className="data">
+          <thead>
+            <tr><th>Function</th><th>Opens</th><th>Closes</th><th>Status</th><th style={{ width: 130 }}>Action</th></tr>
+          </thead>
+          <tbody>
+            {windows.map((w) => (
+              <tr key={w.key}>
+                <td style={{ fontWeight: 600 }}>{w.label}</td>
+                <td><input type="date" className="inline" style={{ width: 150 }} value={w.from} onChange={(e) => setWindowDate(w.key, 'from', e.target.value)} /></td>
+                <td><input type="date" className="inline" style={{ width: 150 }} value={w.to} onChange={(e) => setWindowDate(w.key, 'to', e.target.value)} /></td>
+                <td><Badge tone={w.open ? 'green' : 'gray'}>{w.open ? 'Open' : 'Closed'}</Badge></td>
+                <td>
+                  <button className={`btn sm ${w.open ? 'red-ghost' : 'green'}`} onClick={() => toggleWindow(w.key)}>
+                    {w.open ? 'Close' : 'Open'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Panel>
 
       <Panel title="Role permissions" subtitle="Who sees what — enforced at login · click a cell to cycle Full / Read / no access" flush>
         <table className="data">

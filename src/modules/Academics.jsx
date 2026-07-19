@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { Tabs, Panel, Badge, Toast, useToast } from '../ui.jsx'
-import { MODERATION, AT_RISK } from '../data.js'
+import { MODERATION, AT_RISK, PROGRAMMES } from '../data.js'
+import { INTAKES } from '../lib/controls.js'
 import * as api from '../api.js'
 
 // The HOD layer: marks must be moderated before report cards,
@@ -10,10 +11,108 @@ export default function Academics({ go }) {
   const [tab, setTab] = useState('Mark Moderation')
   return (
     <>
-      <Tabs tabs={['Mark Moderation', 'Students at Risk', 'Exam Board']} active={tab} onChange={setTab} />
+      <Tabs tabs={['Mark Moderation', 'Students at Risk', 'Exam Board', 'Marks Suppression']} active={tab} onChange={setTab} />
       {tab === 'Mark Moderation' && <Moderation />}
       {tab === 'Students at Risk' && <AtRisk go={go} />}
       {tab === 'Exam Board' && <ExamBoard />}
+      {tab === 'Marks Suppression' && <MarksSuppression />}
+    </>
+  )
+}
+
+// Marks suppression — withhold selected marks (CA / Exam / Final) for a given
+// academic year and intake, e.g. from students with outstanding fees. The
+// suppression flows through to the student portal (marks show as withheld).
+function MarksSuppression() {
+  const [toast, showToast] = useToast()
+  const [year, setYear] = useState('2026')
+  const [intake, setIntake] = useState('july')
+  const [prog, setProg] = useState('ALL')
+  const [marks, setMarks] = useState({ CA: false, Exam: false, Final: true })
+  const [rules, setRules] = useState([
+    { id: 1, year: '2026', intake: 'july', prog: 'ALL', marks: ['Final'], reason: 'Outstanding fees', active: true },
+  ])
+
+  const toggleMark = (k) => setMarks((m) => ({ ...m, [k]: !m[k] }))
+
+  const apply = () => {
+    const picked = Object.entries(marks).filter(([, v]) => v).map(([k]) => k)
+    if (picked.length === 0) return showToast('Select at least one mark type to suppress')
+    const rule = { id: Date.now(), year, intake, prog, marks: picked, reason: 'Manual suppression', active: true }
+    setRules((rs) => [rule, ...rs])
+    showToast(`${picked.join(', ')} suppressed for ${prog} · ${INTAKES.find((i) => i.key === intake)?.label} ${year} — audit log updated`)
+  }
+
+  const toggleRule = (id) => {
+    setRules((rs) => rs.map((r) => (r.id === id ? { ...r, active: !r.active } : r)))
+  }
+
+  return (
+    <>
+      <div className="note-banner">
+        <span>ℹ️</span>
+        <div>
+          Suppress selected marks (CA, Exam or Final) per academic year and intake — suppressed marks
+          are withheld from the student portal until the suppression is lifted. Every change is audited.
+        </div>
+      </div>
+
+      <Panel title="New suppression rule" subtitle="Choose the scope and which marks to withhold">
+        <div className="grid2" style={{ gap: 12 }}>
+          <div className="field">
+            <label>Academic year</label>
+            <select value={year} onChange={(e) => setYear(e.target.value)}><option>2026</option><option>2027</option></select>
+          </div>
+          <div className="field">
+            <label>Intake</label>
+            <select value={intake} onChange={(e) => setIntake(e.target.value)}>
+              {INTAKES.map((i) => <option key={i.key} value={i.key}>{i.label}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="field">
+          <label>Programme</label>
+          <select value={prog} onChange={(e) => setProg(e.target.value)}>
+            <option value="ALL">All programmes</option>
+            {PROGRAMMES.map((p) => <option key={p.code} value={p.code}>{p.code} — {p.name}</option>)}
+          </select>
+        </div>
+        <div style={{ margin: '4px 0 10px', fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)' }}>MARKS TO SUPPRESS</div>
+        <div style={{ display: 'flex', gap: 16, marginBottom: 14 }}>
+          {['CA', 'Exam', 'Final'].map((k) => (
+            <label key={k} style={{ display: 'flex', gap: 6, alignItems: 'center', cursor: 'pointer' }}>
+              <input type="checkbox" checked={marks[k]} onChange={() => toggleMark(k)} /> {k}
+            </label>
+          ))}
+        </div>
+        <button className="btn primary" onClick={apply}>Apply suppression</button>
+      </Panel>
+
+      <Panel title="Active suppression rules" subtitle="Toggle a rule off to release the marks to students" flush>
+        <table className="data">
+          <thead>
+            <tr><th>Year</th><th>Intake</th><th>Programme</th><th>Marks</th><th>Reason</th><th>Status</th><th>Action</th></tr>
+          </thead>
+          <tbody>
+            {rules.map((r) => (
+              <tr key={r.id}>
+                <td>{r.year}</td>
+                <td>{INTAKES.find((i) => i.key === r.intake)?.label || r.intake}</td>
+                <td>{r.prog === 'ALL' ? 'All' : r.prog}</td>
+                <td>{r.marks.map((m) => <Badge key={m} tone="blue">{m}</Badge>)}</td>
+                <td style={{ fontSize: 12.5 }}>{r.reason}</td>
+                <td><Badge tone={r.active ? 'red' : 'gray'}>{r.active ? 'Suppressed' : 'Released'}</Badge></td>
+                <td>
+                  <button className={`btn sm ${r.active ? 'green' : 'ghost'}`} onClick={() => toggleRule(r.id)}>
+                    {r.active ? 'Release' : 'Re-apply'}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Panel>
+      <Toast msg={toast} />
     </>
   )
 }

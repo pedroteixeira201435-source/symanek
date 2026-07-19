@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Tabs, Panel, Badge, Progress, Modal, Donut, Toast, useToast } from '../ui.jsx'
-import { PROGRAMMES, COURSES, HOLDS, DEGREE_AUDIT, fmtN } from '../data.js'
+import { PROGRAMMES, COURSES, HOLDS, DEGREE_AUDIT, STAFF, fmtN } from '../data.js'
 
 // Programmes & curriculum — the tertiary academic structure:
 // NQF-levelled programmes, credit-bearing courses, semester enrolments.
@@ -10,11 +10,126 @@ export default function Programmes() {
   const [tab, setTab] = useState('Programmes')
   return (
     <>
-      <Tabs tabs={['Programmes', 'Course Catalogue', 'Semester Enrolments', 'Degree Audit']} active={tab} onChange={setTab} />
+      <Tabs tabs={['Programmes', 'Course Catalogue', 'Module Allocation', 'Student Blocks', 'Semester Enrolments', 'Degree Audit']} active={tab} onChange={setTab} />
       {tab === 'Programmes' && <ProgrammeList />}
       {tab === 'Course Catalogue' && <Catalogue />}
+      {tab === 'Module Allocation' && <ModuleAllocation />}
+      {tab === 'Student Blocks' && <StudentBlocks />}
       {tab === 'Semester Enrolments' && <Enrolments />}
       {tab === 'Degree Audit' && <DegreeAudit />}
+    </>
+  )
+}
+
+// Module allocation — assign each course/module to a teaching staff member.
+function ModuleAllocation() {
+  const [alloc, setAlloc] = useState(Object.fromEntries(COURSES.map((c) => [c.code, c.lecturer])))
+  const [toast, showToast] = useToast()
+  const lecturers = [...new Set([...COURSES.map((c) => c.lecturer), ...STAFF.filter((s) => /lecturer|hod|teacher/i.test(s.role)).map((s) => s.name)])]
+
+  const assign = (code, lecturer) => {
+    setAlloc((a) => ({ ...a, [code]: lecturer }))
+    showToast(`${code} allocated to ${lecturer} — timetable & gradebook access granted`)
+  }
+
+  return (
+    <>
+      <div className="note-banner">
+        <span>ℹ️</span>
+        <div>Allocate modules to teaching staff. The allocated lecturer gets the module on their timetable and gradebook, and can enter marks for it.</div>
+      </div>
+      <Panel title="Module allocation — Semester 2, 2026" subtitle={`${COURSES.length} modules across ${PROGRAMMES.length} programmes`} flush>
+        <table className="data">
+          <thead>
+            <tr><th>Module</th><th>Programme</th><th className="num">Credits</th><th>Semester</th><th style={{ width: 240 }}>Allocated lecturer</th></tr>
+          </thead>
+          <tbody>
+            {COURSES.map((c) => (
+              <tr key={c.code}>
+                <td><div style={{ fontWeight: 600 }}>{c.title}</div><div className="mono" style={{ fontSize: 11.5, color: 'var(--ink-faint)' }}>{c.code}</div></td>
+                <td><Badge tone="blue">{c.prog}</Badge></td>
+                <td className="num">{c.credits}</td>
+                <td>{c.sem}</td>
+                <td>
+                  <select className="inline" style={{ width: 220 }} value={alloc[c.code]} onChange={(e) => assign(c.code, e.target.value)}>
+                    {lecturers.map((l) => <option key={l}>{l}</option>)}
+                  </select>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Panel>
+      <Toast msg={toast} />
+    </>
+  )
+}
+
+// Student blocks — place or release holds that block registration, results or
+// certificates (finance, library, disciplinary, academic).
+const BLOCK_TYPES = ['Finance', 'Library', 'Disciplinary', 'Academic']
+const BLOCK_IMPACT = { Finance: ['Blocks registration', 'Blocks results'], Library: ['Blocks certificate'], Disciplinary: ['Blocks registration'], Academic: ['Blocks graduation'] }
+
+function StudentBlocks() {
+  const [blocks, setBlocks] = useState(HOLDS)
+  const [showNew, setShowNew] = useState(false)
+  const [toast, showToast] = useToast()
+
+  const add = (e) => {
+    e.preventDefault()
+    const f = e.target
+    const type = f.type.value
+    const b = { student: f.student.value, type, reason: f.reason.value || '—', since: '04 Jul 2026', impact: BLOCK_IMPACT[type] || ['Blocks registration'] }
+    setBlocks((bs) => [b, ...bs])
+    setShowNew(false)
+    showToast(`${type} block placed on ${b.student}`)
+  }
+
+  const release = (i) => {
+    const b = blocks[i]
+    setBlocks((bs) => bs.filter((_, j) => j !== i))
+    showToast(`${b.type} block released for ${b.student} — access restored`)
+  }
+
+  return (
+    <>
+      <Panel
+        title="Student blocks / holds"
+        subtitle={`${blocks.length} active · blocks stop registration, results or certificate release`}
+        actions={<button className="btn primary sm" onClick={() => setShowNew(true)}>+ Place block</button>}
+        flush
+      >
+        <table className="data">
+          <thead>
+            <tr><th>Student</th><th>Type</th><th>Reason</th><th>Since</th><th>Impact</th><th>Action</th></tr>
+          </thead>
+          <tbody>
+            {blocks.map((b, i) => (
+              <tr key={i}>
+                <td style={{ fontWeight: 600 }}>{b.student}</td>
+                <td><Badge tone="red">{b.type}</Badge></td>
+                <td style={{ fontSize: 12.5 }}>{b.reason}</td>
+                <td>{b.since}</td>
+                <td><span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{b.impact.map((im) => <Badge key={im} tone="amber">{im}</Badge>)}</span></td>
+                <td><button className="btn green sm" onClick={() => release(i)}>Release</button></td>
+              </tr>
+            ))}
+            {blocks.length === 0 && <tr><td colSpan={6} style={{ color: 'var(--ink-faint)', fontSize: 12.5 }}>No active blocks</td></tr>}
+          </tbody>
+        </table>
+      </Panel>
+
+      {showNew && (
+        <Modal title="Place student block" onClose={() => setShowNew(false)} width={420}>
+          <form onSubmit={add}>
+            <div className="field"><label>Student name</label><input name="student" placeholder="e.g. Ruusa Nghidinwa" required /></div>
+            <div className="field"><label>Block type</label><select name="type">{BLOCK_TYPES.map((t) => <option key={t}>{t}</option>)}</select></div>
+            <div className="field"><label>Reason</label><input name="reason" placeholder="e.g. Outstanding tuition N$ 6,550" /></div>
+            <button className="btn primary" type="submit">Place block</button>
+          </form>
+        </Modal>
+      )}
+      <Toast msg={toast} />
     </>
   )
 }

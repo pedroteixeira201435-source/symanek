@@ -143,6 +143,21 @@ export async function getResultsForStudent(studentName) {
     rows.filter((r) => r.learner === studentName).map((r) => ({ code, ...r }))))
 }
 
+// Class attendance for a student — feeds the 80% examination-admission rule.
+export async function getAttendanceForStudent(studentName) {
+  if (useHttp()) {
+    const sid = await studentIdByName(studentName)
+    if (!sid) return { percent: 0, hoursAttended: 0, hoursTotal: 0 }
+    const { data } = await supabase.from('attendance_summary')
+      .select('percent,hours_attended,hours_total').eq('student_id', sid).maybeSingle()
+    return { percent: data?.percent ?? 0, hoursAttended: data?.hours_attended ?? 0, hoursTotal: data?.hours_total ?? 0 }
+  }
+  const l = db.LEARNERS.find((x) => x.name === studentName)
+  const percent = l?.attendance ?? 92
+  const hoursTotal = 240 // demo: contact hours in the semester
+  return mock({ percent, hoursAttended: Math.round((percent / 100) * hoursTotal), hoursTotal })
+}
+
 export async function listGraduands() {
   if (useHttp()) {
     const { data, error } = await supabase.rpc('graduation_board')

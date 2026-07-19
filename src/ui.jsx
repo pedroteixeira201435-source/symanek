@@ -71,8 +71,8 @@ export function Panel({ title, subtitle, actions, children, flush }) {
   )
 }
 
-export function Badge({ tone, children }) {
-  return <span className={`badge ${tone}`}>{children}</span>
+export function Badge({ tone, children, title }) {
+  return <span className={`badge ${tone}`} title={title}>{children}</span>
 }
 
 export function Progress({ pct, tone = '' }) {

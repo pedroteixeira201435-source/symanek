@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { allProgrammes, programmeBySlug, formatN } from "@/lib/content";
+import Image from "next/image";
+import { allProgrammes, programmeBySlug, formatN, fees, registrationFee } from "@/lib/content";
 import { Reveal } from "@/components/reveal";
 import { ArrowRight, CheckIcon, ClockIcon, BriefcaseIcon } from "@/components/icons";
 
@@ -19,11 +20,15 @@ export default function CoursePage({ params }: { params: { slug: string } }) {
   const p = programmeBySlug(params.slug);
   if (!p) notFound();
 
+  const isMentalHealth = p.slug.includes("mental-health");
+
   const facts = [
     ["Duration", p.duration],
     ["Level", p.level ?? "—"],
     ["Study modes", p.modes ?? "—"],
     ["Tuition", p.fee ? formatN(p.fee) : "Enquire"],
+    ["Application fee", formatN(fees.application)],
+    ["Registration fee", formatN(registrationFee(p.slug))],
   ];
 
   return (
@@ -50,6 +55,19 @@ export default function CoursePage({ params }: { params: { slug: string } }) {
 
       <div className="container-max grid gap-12 py-16 lg:grid-cols-[1fr_320px]">
         <div className="space-y-10">
+          {isMentalHealth && (
+            <Reveal>
+              <div className="relative aspect-[16/9] overflow-hidden rounded-3xl shadow-card ring-1 ring-petrol-100">
+                <Image
+                  src="/images/programmes/mental-health.jpg"
+                  alt="Symanek Mental Health students"
+                  fill
+                  sizes="(max-width:1024px) 90vw, 720px"
+                  className="object-cover"
+                />
+              </div>
+            </Reveal>
+          )}
           <Reveal>
             <div>
               <h2 className="text-xl font-semibold">About this programme</h2>

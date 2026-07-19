@@ -1,8 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { StatCard, Tabs, Panel, Badge, Progress, Modal, Toast, useToast } from '../ui.jsx'
 import { COURSES, EXAM_BOARD, gradeOf, fmtN } from '../data.js'
+import { evaluateResult, WEIGHTS } from '../lib/academics.js'
+import { ANNOUNCEMENTS, STUDENT_DOCUMENTS, ATTENDANCE_MIN, isWindowOpen } from '../lib/controls.js'
 import * as api from '../api.js'
 import { TimetableGrid } from './Scheduling.jsx'
+
+const CA_PCT = Math.round(WEIGHTS.ca * 100) // 60
+const EXAM_PCT = Math.round(WEIGHTS.exam * 100) // 40
 
 const CREDIT_RATE = 1150 // N$ per credit — charge assessed on registration (demo)
 const SEM_CREDIT_CAP = 72
@@ -22,13 +27,14 @@ export default function StudentPortal({ role }) {
   useEffect(() => {
     let alive = true
     ;(async () => {
-      const [audit, programmes, myResults, myInvoices, mySponsors, myHolds] = await Promise.all([
+      const [audit, programmes, myResults, myInvoices, mySponsors, myHolds, attendance] = await Promise.all([
         api.getDegreeAudit(me), api.listProgrammes(), api.getResultsForStudent(me),
         api.getInvoicesForStudent(me), api.getSponsorsForStudent(me), api.getHoldsForStudent(me),
+        api.getAttendanceForStudent(me),
       ])
       if (!alive) return
       const prog = programmes.find((p) => p.code === audit?.prog)
-      setRec({ audit, prog, myResults, myInvoices, mySponsors, myHolds })
+      setRec({ audit, prog, myResults, myInvoices, mySponsors, myHolds, attendance })
     })().catch((e) => { if (alive) setRec({ error: e?.message || 'Failed to load your record' }) })
     return () => { alive = false }
   }, [me, reloadN])
@@ -36,19 +42,19 @@ export default function StudentPortal({ role }) {
   if (!rec) return <Panel title="My portal"><div className="di-sub">Loading your record…</div></Panel>
   if (rec.error) return <Panel title="My portal"><div className="di-sub">Couldn’t load your record — {rec.error}</div></Panel>
 
-  const { audit, prog, myResults, myInvoices, mySponsors, myHolds } = rec
+  const { audit, prog, myResults, myInvoices, mySponsors, myHolds, attendance } = rec
   const passedCodes = myResults
-    .filter((r) => Math.round(r.ca * 0.4 + r.exam * 0.6) >= 50)
+    .filter((r) => evaluateResult({ ca: r.ca, exam: r.exam }).outcome === 'pass')
     .map((r) => r.code)
   const balance = myInvoices.reduce((s, i) => s + i.balance, 0)
 
   const reload = () => setReloadN((n) => n + 1)
-  const ctx = { me, audit, prog, myResults, passedCodes, myInvoices, balance, mySponsors, myHolds, registered, setRegistered, reload }
+  const ctx = { me, audit, prog, myResults, passedCodes, myInvoices, balance, mySponsors, myHolds, attendance, registered, setRegistered, reload }
 
   return (
     <>
       <Tabs
-        tabs={['My Studies', 'Registration', 'Grades & Transcript', 'My Timetable', 'My Finance', 'Holds & Documents']}
+        tabs={['My Studies', 'Registration', 'Grades & Transcript', 'My Timetable', 'My Finance', 'Announcements', 'Holds & Documents']}
         active={tab}
         onChange={setTab}
       />
@@ -57,16 +63,19 @@ export default function StudentPortal({ role }) {
       {tab === 'Grades & Transcript' && <Transcript {...ctx} />}
       {tab === 'My Timetable' && <MyTimetable {...ctx} />}
       {tab === 'My Finance' && <MyFinance {...ctx} />}
+      {tab === 'Announcements' && <Announcements {...ctx} />}
       {tab === 'Holds & Documents' && <HoldsDocs {...ctx} />}
     </>
   )
 }
 
 // ---------- My Studies: programme header + degree audit ----------
-function MyStudies({ audit, prog }) {
+function MyStudies({ audit, prog, attendance }) {
   if (!audit) return <Panel title="My studies"><div className="di-sub">No academic record on file yet.</div></Panel>
   const total = audit.reqs.find((r) => /total credits/i.test(r.req)) || audit.reqs[audit.reqs.length - 1]
   const yearOf = prog ? Math.min(prog.years, Math.max(1, prog.years - 1)) : 1
+  const att = attendance || { percent: 0, hoursAttended: 0, hoursTotal: 0 }
+  const attOk = att.percent >= ATTENDANCE_MIN
 
   return (
     <>
@@ -74,7 +83,18 @@ function MyStudies({ audit, prog }) {
         <StatCard icon="🎓" label="Programme" value={audit.prog} delta={prog?.name} deltaTone="neutral" />
         <StatCard icon="📅" label="Year of study" value={`Year ${yearOf}`} delta={`Catalog ${audit.catalog} · Semester 2, 2026`} deltaTone="neutral" />
         <StatCard icon="📈" label="Cumulative GPA" value={audit.gpa.toFixed(2)} delta="of 4.00" deltaTone={audit.gpa >= 2 ? 'up' : 'down'} />
-        <StatCard icon="✅" label="Credits earned" value={`${total.done}/${total.need}`} delta={`${total.inprog} in progress`} deltaTone="neutral" />
+        <StatCard icon="⏰" label="Class attendance" value={`${att.percent}%`} delta={`${att.hoursAttended}/${att.hoursTotal} hrs · min ${ATTENDANCE_MIN}%`} deltaTone={attOk ? 'up' : 'down'} />
+      </div>
+
+      <div className="note-banner" style={attOk ? { background: 'var(--green-soft)', borderColor: '#cfe6d4' } : { background: 'var(--red-soft)', borderColor: '#eccfc9' }}>
+        <span>{attOk ? '✅' : '🚫'}</span>
+        <div>
+          {attOk ? (
+            <>Your attendance is <strong>{att.percent}%</strong> — above the {ATTENDANCE_MIN}% minimum, so you are <strong>eligible for the final examination</strong> and your examination permit.</>
+          ) : (
+            <><strong style={{ color: 'var(--red)' }}>Attendance {att.percent}%</strong> is below the {ATTENDANCE_MIN}% minimum required to be admitted to the final examination. Speak to your lecturer — no examination permit is issued below {ATTENDANCE_MIN}%.</>
+          )}
+        </div>
       </div>
 
       <Panel title="Degree audit" subtitle={`${prog?.name || audit.prog} · NQF ${prog?.nqf ?? '—'} · progress to graduation, requirement by requirement`}>
@@ -207,34 +227,55 @@ function Registration({ audit, passedCodes, myHolds, registered, setRegistered }
 // ---------- Grades & Transcript ----------
 function Transcript({ audit, myResults }) {
   const publishedOf = (code) => EXAM_BOARD.find((e) => e.code === code)?.status === 'Published'
+  const released = isWindowOpen('marks_release')
+  const secondOpp = myResults.filter((r) => evaluateResult({ ca: r.ca, exam: r.exam }).outcome === 'second_opportunity')
 
   return (
     <>
-      <Panel title="Results" subtitle="Continuous assessment (40%) + exam (60%) → final mark. Provisional until the exam board publishes.">
+      {!released && (
+        <div className="note-banner" style={{ background: 'var(--amber-soft, #fff6e6)', borderColor: '#ecdcc0' }}>
+          <span>🔒</span>
+          <div>Marks release is currently <strong>closed</strong> by the registrar — the marks below are <strong>provisional</strong> until the exam board publishes and the release window opens.</div>
+        </div>
+      )}
+
+      {secondOpp.length > 0 && (
+        <div className="note-banner" style={{ background: '#fff6e6', borderColor: '#ecdcc0' }}>
+          <span>📝</span>
+          <div>
+            You qualify for a <strong>second-opportunity examination</strong> in {secondOpp.map((r) => r.code).join(', ')}
+            {' '}(final mark 45–49%, or exam paper below 40%).
+            {isWindowOpen('second_opportunity') ? ' Registration for the second opportunity is open.' : ' Watch for the second-opportunity window to open.'}
+          </div>
+        </div>
+      )}
+
+      <Panel title="Results" subtitle={`Continuous assessment (${CA_PCT}%) + exam (${EXAM_PCT}%) → final mark. Exam paper pass 40%; module pass 50%; 45–49% earns a second opportunity.`}>
         {myResults.length === 0 ? (
           <div className="di-sub">No results released yet — held by your lecturers until the exam board sits.</div>
         ) : (
           <table className="data">
             <thead>
               <tr>
-                <th>Course</th><th className="num">CA (40%)</th><th className="num">Exam (60%)</th>
-                <th className="num">Final</th><th>Grade</th><th className="num">GPA</th><th>Status</th>
+                <th>Course</th><th className="num">CA ({CA_PCT}%)</th><th className="num">Exam ({EXAM_PCT}%)</th>
+                <th className="num">Final</th><th>Grade</th><th className="num">GPA</th><th>Result</th><th>Status</th>
               </tr>
             </thead>
             <tbody>
               {myResults.map((r) => {
-                const final = Math.round(r.ca * 0.4 + r.exam * 0.6)
-                const g = gradeOf(final)
-                const pub = publishedOf(r.code)
+                const res = evaluateResult({ ca: r.ca, exam: r.exam })
+                const g = gradeOf(res.final)
+                const pub = publishedOf(r.code) && released
                 const title = COURSES.find((c) => c.code === r.code)?.title
                 return (
                   <tr key={r.code}>
                     <td><div style={{ fontWeight: 600 }}>{r.code}</div><div className="di-sub">{title}</div></td>
                     <td className="num">{r.ca}</td>
                     <td className="num">{r.exam}</td>
-                    <td className="num" style={{ fontWeight: 700, color: final < 50 ? 'var(--red)' : 'var(--ink)' }}>{final}%</td>
+                    <td className="num" style={{ fontWeight: 700, color: res.final < 50 ? 'var(--red)' : 'var(--ink)' }}>{res.final}%</td>
                     <td className="mono" style={{ fontWeight: 600 }}>{g.letter}</td>
                     <td className="num mono">{g.gpa.toFixed(1)}</td>
+                    <td><Badge tone={res.tone} title={res.reasons.join(' · ')}>{res.label}</Badge></td>
                     <td><Badge tone={pub ? 'green' : 'amber'}>{pub ? 'Published' : 'Provisional'}</Badge></td>
                   </tr>
                 )
@@ -270,9 +311,54 @@ const MY_TT = {
 }
 
 function MyTimetable({ audit, prog }) {
+  const [toast, showToast] = useToast()
+
+  const downloadExamTimetable = async () => {
+    const rows = await api.listExamSchedule()
+    const header = 'Course,Title,Date,Time,Venue,Seats,Invigilator'
+    const lines = rows.map((e) => [e.code, e.title, e.date, e.time, e.venue, `${e.sat}/${e.seats}`, e.invigilator]
+      .map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
+    const csv = [header, ...lines].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'Symanek-exam-timetable-Nov2026.csv'; a.click()
+    URL.revokeObjectURL(url)
+    showToast('Examination timetable downloaded')
+  }
+
   return (
-    <Panel title="My weekly timetable" subtitle={`${audit?.prog || ''} ${prog?.name ? '· ' + prog.name : ''} · Semester 2, 2026`}>
-      <TimetableGrid data={MY_TT} />
+    <>
+      <Panel
+        title="My weekly timetable"
+        subtitle={`${audit?.prog || ''} ${prog?.name ? '· ' + prog.name : ''} · Semester 2, 2026`}
+        actions={<button className="btn ghost sm" onClick={downloadExamTimetable}>⬇ Download exam timetable</button>}
+      >
+        <TimetableGrid data={MY_TT} />
+      </Panel>
+      <Toast msg={toast} />
+    </>
+  )
+}
+
+// ---------- Announcements ----------
+function Announcements() {
+  return (
+    <Panel title="Announcements" subtitle="Notices from the registrar and your lecturers" flush>
+      <div style={{ padding: 4 }}>
+        {ANNOUNCEMENTS.map((a) => (
+          <div key={a.id} className="note-banner" style={{ marginBottom: 10 }}>
+            <span>📢</span>
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <strong>{a.title}</strong>
+                <span className="di-sub">{a.date}</span>
+              </div>
+              <div className="di-sub" style={{ marginTop: 2 }}>{a.body}</div>
+            </div>
+          </div>
+        ))}
+      </div>
     </Panel>
   )
 }
@@ -400,13 +486,23 @@ function MyFinance({ myInvoices, balance, mySponsors, registered = [], reload })
 }
 
 // ---------- Holds & Documents ----------
-function HoldsDocs({ myHolds }) {
+function HoldsDocs({ myHolds, attendance }) {
   const [toast, showToast] = useToast()
-  const docs = ['Official transcript', 'Proof of registration', 'Statement of account', 'Confirmation letter']
+  const hasHold = myHolds.length > 0
+  const att = attendance?.percent ?? 0
+  const attOk = att >= ATTENDANCE_MIN
+  // students never issue rejection letters (staffOnly)
+  const docs = STUDENT_DOCUMENTS.filter((d) => !d.staffOnly)
+
+  const reason = (d) => {
+    if (d.needsClearance && hasHold) return 'Clear your holds first'
+    if (d.needsAttendance && !attOk) return `Attendance ${att}% — needs ${ATTENDANCE_MIN}%`
+    return null
+  }
 
   return (
     <>
-      {myHolds.length === 0 ? (
+      {!hasHold ? (
         <div className="note-banner" style={{ background: 'var(--green-soft)', borderColor: '#cfe6d4' }}>
           <span>✅</span>
           <div>No active holds on your record — you are <strong>cleared to register</strong> and to request documents.</div>
@@ -424,19 +520,23 @@ function HoldsDocs({ myHolds }) {
         ))
       )}
 
-      <Panel title="Request documents" subtitle="Official documents are released only when your record is free of holds">
+      <Panel title="Request documents" subtitle="Official documents are released only when your record is clear — the examination permit also requires 80% attendance">
         <div className="grid2">
-          {docs.map((d) => (
-            <button
-              key={d}
-              className="btn ghost"
-              style={{ justifyContent: 'flex-start', opacity: myHolds.length ? 0.5 : 1 }}
-              disabled={myHolds.length > 0}
-              onClick={() => showToast(`${d} requested — ready to download within 24h (demo)`)}
-            >
-              ⬇ {d}
-            </button>
-          ))}
+          {docs.map((d) => {
+            const blocked = reason(d)
+            return (
+              <button
+                key={d.key}
+                className="btn ghost"
+                style={{ justifyContent: 'flex-start', opacity: blocked ? 0.5 : 1 }}
+                disabled={!!blocked}
+                title={blocked || ''}
+                onClick={() => showToast(`${d.label} requested — ready to download within 24h (demo)`)}
+              >
+                ⬇ {d.label}{blocked ? ` — ${blocked}` : ''}
+              </button>
+            )
+          })}
         </div>
       </Panel>
       <Toast msg={toast} />

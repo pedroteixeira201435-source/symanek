@@ -23,7 +23,7 @@ export default function Home() {
         <div className="container-max relative grid items-center gap-12 py-20 lg:grid-cols-[1.1fr_0.9fr] lg:py-28">
           <div>
             <Reveal>
-              <span className="eyebrow bg-white/10 text-accent-soft">Registered · NTA · Nursing Council of Namibia</span>
+              <span className="eyebrow bg-white/10 text-accent-soft">NQA Accredited · NTA · Nursing Board · HPCNA</span>
             </Reveal>
             <Reveal delay={60}>
               <h1 className="mt-5 text-4xl font-semibold sm:text-5xl lg:text-[3.4rem]">
@@ -88,9 +88,9 @@ export default function Home() {
         </Reveal>
         <div className="mt-12 grid gap-6 md:grid-cols-3">
           {[
-            { title: "Nationally recognised", body: "Qualifications registered with the NTA, Nursing Council of Namibia and recognised with the HPCNA." },
-            { title: "Hands-on practical learning", body: "We combine classroom knowledge with real-world experience to prepare you for professional success." },
-            { title: "Flexible study modes", body: "Study full-time or by distance learning — programmes designed to fit your life and goals." },
+            { title: "Nationally accredited", body: "Accredited by the NQA and registered with the NTA, the Nursing Board of Namibia and the HPCNA." },
+            { title: "Practical learning & internship", body: "Every programme includes work-integrated learning and internship placements, so you graduate job-ready." },
+            { title: "Flexible study modes", body: "Study full-time, by distance, or part-time with online synchronisation — designed to fit your life and goals." },
           ].map((f, i) => (
             <Reveal key={f.title} delay={i * 70}>
               <div className="card card-lift h-full p-7">

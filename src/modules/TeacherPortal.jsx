@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Tabs, Panel, Progress, Toast, useToast, Badge } from '../ui.jsx'
 import { TEACHER_CLASSES, TEACHER_TIMETABLE, GRADEBOOKS, LEAVE_BALANCES, PAYSLIP, COURSES, COURSE_RESULTS, gradeOf, fmtN } from '../data.js'
+import { evaluateResult, POLICY_SUMMARY } from '../lib/academics.js'
 import { TimetableGrid } from './Scheduling.jsx'
 
 // Teacher sees ONLY own record and own classes — no school-wide finance/HR.
@@ -34,8 +35,8 @@ function MyCourses() {
       <div className="note-banner">
         <span>ℹ️</span>
         <div>
-          Final mark = <strong>40% continuous assessment + 60% exam</strong>. Submitting sends the
-          sheet to the exam board (Academics) — marks lock until the board publishes.
+          {POLICY_SUMMARY} Submitting sends the sheet to the exam board (Academics) — marks lock
+          until the board publishes.
         </div>
       </div>
       {mine.map((c) => {
@@ -58,22 +59,22 @@ function MyCourses() {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Student</th><th className="num">CA (40%)</th><th className="num">Exam (60%)</th>
+                  <th>Student</th><th className="num">CA (60%)</th><th className="num">Exam (40%)</th>
                   <th className="num">Final</th><th>Grade</th><th>Result</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const final = Math.round(r.ca * 0.4 + r.exam * 0.6)
-                  const g = gradeOf(final)
+                  const res = evaluateResult({ ca: r.ca, exam: r.exam })
+                  const g = gradeOf(res.final)
                   return (
                     <tr key={r.learner}>
                       <td style={{ fontWeight: 600 }}>{r.learner}</td>
                       <td className="num">{r.ca}</td>
                       <td className="num">{r.exam}</td>
-                      <td className="num" style={{ fontWeight: 700, color: final < 50 ? 'var(--red)' : 'var(--ink)' }}>{final}%</td>
+                      <td className="num" style={{ fontWeight: 700, color: res.final < 50 ? 'var(--red)' : 'var(--ink)' }}>{res.final}%</td>
                       <td className="mono" style={{ fontWeight: 600 }}>{g.letter}</td>
-                      <td><Badge tone={final >= 50 ? 'green' : 'red'}>{final >= 50 ? 'Pass' : 'Fail'}</Badge></td>
+                      <td><Badge tone={res.tone} title={res.reasons.join(' · ')}>{res.label}</Badge></td>
                     </tr>
                   )
                 })}

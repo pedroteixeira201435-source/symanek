@@ -1,6 +1,38 @@
 import React, { useEffect, useState } from 'react'
 import { StatCard, Panel, Badge, Avatar, Modal, Toast, useToast } from '../ui.jsx'
 import { SCHOOL, LEARNERS, INVOICES, GRADEBOOKS, LOANS, INCIDENTS, HOLDS, gradeOf, fmtN } from '../data.js'
+import { STUDENT_DOCUMENTS, ATTENDANCE_MIN } from '../lib/controls.js'
+
+// Open a print-ready official document in a new window (letterhead + body).
+function printStudentDoc(student, docLabel, bodyHtml) {
+  const w = window.open('', '_blank', 'width=760,height=900')
+  if (!w) return
+  w.document.write(`<!doctype html><html><head><title>${docLabel} — ${student.name}</title>
+    <style>
+      body{font-family:Georgia,'Times New Roman',serif;color:#12303f;margin:48px;line-height:1.55}
+      .lh{display:flex;align-items:center;gap:14px;border-bottom:3px solid #12506b;padding-bottom:14px}
+      .lh .m{width:46px;height:46px;border-radius:10px;background:#12506b;color:#fff;display:grid;place-items:center;font-weight:800;font-size:22px}
+      h1{font-size:19px;margin:26px 0 4px}
+      .meta{font-size:13px;color:#5a7180;margin-bottom:18px}
+      table{border-collapse:collapse;width:100%;font-size:13px;margin:10px 0}
+      td,th{border:1px solid #d7e0e7;padding:6px 9px;text-align:left}
+      .sig{margin-top:60px;font-size:13px}
+      .foot{margin-top:40px;font-size:11px;color:#7c93a2;border-top:1px solid #d7e0e7;padding-top:10px}
+    </style></head><body>
+    <div class="lh"><div class="m">S</div><div>
+      <div style="font-weight:700;font-size:16px">Symanek Specialized College</div>
+      <div style="font-size:12px;color:#5a7180">ERF 2948, Extension 6, Okahandja, Namibia</div>
+    </div></div>
+    <h1>${docLabel}</h1>
+    <div class="meta">Student: <b>${student.name}</b> · ${student.id} · ${student.grade} · Issued ${new Date().toLocaleDateString('en-NA')}</div>
+    ${bodyHtml}
+    <div class="sig">_____________________________<br/>Registrar · Symanek Specialized College</div>
+    <div class="foot">This is a computer-generated document from the Symanek Suite. Verify authenticity with the Registrar's office.</div>
+    </body></html>`)
+  w.document.close()
+  w.focus()
+  w.print()
+}
 
 // Student 360 — every module converges on one learner file:
 // account (Finance), marks (Gradebooks), library loans, incidents, attendance.
@@ -125,6 +157,7 @@ export default function Students({ focus, clearFocus, go }) {
 }
 
 function Student360({ s, onClose, go, showToast }) {
+  const [sub, setSub] = useState(null) // 'docs' | 'edit' | 'apps'
   const invoices = INVOICES.filter((i) => i.learner === s.name)
   const marks = Object.entries(GRADEBOOKS).flatMap(([cls, rows]) =>
     rows.filter((r) => r.learner === s.name).map((r) => ({ cls, ...r }))
@@ -255,10 +288,100 @@ function Student360({ s, onClose, go, showToast }) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+      <div style={{ margin: '8px 0 4px', fontSize: 11.5, fontWeight: 700, letterSpacing: '.04em', color: 'var(--ink-soft)', paddingTop: 14, borderTop: '1px solid var(--line)' }}>
+        ADMIN ACTIONS
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+        <button className="btn ghost sm" onClick={() => setSub('edit')}>Update profile</button>
+        <button className="btn ghost sm" onClick={() => setSub('docs')}>Documents</button>
+        <button className="btn ghost sm" onClick={() => setSub('apps')}>Applications</button>
+        <button className="btn ghost sm" onClick={() => showToast(`Password reset link emailed to ${s.name}`)}>Reset password</button>
+        <button className="btn ghost sm" onClick={() => showToast(`Impersonating ${s.name} — opening their student portal (audit logged)`)}>Log in as</button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10 }}>
         <button className="btn primary sm" onClick={() => { onClose(); go && go('finance') }}>Record payment</button>
         <button className="btn ghost sm" onClick={() => showToast(`Statement for ${s.name} sent to ${s.guardian}`)}>Send statement</button>
         <button className="btn ghost sm" onClick={() => showToast(`Incident logged on ${s.name}'s file — HOD notified`)}>Log incident</button>
+      </div>
+
+      {sub === 'docs' && <DocumentsModal s={s} hold={hold} onClose={() => setSub(null)} showToast={showToast} />}
+      {sub === 'edit' && <EditProfileModal s={s} onClose={() => setSub(null)} showToast={showToast} />}
+      {sub === 'apps' && (
+        <Modal title={`Applications — ${s.name}`} onClose={() => setSub(null)} width={460}>
+          <div className="cf-row"><span>Programme applied</span><span style={{ fontWeight: 600 }}>{s.grade}</span></div>
+          <div className="cf-row"><span>Application status</span><Badge tone="green">Enrolled</Badge></div>
+          <div className="cf-row"><span>Application fee (N$200)</span><Badge tone="green">Paid</Badge></div>
+          <div className="cf-row"><span>Registration fee</span><Badge tone="green">Paid</Badge></div>
+          <div className="di-sub" style={{ marginTop: 12 }}>Full application history and uploaded documents open in the Admissions module.</div>
+        </Modal>
+      )}
+    </Modal>
+  )
+}
+
+function EditProfileModal({ s, onClose, showToast }) {
+  const save = (e) => { e.preventDefault(); onClose(); showToast(`${s.name}'s profile updated`) }
+  return (
+    <Modal title={`Update profile — ${s.name}`} onClose={onClose} width={440}>
+      <form onSubmit={save}>
+        <div className="field"><label>Full name</label><input name="name" defaultValue={s.name} required /></div>
+        <div className="grid2" style={{ gap: 12 }}>
+          <div className="field"><label>Programme / year</label><input name="grade" defaultValue={s.grade} /></div>
+          <div className="field"><label>Next of kin phone</label><input name="phone" defaultValue={s.phone} /></div>
+        </div>
+        <div className="field"><label>Next of kin</label><input name="guardian" defaultValue={s.guardian} /></div>
+        <button className="btn primary" type="submit">Save changes</button>
+      </form>
+    </Modal>
+  )
+}
+
+function DocumentsModal({ s, hold, onClose, showToast }) {
+  const attOk = (s.attendance ?? 0) >= ATTENDANCE_MIN
+
+  const bodyFor = (key) => {
+    switch (key) {
+      case 'proof_of_registration':
+        return `<p>This confirms that <b>${s.name}</b> is a registered student at Symanek Specialized College for the ${s.grade} programme in the 2026 academic year.</p>`
+      case 'exam_permit':
+        return `<p>This examination permit admits <b>${s.name}</b> (${s.id}) to the November 2026 final examinations.</p><table><tr><th>Attendance</th><td>${s.attendance ?? 0}% (minimum ${ATTENDANCE_MIN}%)</td></tr><tr><th>Programme</th><td>${s.grade}</td></tr></table>`
+      case 'academic_record':
+        return `<p>Academic record for <b>${s.name}</b>. Final marks are computed as 60% continuous assessment + 40% examination.</p>`
+      case 'statement_of_results':
+        return `<p>Statement of results for <b>${s.name}</b>, issued by the examinations office. Pass mark 50%; second opportunity 45–49%.</p>`
+      case 'admission_letter':
+        return `<p>Dear ${s.name},</p><p>We are pleased to offer you admission to the <b>${s.grade}</b> programme at Symanek Specialized College. Application fee N$200 and registration fee N$500 apply.</p>`
+      case 'rejection_letter':
+        return `<p>Dear ${s.name},</p><p>Thank you for your application to Symanek Specialized College. Regrettably, your application for the ${s.grade} programme was not successful for this intake.</p>`
+      default:
+        return `<p>Official document for ${s.name}.</p>`
+    }
+  }
+
+  const generate = (d) => {
+    if (d.needsClearance && hold) return showToast(`Blocked — ${hold.type} hold must be cleared before issuing ${d.label}`)
+    if (d.needsAttendance && !attOk) return showToast(`${d.label} denied — attendance ${s.attendance ?? 0}% is below the ${ATTENDANCE_MIN}% minimum`)
+    printStudentDoc(s, d.label, bodyFor(d.key))
+    showToast(`${d.label} generated for ${s.name}`)
+  }
+
+  return (
+    <Modal title={`Documents — ${s.name}`} onClose={onClose} width={460}>
+      <p className="di-sub" style={{ marginBottom: 10 }}>
+        Generate official documents. The examination permit requires ≥{ATTENDANCE_MIN}% attendance; clearance
+        documents require no active holds.
+      </p>
+      <div style={{ display: 'grid', gap: 8 }}>
+        {STUDENT_DOCUMENTS.map((d) => {
+          const blocked = (d.needsClearance && hold) || (d.needsAttendance && !attOk)
+          return (
+            <button key={d.key} className="btn ghost" style={{ justifyContent: 'space-between', opacity: blocked ? 0.55 : 1 }} onClick={() => generate(d)}>
+              <span>⬇ {d.label}</span>
+              {blocked ? <Badge tone="red">Blocked</Badge> : <Badge tone="green">Ready</Badge>}
+            </button>
+          )
+        })}
       </div>
     </Modal>
   )

@@ -9,23 +9,35 @@ export const college = {
   subSlogan: "Study at Symanek — Where Dreams Take Shape",
   intro:
     "A registered vocational and healthcare training institution dedicated to equipping students with practical skills and professional knowledge in various fields.",
-  location: "Extension 6, Okahandja, Namibia",
+  location: "ERF 2948, Extension 6, Okahandja, Namibia",
   mission:
     "To provide accessible, industry-responsive, and transformative education, training, research, and innovation that empower individuals, strengthen communities, and contribute to sustainable socio-economic development in Namibia and beyond.",
   vision:
     "To be the most celebrated educational brand in Namibia and beyond, transforming lives through quality education, training, and research-driven innovation.",
   whyChooseUs:
     "Choose Symanek Specialized College for quality, industry-focused education that combines practical training, experienced facilitators, and a supportive learning environment to prepare you for career success and lifelong growth.",
+  // Every programme includes practical work-integrated learning.
+  internship:
+    "Every Symanek programme includes practical internship and work-integrated learning placements, so you graduate with real workplace experience.",
   accreditations: [
-    "Registered with the Nursing Council of Namibia for Auxiliary Nursing and Care Giving programmes",
-    "Registered with the NTA for Occupational Health & Safety and Office Administration Level 4",
-    "Recognised with the HPCNA",
+    "Accredited by the Namibia Qualifications Authority (NQA)",
+    "Registered with the Nursing Board of Namibia for the Auxiliary Nursing programme",
+    "Registered with the NTA for Occupational Health & Safety Levels 4 & 5, and Office Administration Level 4",
+    "Registered with the HPCNA",
+  ],
+  // TODO(pedro): confirmar/editar os valores institucionais reais (a ser gerido pela área admin).
+  values: [
+    { title: "Accessibility", body: "Education that is open, affordable and responsive to the communities we serve." },
+    { title: "Excellence", body: "Industry-responsive, quality training delivered by experienced facilitators." },
+    { title: "Integrity", body: "Honest, professional and ethical conduct in everything we do." },
+    { title: "Innovation", body: "Research-driven teaching that keeps our graduates ahead in their fields." },
+    { title: "Community", body: "Strengthening Namibia through skills that drive sustainable development." },
   ],
   contact: {
     phones: ["+264 85 804 5679", "+264 62 502 227"],
     emails: ["admin@symanekacademy.com", "info@symanekacademy.com"],
-    address: "Extension 6, Okahandja, Namibia",
-    hours: "7:00am – 6:00pm (Mon – Fri). Sat, Sun & Public Holidays: Closed",
+    address: "ERF 2948, Extension 6, Okahandja, Namibia",
+    hours: "07:30 – 17:00 (Mon – Thu) · 07:30 – 13:00 (Fri). Weekends & public holidays: closed",
     facebook: "https://facebook.com/Symanektrainingacademy",
     instagram: "https://instagram.com/Symanektrainingacademy",
     maps: "https://goo.gl/maps/DQ4LPE52wByQV3i29",
@@ -41,10 +53,24 @@ export const college = {
   },
 } as const;
 
+// Application & registration fees. Same for every programme, except caregiving's
+// higher registration fee. (Managed via the admin area — see Track B.)
+export const fees = {
+  application: 200, // N$ — all programmes
+  registration: 500, // N$ — all programmes…
+  registrationExceptions: {
+    "certificate-caregiving": 1650, // …except Caregiving.
+  } as Record<string, number>,
+} as const;
+
+export function registrationFee(slug: string): number {
+  return fees.registrationExceptions[slug] ?? fees.registration;
+}
+
 export const stats = [
   { value: "50+", label: "Programmes & short courses" },
-  { value: "NTA", label: "Nationally accredited" },
-  { value: "2", label: "Study modes — full-time & distance" },
+  { value: "NQA", label: "Nationally accredited" },
+  { value: "3", label: "Study modes — full-time, distance & part-time online" },
   { value: "100%", label: "Practical, industry-focused" },
 ] as const;
 
@@ -70,28 +96,31 @@ export type Category = {
 export const categories: Category[] = [
   {
     slug: "nursing-care",
-    title: "Nursing & Care",
+    title: "Nursing & Healthcare",
     blurb:
-      "Caring professions — from auxiliary nursing to caregiving — registered with the Nursing Council of Namibia.",
+      "Caring professions — from auxiliary nursing to caregiving. Our Auxiliary Nursing programme is registered with the Nursing Board of Namibia.",
     programmes: [
       {
         slug: "certificate-auxiliary-nursing-science",
         name: "Certificate in Auxiliary Nursing Science",
-        duration: "Certificate",
-        modes: "Full-Time, Distance Learning",
+        level: "NQF Level 5",
+        // TODO(pedro): confirmar duração, fee e admission requirements (gerir na área admin).
+        duration: "12 Months",
+        modes: "Full-Time, Distance, Part-Time (Online Synchronisation)",
         description:
-          "Prepares students to provide basic nursing care and support services under the supervision of registered nurses. Registered with the Nursing Council of Namibia.",
+          "Prepares students to provide basic nursing care and support services under the supervision of registered nurses. Registered with the Nursing Board of Namibia.",
         careers: ["Auxiliary Nurse", "Nursing Assistant", "Care Support Worker", "Clinic Support Staff"],
       },
       {
         slug: "certificate-caregiving",
         name: "Certificate in Caregiving",
+        level: "NQF Level 3",
         duration: "6 Months",
         fee: 9370,
-        modes: "Full-Time, Distance Learning",
+        modes: "Full-Time, Distance, Part-Time (Online Synchronisation)",
         requirements: "Grade 9–12 with minimum 15 points; relevant caregiving experience may strengthen applications.",
         description:
-          "Equips learners with practical skills to provide quality care and support to elderly persons, persons with disabilities and chronically ill patients. Registered with the Nursing Council of Namibia for Care Giving.",
+          "Equips learners with practical skills to provide quality care and support to elderly persons, persons with disabilities and chronically ill patients.",
         careers: ["Caregiver", "Home-Based Care Assistant", "Elderly Care Assistant", "Disability Support Worker", "Community Health Assistant"],
       },
     ],
@@ -106,15 +135,19 @@ export const categories: Category[] = [
         slug: "bachelor-ohse-honours-nqf8",
         name: "Bachelor of Occupational Health, Safety and Environmental Management, Honours",
         level: "NQF Level 8",
-        duration: "Degree",
+        duration: "1 Year",
+        modes: "Full-Time (Face-to-Face), Distance, Part-Time (Online Synchronisation)",
+        // TODO(pedro): confirmar fee e admission requirements (gerir na área admin).
         description:
-          "Provides advanced knowledge and professional competencies required for senior safety and environmental management roles.",
+          "A one-year honours degree that provides advanced knowledge and professional competencies required for senior safety and environmental management roles.",
       },
       {
         slug: "bachelor-ohse-nqf7",
         name: "Bachelor of Occupational Health, Safety and Environmental Management",
         level: "NQF Level 7",
-        duration: "3-year degree",
+        duration: "3 Years",
+        modes: "Full-Time (Face-to-Face), Distance, Part-Time (Online Synchronisation)",
+        // TODO(pedro): confirmar fee e admission requirements (gerir na área admin).
         description:
           "A comprehensive three-year degree designed to prepare graduates to manage workplace safety and environmental concerns.",
       },
@@ -132,7 +165,7 @@ export const categories: Category[] = [
         level: "Level 4",
         duration: "12 Months",
         fee: 19670,
-        modes: "Full-Time (Preferred), Distance Learning",
+        modes: "Full-Time (Preferred), Distance, Part-Time (Online Synchronisation)",
         requirements:
           "Grade 11 or 12 with minimum 20 points. Grade 10 (old curriculum) with minimum 22 points. English with an E symbol or better.",
         description:
@@ -145,7 +178,7 @@ export const categories: Category[] = [
         level: "Level 5",
         duration: "12 Months",
         fee: 19670,
-        modes: "Full-Time, Distance Learning",
+        modes: "Full-Time, Distance, Part-Time (Online Synchronisation)",
         requirements: "Occupational Health and Safety Level 4 qualification.",
         description:
           "Advanced competencies in workplace safety management, compliance monitoring, occupational risk management and incident prevention. Progresses to the Bachelor in Occupational Health, Safety and Environmental Management Level 7.",
@@ -157,7 +190,7 @@ export const categories: Category[] = [
         level: "Level 4",
         duration: "12 Months",
         fee: 14090,
-        modes: "Full-Time, Distance Learning",
+        modes: "Full-Time, Distance, Part-Time (Online Synchronisation)",
         requirements:
           "Grade 11 or 12 with minimum 20 points. Grade 10 with minimum 22 points. English with an E symbol or better. Certificate in Counselling Services Level 3.",
         description:
@@ -170,7 +203,7 @@ export const categories: Category[] = [
         level: "Level 5",
         duration: "12 Months",
         fee: 14090,
-        modes: "Full-Time, Distance Learning",
+        modes: "Full-Time, Distance, Part-Time (Online Synchronisation)",
         requirements: "Mental Health Support Level 4 or Counselling Services Level 4.",
         description: "Advanced psychosocial support, counselling and mental health intervention skills.",
         careers: ["Psychosocial Counsellor", "Mental Health Practitioner Assistant", "Community Development Practitioner", "Employee Wellness Coordinator", "Youth Counsellor"],
@@ -181,7 +214,7 @@ export const categories: Category[] = [
         level: "Level 4",
         duration: "12 Months",
         fee: 14090,
-        modes: "Full-Time, Distance Learning",
+        modes: "Full-Time, Distance, Part-Time (Online Synchronisation)",
         requirements:
           "Grade 11 or 12 with minimum 20 points in six subjects; Grade 10 (old curriculum) with minimum 22 points; English with an E symbol or better; National Vocational Certificate in Office Administration Level 3; or mature-age entry with 3+ years relevant work experience.",
         description:
@@ -194,7 +227,7 @@ export const categories: Category[] = [
         level: "Level 5",
         duration: "12 Months",
         fee: 14090,
-        modes: "Full-Time, Distance Learning",
+        modes: "Full-Time, Distance, Part-Time (Online Synchronisation)",
         requirements: "Medical Office Administration Level 4, Medical Secretary Level 4, Office Administration Level 4, or equivalent NQF Level 4.",
         description: "Supervisory and management roles in healthcare administration.",
         careers: ["Medical Office Manager", "Hospital Administrator", "Practice Administrator", "Patient Services Manager", "Health Records Supervisor"],
@@ -205,7 +238,7 @@ export const categories: Category[] = [
         level: "Level 4",
         duration: "12 Months",
         fee: 14090,
-        modes: "Full-Time, Distance Learning",
+        modes: "Full-Time, Distance, Part-Time (Online Synchronisation)",
         requirements: "Grade 11 or 12 with minimum 20 points. Grade 10 with minimum 22 points. English with an E symbol or better. Food and Nutrition Level 3 or Community Health Level 3.",
         description: "Practical knowledge in nutrition, healthy living, food science, community nutrition and health promotion.",
         careers: ["Nutrition Assistant", "Community Nutrition Worker", "Health Promotion Assistant", "School Nutrition Assistant", "Wellness Programme Assistant"],
@@ -216,7 +249,7 @@ export const categories: Category[] = [
         level: "Level 5",
         duration: "12 Months",
         fee: 14090,
-        modes: "Full-Time, Distance Learning",
+        modes: "Full-Time, Distance, Part-Time (Online Synchronisation)",
         requirements: "National Vocational Certificate in Nutrition and Dietetics Level 4 or Community Health Level 4.",
         description: "Advanced nutrition assessment, diet planning, health promotion, food safety, occupational nutrition and community programmes.",
         careers: ["Nutrition Technician", "Community Nutrition Practitioner", "Workplace Wellness Coordinator", "Health Promotion Officer", "Food Service Supervisor"],
@@ -233,7 +266,7 @@ export const categories: Category[] = [
         name: "Certificate in Medical Secretary",
         duration: "6 Months",
         fee: 11020,
-        modes: "Full-Time, Distance Learning",
+        modes: "Full-Time, Distance, Part-Time (Online Synchronisation)",
         requirements: "Grade 9–12 with minimum 15 points; one year work experience as a Medical Secretary or Receptionist considered.",
         description: "Prepares students for administrative roles within healthcare facilities — medical terminology, office administration, patient communication and records management.",
         careers: ["Medical Secretary", "Medical Receptionist", "Clinic Administrator", "Patient Records Clerk", "Front Office Administrator"],
