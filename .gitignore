@@ -16,6 +16,12 @@ supabase/.temp/
 supabase/.branches/
 supabase/.env
 
+# student login credentials produced by the import script — NEVER commit
+supabase/import/students_credentials.csv
+
+# deploy secrets (DB url, service-role key) — NEVER commit
+supabase/.env.deploy
+
 # logs / os
 *.log
 .DS_Store

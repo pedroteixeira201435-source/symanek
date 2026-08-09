@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Tabs, Panel, Badge, Modal, Toast, useToast } from '../ui.jsx'
+import { Tabs, Panel, Badge, Modal, Toast, useToast, Icon } from '../ui.jsx'
 import { PERIODS, TIMETABLES, DUTY_ROSTER, RELIEF_TODAY, SUBJECT_STYLES } from '../data.js'
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
@@ -37,12 +37,12 @@ function ReliefBoard() {
     <>
       {uncovered > 0 ? (
         <div className="banner">
-          <span style={{ fontSize: 18 }}>⚠️</span>
+          <Icon name="alert" size={18} />
           <div><strong>{uncovered} period{uncovered > 1 ? 's' : ''} still uncovered today</strong> — assign relief before P1 starts at 07:30.</div>
         </div>
       ) : (
         <div className="note-banner">
-          <span>✅</span>
+          <Icon name="check" size={16} />
           <div><strong>All periods covered.</strong> Relief staff have been notified of their assignments.</div>
         </div>
       )}
@@ -67,7 +67,7 @@ function ReliefBoard() {
                   <td>{p.room}</td>
                   <td>
                     {p.cover ? (
-                      <Badge tone="green">✓ {p.cover}</Badge>
+                      <Badge tone="green"><Icon name="tick" size={12} /> {p.cover}</Badge>
                     ) : (
                       <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {p.options.map((o) => (
@@ -209,7 +209,7 @@ function Timetable() {
           </div>
           {occupied && (
             <div className="note-banner" style={{ background: 'var(--orange-soft)', borderColor: '#eeddbc', color: 'var(--orange)' }}>
-              <span>⚠</span>
+              <Icon name="alert" size={16} />
               <div>Conflict: {occupied.s} ({occupied.r}) already occupies this slot — it will be replaced.</div>
             </div>
           )}

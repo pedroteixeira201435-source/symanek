@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { StatCard, Panel, Badge, Toast, useToast } from '../ui.jsx'
+import { StatCard, Panel, Badge, Toast, useToast, Icon } from '../ui.jsx'
 import * as api from '../api.js'
 
 // Graduation & clearance — clearance is DERIVED from live data (finance = no
@@ -35,7 +35,7 @@ export default function Graduation() {
     }
   }
 
-  const Chk = ({ ok, label }) => <Badge tone={ok ? 'green' : 'red'}>{ok ? '✓' : '✗'} {label}</Badge>
+  const Chk = ({ ok, label }) => <Badge tone={ok ? 'green' : 'red'}><Icon name={ok ? 'tick' : 'x'} size={12} /> {label}</Badge>
 
   return (
     <>
@@ -61,7 +61,7 @@ export default function Graduation() {
                 </td>
                 <td>
                   {isIssued(g) ? (
-                    <Badge tone="green">📜 Issued</Badge>
+                    <Badge tone="green"><Icon name="scroll" size={12} /> Issued</Badge>
                   ) : isCleared(g) ? (
                     <button className="btn primary sm" disabled={busy === g.student} onClick={() => issue(g)}>{busy === g.student ? '…' : 'Issue certificate'}</button>
                   ) : (

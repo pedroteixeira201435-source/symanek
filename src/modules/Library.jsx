@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { StatCard, Tabs, Panel, Badge, Toast, useToast, Modal } from '../ui.jsx'
+import { StatCard, Tabs, Panel, Badge, Toast, useToast, Modal, Icon } from '../ui.jsx'
 import { LIBRARY_STATS, CATALOGUE, LOANS, FINES, RESERVATIONS, fmtN } from '../data.js'
 
 const CAT_TONE = { Textbook: 'teal', Literature: 'purple', Reference: 'blue', Biography: 'amber' }
@@ -230,7 +230,7 @@ function Catalogue({ books, loans, showToast }) {
             style={{ marginTop: 12 }}
             onClick={() => { setSel(null); showToast(`Purchase order raised — 10 copies of "${sel.title}" from Namibia Book Market`) }}
           >
-            🛒 Order more copies
+            <Icon name="cart" size={14} /> Order more copies
           </button>
           <div style={{ margin: '14px 0 6px', fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)' }}>
             CURRENTLY WITH ({borrowers.length})
@@ -263,7 +263,7 @@ function Loans({ loans, onReturn, onRenew, showToast }) {
           disabled={overdue === 0}
           onClick={() => showToast(`Overdue reminders sent — ${overdue} SMS to guardians/staff`)}
         >
-          📣 Send overdue reminders
+          <Icon name="send" size={14} /> Send overdue reminders
         </button>
       }
       flush
@@ -283,8 +283,8 @@ function Loans({ loans, onReturn, onRenew, showToast }) {
               <td><Badge tone={LOAN_TONE[l.status]}>{l.status}</Badge></td>
               <td>
                 <span style={{ display: 'flex', gap: 6 }}>
-                  <button className="btn ghost sm" onClick={() => onReturn(l.id)}>↩ Return</button>
-                  <button className="btn ghost sm" onClick={() => onRenew(l.id)}>⟳ Renew</button>
+                  <button className="btn ghost sm" onClick={() => onReturn(l.id)}><Icon name="undo" size={14} /> Return</button>
+                  <button className="btn ghost sm" onClick={() => onRenew(l.id)}><Icon name="refresh" size={14} /> Renew</button>
                 </span>
               </td>
             </tr>
@@ -322,7 +322,7 @@ function Fines({ fines, setFines, showToast }) {
                 <td>{f.book}</td>
                 <td className="num">{f.days}</td>
                 <td className="num" style={{ color: 'var(--red)', fontWeight: 700 }}>{fmtN(f.days * RATE)}</td>
-                <td><button className="btn green sm" onClick={() => markPaid(f.id)}>✓ Mark paid</button></td>
+                <td><button className="btn green sm" onClick={() => markPaid(f.id)}><Icon name="tick" size={14} /> Mark paid</button></td>
               </tr>
             ))}
           </tbody>

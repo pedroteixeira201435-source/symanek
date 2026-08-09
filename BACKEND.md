@@ -43,7 +43,7 @@ RBAC (via RLS), uploads e tempo-real sem infra própria.
 - **Holds financeiros**: criar/libertar automaticamente por saldo em aberto.
 - **Clearance de graduação**: derivar de invoices/loans/results (já derivado no front em `Graduation.jsx`).
 - **Fiscalidade NamRA**: PAYE/SSC/VET, IVA de suprimentos mistos, imposto 30%, provisional tax (hoje em `Accounting.jsx`).
-- **Assessment**: `final = 0.4*CA + 0.6*exam`, publicação bloqueia edição.
+- **Assessment**: `final = 0.6*CA + 0.4*exam` (regra do cliente, 2026), publicação bloqueia edição.
 
 ## Contratos de operação (mapa `api.js` → endpoint)
 | Operação (api.js) | Método/rota (sugerido) | Regras server-side |

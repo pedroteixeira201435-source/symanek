@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { StatCard, Panel, Progress, Badge, Toast, useToast } from '../ui.jsx'
+import { StatCard, Panel, Progress, Badge, Toast, useToast, Icon } from '../ui.jsx'
 import { ENROLMENT_BY_GRADE, FEE_COLLECTION, ACTIVITY_FEED, CASHFLOW, WORK_QUEUE, SCHOOL, fmtN } from '../data.js'
 
 const linkStyle = {
@@ -86,14 +86,14 @@ export default function Dashboard({ go }) {
   return (
     <>
       <div className="banner">
-        <span style={{ fontSize: 18 }}>⚠️</span>
+        <Icon name="alert" size={18} />
         <div>
           <strong>{openCount} items need attention</strong> — assigned in the action queue below.
           Jump to <button style={linkStyle} onClick={() => go('finance')}>Finance</button> or{' '}
           <button style={linkStyle} onClick={() => go('canteen')}>Canteen</button>.
         </div>
         <div className="spacer" style={{ marginLeft: 'auto' }} />
-        <button className="btn ghost sm" onClick={printTermReport}>🖨 Print term report</button>
+        <button className="btn ghost sm" onClick={printTermReport}><Icon name="printer" size={14} /> Print term report</button>
       </div>
 
       <div className="stat-row c5">

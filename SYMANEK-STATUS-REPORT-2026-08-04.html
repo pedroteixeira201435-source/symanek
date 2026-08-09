@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Symanek Specialized College — Project Status Report</title>
+<style>
+  @page { size: A4; margin: 16mm 15mm; }
+  body { font-family: 'Liberation Sans', Arial, sans-serif; color: #22303c; font-size: 10.5pt; line-height: 1.45; }
+  h1 { font-size: 22pt; color: #ffffff; margin: 0; }
+  h2 { font-size: 14pt; color: #16406b; border-bottom: 2px solid #f5b301; padding-bottom: 3px; margin: 22px 0 8px; }
+  h3 { font-size: 11.5pt; color: #16406b; margin: 14px 0 4px; }
+  p  { margin: 6px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0; font-size: 9.8pt; }
+  th { background: #16406b; color: #fff; text-align: left; padding: 6px 8px; }
+  td { border: 1px solid #cbd5e1; padding: 5px 8px; vertical-align: top; }
+  .cover { background: #16406b; color: #fff; padding: 30px 26px; }
+  .cover .sub { color: #cfe0f2; font-size: 11pt; margin-top: 6px; }
+  .tag { display: inline-block; background: #f5b301; color: #16406b; font-weight: bold; padding: 2px 8px; font-size: 9pt; }
+  .done { color: #1a7f37; font-weight: bold; }
+  .prog { color: #b58100; font-weight: bold; }
+  .block { color: #b42318; font-weight: bold; }
+  .muted { color: #64748b; }
+  ul { margin: 6px 0 6px 0; padding-left: 20px; }
+  li { margin: 3px 0; }
+  .box { border: 1px solid #cbd5e1; border-left: 4px solid #f5b301; padding: 8px 12px; margin: 8px 0; background: #fbfcfe; }
+  .pagebreak { page-break-before: always; }
+  .small { font-size: 9pt; }
+  .kpi td { text-align: center; font-size: 10pt; }
+  .kpi .n { font-size: 16pt; font-weight: bold; color: #16406b; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="tag">PROJECT STATUS REPORT</div>
+  <h1>Symanek Specialized College</h1>
+  <div class="sub">Website &middot; Student Portal &middot; Symanek Suite (management system)</div>
+  <div class="sub">Prepared: 4 August 2026 &nbsp;|&nbsp; Status as of client responses received 2 August 2026</div>
+</div>
+
+<h2>1. Executive summary</h2>
+<p>
+The <strong>public website is live in production</strong> and now carries the college's real
+programmes, fees, admission requirements, official values and banking details. The
+<strong>Symanek Suite</strong> (management system) and <strong>Student Portal</strong> are fully
+built and the academic engine is complete and matches the college's confirmed rules — but the Suite
+is still running in <strong>demo/offline mode</strong> and is <strong>not yet connected to the live
+database</strong>. The remaining work to reach full production is well defined and is driven mainly by
+(a) connecting the Suite to the cloud and loading real accounts/data, and (b) a small set of items
+still needed from the college.
+</p>
+
+<table class="kpi">
+  <tr>
+    <td><div class="n">~90%</div>Public website</td>
+    <td><div class="n">~70%</div>Suite (built, not connected)</td>
+    <td><div class="n">100%</div>Academic rules engine</td>
+    <td><div class="n">6</div>Client items outstanding</td>
+  </tr>
+</table>
+
+<h2>2. What was completed in this round (client responses processed)</h2>
+<p>The college's documents of 2 August were reviewed and actioned:</p>
+<table>
+  <tr><th style="width:32%">Area</th><th>Done</th></tr>
+  <tr><td>Public website content</td><td class="done">DEPLOYED — 8 official values; real banking details (FNB Okahandja, acc. 64279814676, branch 280373); missing tuition fees added (Bachelor L7 &amp; L8 = N$18,490; Auxiliary Nursing = N$19,630); admission requirements for both Bachelors and Auxiliary Nursing. Live at symanek-site.vercel.app.</td></tr>
+  <tr><td>Grading rule — second opportunity (D2)</td><td class="done">DONE — re-sit final mark now capped at 50% (a "bare pass"), in both the frontend engine and a new database function.</td></tr>
+  <tr><td>Go-live data prepared</td><td class="done">READY TO LOAD — 7 staff accounts, 145 curriculum modules across 10 programmes, and 24 registered Auxiliary Nursing students (January 2026 intake), packaged as a repeatable database seed.</td></tr>
+  <tr><td>Confirmed decisions recorded</td><td class="done">60% CA / 40% exam; pass 50% (exam paper 40%); 45–49% = second opportunity; 80% attendance for exam admission; two intakes (Jan/July); EFT + proof of payment; automatic emails to students; launch scope incl. LMS.</td></tr>
+</table>
+
+<h2>3. Current state by component</h2>
+<table>
+  <tr><th style="width:20%">Component</th><th style="width:14%">Status</th><th>Detail</th></tr>
+  <tr>
+    <td><strong>Public website</strong></td><td class="done">LIVE</td>
+    <td>Next.js site deployed on Vercel with real content. Pending: graduation photos for the gallery, and pointing the custom domain <em>symanekacademy.com</em> to the new site.</td>
+  </tr>
+  <tr>
+    <td><strong>Academic engine</strong></td><td class="done">COMPLETE</td>
+    <td>All marking rules implemented and confirmed by the college (60/40, pass thresholds, second-opportunity with 50% cap, formative structure, attendance 80%, admin-controlled academic windows).</td>
+  </tr>
+  <tr>
+    <td><strong>Symanek Suite</strong></td><td class="prog">BUILT — OFFLINE</td>
+    <td>All modules built (Admissions, Registration, Marks/Exams, Finance, HR, Student &amp; Teacher portals, LMS, etc.). Currently in <strong>demo mode</strong> — data lives in memory and does not persist. Not yet connected to the live database.</td>
+  </tr>
+  <tr>
+    <td><strong>Database (Supabase cloud)</strong></td><td class="prog">PROVISIONED</td>
+    <td>Cloud project exists. Schema migrations (including today's second-opportunity fix) are written but <strong>not yet applied</strong> to the cloud. Programme catalogue and go-live seed are prepared.</td>
+  </tr>
+  <tr>
+    <td><strong>User accounts / login</strong></td><td class="block">NOT STARTED</td>
+    <td>Real staff and student login accounts have not been created yet; the Suite still uses a demo role-picker. Required before real users can log in.</td>
+  </tr>
+  <tr>
+    <td><strong>Official letters &amp; documents</strong></td><td class="block">BLOCKED</td>
+    <td>Admission/rejection letters, exam permits, proof of registration and results documents are built, but need the college's letterhead, authorised signatory and stamp before they can be issued officially.</td>
+  </tr>
+  <tr>
+    <td><strong>Automatic emails (A2)</strong></td><td class="prog">TO IMPLEMENT</td>
+    <td>The college chose automatic emailing of documents to students. The system currently generates documents for manual sending; auto-send is a defined follow-up task.</td>
+  </tr>
+</table>
+
+<div class="pagebreak"></div>
+
+<h2>4. Outstanding items needed from the college</h2>
+<p>These were requested in the follow-up note of 4 August. Items 1–2 block the official letters.</p>
+<table>
+  <tr><th style="width:5%">#</th><th style="width:30%">Item</th><th>Why it is needed</th></tr>
+  <tr><td>1</td><td class="block">Letterhead &amp; signatory</td><td>Logo, colours, and the name/title/signature to appear on all official documents.</td></tr>
+  <tr><td>2</td><td class="block">Official stamp</td><td>Stamp image for admission letters, permits, proof of registration and results.</td></tr>
+  <tr><td>3</td><td>OHS Level 4 &amp; 5 modules</td><td>The file supplied is the NQA unit-standard document; the exact module list (codes + credits) is needed to load them like the other programmes.</td></tr>
+  <tr><td>4</td><td>Lecturer per module</td><td>To route marks and class registers to the correct staff member.</td></tr>
+  <tr><td>5</td><td>Student lists (other programmes)</td><td>Only Auxiliary Nursing was supplied; the rest are needed to import enrolled students.</td></tr>
+  <tr><td>6</td><td>Graduation photos</td><td>To complete the website gallery.</td></tr>
+  <tr><td>7</td><td class="muted">Confirm Bachelor L7 fee</td><td>The fee document shows tuition of N$16,000 but the instalment note uses N$15,000 — please confirm.</td></tr>
+</table>
+
+<h2>5. Roadmap to 100% production</h2>
+<p>Ordered plan. "SSC" = Symanek; "Dev" = development team.</p>
+<table>
+  <tr><th style="width:5%">Step</th><th>Action</th><th style="width:12%">Owner</th></tr>
+  <tr><td>1</td><td>Authorise and connect the cloud: apply all database migrations to the live Supabase project (incl. the new second-opportunity cap).</td><td>Pedro / Dev</td></tr>
+  <tr><td>2</td><td>Load real data into the cloud: programme catalogue, 145 modules, 7 staff, 24 Auxiliary Nursing students (seed already prepared).</td><td>Dev</td></tr>
+  <tr><td>3</td><td>Create real login accounts for staff and students, assign roles, and link them to their records. Retire the demo role-picker.</td><td>Dev</td></tr>
+  <tr><td>4</td><td>Switch the Suite from demo mode to live (connect to the cloud database) and redeploy.</td><td>Dev</td></tr>
+  <tr><td>5</td><td>Implement automatic emailing of letters and notifications to students (decision A2).</td><td>Dev</td></tr>
+  <tr><td>6</td><td>Receive letterhead, signatory and stamp (items 1–2); wire them into document generation; enable official letters.</td><td>SSC &rarr; Dev</td></tr>
+  <tr><td>7</td><td>Load remaining client data: OHS L4/L5 modules, lecturer-per-module mapping, other programmes' students, graduation photos.</td><td>SSC &rarr; Dev</td></tr>
+  <tr><td>8</td><td>End-to-end smoke test of every flow: application &rarr; admission &rarr; registration &rarr; marks &rarr; results &rarr; finance; attendance (80% rule); second-opportunity (50% cap); LMS submissions.</td><td>Dev</td></tr>
+  <tr><td>9</td><td>Security hardening (per-lecturer access controls), automated backups and monitoring.</td><td>Dev</td></tr>
+  <tr><td>10</td><td>User Acceptance Testing with the college; then point the domain <em>symanekacademy.com</em> to the new site and confirm the go-live date.</td><td>SSC + Dev</td></tr>
+</table>
+
+<h2>6. Go-live checklist (summary)</h2>
+<table>
+  <tr><th style="width:70%">Gate</th><th>Status</th></tr>
+  <tr><td>Public website live with real content</td><td class="done">DONE</td></tr>
+  <tr><td>Academic rules confirmed &amp; implemented</td><td class="done">DONE</td></tr>
+  <tr><td>Go-live data prepared</td><td class="done">DONE</td></tr>
+  <tr><td>Database connected &amp; migrations applied</td><td class="prog">PENDING</td></tr>
+  <tr><td>Real accounts created &amp; Suite connected (live mode)</td><td class="prog">PENDING</td></tr>
+  <tr><td>Automatic emails implemented</td><td class="prog">PENDING</td></tr>
+  <tr><td>Letterhead, signatory &amp; stamp received and wired in</td><td class="block">BLOCKED (client)</td></tr>
+  <tr><td>Remaining programmes' modules, lecturers &amp; students loaded</td><td class="block">BLOCKED (client)</td></tr>
+  <tr><td>End-to-end testing &amp; UAT signed off</td><td class="prog">PENDING</td></tr>
+  <tr><td>Backups, monitoring &amp; security hardening</td><td class="prog">PENDING</td></tr>
+</table>
+
+<div class="box small">
+  <strong>Bottom line:</strong> the public-facing site is done and live. Reaching a fully operational
+  management system is now mostly execution on the connection and data-loading steps (1–5, 8–9),
+  plus a short list of assets from the college (letterhead, stamp, remaining module/lecturer/student
+  data). Once steps 1–7 are complete, we can confirm a firm go-live date.
+</div>
+
+<p class="small muted" style="margin-top:18px">
+  Symanek Specialized College — project status report &middot; 4 August 2026 &middot; internal / client-shareable.
+</p>
+
+</body>
+</html>

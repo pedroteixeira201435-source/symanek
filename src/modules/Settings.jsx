@@ -1,7 +1,15 @@
-import React, { useState } from 'react'
-import { Panel, Badge, Avatar, Toast, useToast } from '../ui.jsx'
+import React, { useState, useEffect } from 'react'
+import { Panel, Badge, Avatar, Toast, useToast, Icon } from '../ui.jsx'
 import { SCHOOL, ROLES, AUDIT_LOG, BP_DEFS, staffEmail } from '../data.js'
 import { CONTROL_WINDOWS, INTAKES } from '../lib/controls.js'
+import { listAcademicWindows, setAcademicWindow } from '../api.js'
+
+// Backend rows ({ kind, is_open, opens_at, closes_at }) → the UI shape used
+// below, borrowing the human label from CONTROL_WINDOWS (keyed by kind).
+const labelFor = (kind) => CONTROL_WINDOWS.find((w) => w.key === kind)?.label || kind
+function toWindowRow(r) {
+  return { key: r.kind, label: labelFor(r.kind), open: !!r.is_open, from: r.opens_at || '', to: r.closes_at || '' }
+}
 
 const TERMS = [
   { term: 'Term 1', dates: '14 Jan – 25 Apr 2026', status: 'Closed' },
@@ -32,10 +40,26 @@ export default function Settings() {
   const [windows, setWindows] = useState(CONTROL_WINDOWS)
   const [intake, setIntake] = useState('july')
 
-  const toggleWindow = (key) => {
-    setWindows((ws) => ws.map((w) => (w.key === key ? { ...w, open: !w.open } : w)))
+  // Load the persisted control windows (backend in http mode, mock otherwise).
+  useEffect(() => {
+    let alive = true
+    listAcademicWindows()
+      .then((rows) => { if (alive && Array.isArray(rows) && rows.length) setWindows(rows.map(toWindowRow)) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
+  const toggleWindow = async (key) => {
     const w = windows.find((x) => x.key === key)
-    showToast(`${w.label} ${w.open ? 'closed' : 'opened'} — audit log updated`)
+    const nextOpen = !w.open
+    setWindows((ws) => ws.map((x) => (x.key === key ? { ...x, open: nextOpen } : x)))
+    showToast(`${w.label} ${nextOpen ? 'opened' : 'closed'} — audit log updated`)
+    try {
+      await setAcademicWindow({ kind: key, isOpen: nextOpen, opensAt: w.from || null, closesAt: w.to || null, year: 2026, intake })
+    } catch (e) {
+      setWindows((ws) => ws.map((x) => (x.key === key ? { ...x, open: !nextOpen } : x)))
+      showToast(`Could not save — ${e.message || 'try again'}`)
+    }
   }
   const setWindowDate = (key, field, value) => {
     setWindows((ws) => ws.map((w) => (w.key === key ? { ...w, [field]: value } : w)))
@@ -221,7 +245,7 @@ export default function Settings() {
       <Panel
         title="Audit log"
         subtitle="Every sensitive change is written here — marks, money, payroll, till variances"
-        actions={<button className="btn ghost sm" onClick={() => showToast('Audit log exported to CSV')}>⬇ Export</button>}
+        actions={<button className="btn ghost sm" onClick={() => showToast('Audit log exported to CSV')}><Icon name="download" size={14} /> Export</button>}
         flush
       >
         <table className="data">

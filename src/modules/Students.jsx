@@ -1,37 +1,64 @@
 import React, { useEffect, useState } from 'react'
-import { StatCard, Panel, Badge, Avatar, Modal, Toast, useToast } from '../ui.jsx'
+import { StatCard, Panel, Badge, Avatar, Modal, Toast, useToast, Icon } from '../ui.jsx'
 import { SCHOOL, LEARNERS, INVOICES, GRADEBOOKS, LOANS, INCIDENTS, HOLDS, gradeOf, fmtN } from '../data.js'
 import { STUDENT_DOCUMENTS, ATTENDANCE_MIN } from '../lib/controls.js'
+import { listStudents, issueDocument, getCollegeSettings, getSignatories } from '../api.js'
 
-// Open a print-ready official document in a new window (letterhead + body).
-function printStudentDoc(student, docLabel, bodyHtml) {
+const esc = (v) => String(v ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]))
+
+// Open a print-ready official document in a new window, using the college's
+// official letterhead + the correct signatory (from college_settings/signatories).
+function printStudentDoc(student, docLabel, bodyHtml, college, signatory) {
+  const c = college || {}
+  const name = esc(c.name || 'Symanek Specialized College')
+  const initial = (c.name || 'S').trim().charAt(0)
+  const contactLine = [c.address, c.po_box].filter(Boolean).map(esc).join(' · ')
+  const commsLine = [c.phone && `Tel: ${c.phone}`, c.cell && `Cell: ${c.cell}`, c.email]
+    .filter(Boolean).map(esc).join(' · ')
+  const regLine = [c.reg_no && `Reg. No: ${c.reg_no}`, c.tax_no && `Tax No: ${c.tax_no}`]
+    .filter(Boolean).map(esc).join('  ·  ')
+  const sig = signatory || {}
   const w = window.open('', '_blank', 'width=760,height=900')
   if (!w) return
-  w.document.write(`<!doctype html><html><head><title>${docLabel} — ${student.name}</title>
+  w.document.write(`<!doctype html><html><head><title>${esc(docLabel)} — ${esc(student.name)}</title>
     <style>
       body{font-family:Georgia,'Times New Roman',serif;color:#12303f;margin:48px;line-height:1.55}
-      .lh{display:flex;align-items:center;gap:14px;border-bottom:3px solid #12506b;padding-bottom:14px}
-      .lh .m{width:46px;height:46px;border-radius:10px;background:#12506b;color:#fff;display:grid;place-items:center;font-weight:800;font-size:22px}
-      h1{font-size:19px;margin:26px 0 4px}
+      .lh{display:flex;align-items:center;gap:14px;border-bottom:3px solid #12506b;padding-bottom:12px}
+      .lh .m{width:48px;height:48px;border-radius:10px;background:#12506b;color:#fff;display:grid;place-items:center;font-weight:800;font-size:22px}
+      .lh .reg{font-size:11px;color:#5a7180;margin-top:3px}
+      h1{font-size:18px;margin:24px 0 4px}
       .meta{font-size:13px;color:#5a7180;margin-bottom:18px}
       table{border-collapse:collapse;width:100%;font-size:13px;margin:10px 0}
       td,th{border:1px solid #d7e0e7;padding:6px 9px;text-align:left}
-      .sig{margin-top:60px;font-size:13px}
-      .foot{margin-top:40px;font-size:11px;color:#7c93a2;border-top:1px solid #d7e0e7;padding-top:10px}
+      .sig{margin-top:54px;font-size:13px;display:flex;justify-content:space-between;align-items:flex-end}
+      .stamp{width:120px;height:120px;border:2px dashed #b7c6d0;border-radius:50%;display:grid;place-items:center;color:#9fb0bb;font-size:10px;text-align:center}
+      .foot{margin-top:36px;font-size:11px;color:#7c93a2;border-top:1px solid #d7e0e7;padding-top:10px}
     </style></head><body>
-    <div class="lh"><div class="m">S</div><div>
-      <div style="font-weight:700;font-size:16px">Symanek Specialized College</div>
-      <div style="font-size:12px;color:#5a7180">ERF 2948, Extension 6, Okahandja, Namibia</div>
+    <div class="lh"><div class="m">${esc(initial)}</div><div>
+      <div style="font-weight:700;font-size:16px">${name}</div>
+      <div style="font-size:12px;color:#5a7180">${contactLine}</div>
+      <div style="font-size:12px;color:#5a7180">${commsLine}</div>
+      <div class="reg">${regLine}</div>
     </div></div>
-    <h1>${docLabel}</h1>
-    <div class="meta">Student: <b>${student.name}</b> · ${student.id} · ${student.grade} · Issued ${new Date().toLocaleDateString('en-NA')}</div>
+    <h1>${esc(docLabel)}</h1>
+    <div class="meta">Student: <b>${esc(student.name)}</b> · ${esc(student.id)} · ${esc(student.grade)} · Issued ${new Date().toLocaleDateString('en-NA')}</div>
     ${bodyHtml}
-    <div class="sig">_____________________________<br/>Registrar · Symanek Specialized College</div>
-    <div class="foot">This is a computer-generated document from the Symanek Suite. Verify authenticity with the Registrar's office.</div>
+    <div class="sig">
+      <div>_____________________________<br/><b>${esc(sig.name || '')}</b><br/>${esc(sig.title || '')}<br/>${name}</div>
+      <div class="stamp">OFFICIAL<br/>STAMP</div>
+    </div>
+    <div class="foot">This is a computer-generated document from the Symanek Suite${c.portal_url ? ` · Portal: ${esc(c.portal_url)}` : ''}. Verify authenticity with the Office of the Registrar.</div>
     </body></html>`)
   w.document.close()
   w.focus()
   w.print()
+}
+
+// Which signatory signs which document (role_key in the signatories table).
+const SIGN_BY_DOC = {
+  admission_letter: 'registrar', rejection_letter: 'registrar',
+  proof_of_registration: 'registrar', exam_permit: 'registrar',
+  academic_record: 'registrar', statement_of_results: 'registrar',
 }
 
 // Student 360 — every module converges on one learner file:
@@ -44,12 +71,21 @@ export default function Students({ focus, clearFocus, go }) {
   const [showAdd, setShowAdd] = useState(false)
   const [toast, showToast] = useToast()
 
+  // Load the roster through the data-access seam (backend in http mode, mock otherwise).
+  useEffect(() => {
+    let alive = true
+    listStudents()
+      .then((rows) => { if (alive && Array.isArray(rows) && rows.length) setLearners(rows) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
   useEffect(() => {
     if (!focus) return
-    const hit = LEARNERS.find((l) => l.name === focus)
+    const hit = learners.find((l) => l.name === focus)
     if (hit) setSel(hit)
     clearFocus()
-  }, [focus, clearFocus])
+  }, [focus, clearFocus, learners])
 
   const addLearner = (e) => {
     e.preventDefault()
@@ -182,7 +218,7 @@ function Student360({ s, onClose, go, showToast }) {
 
       {hold && (
         <div className="note-banner" style={{ background: 'var(--red-soft)', borderColor: '#eccfc9', color: 'var(--red)' }}>
-          <span>🚫</span>
+          <span><Icon name="ban" size={14} /></span>
           <div style={{ color: 'var(--ink)' }}>
             <strong style={{ color: 'var(--red)' }}>{hold.type} hold since {hold.since}</strong> — {hold.reason}.{' '}
             {hold.impact.map((i) => <Badge key={i} tone="red">{i}</Badge>)}{' '}
@@ -339,30 +375,67 @@ function EditProfileModal({ s, onClose, showToast }) {
 
 function DocumentsModal({ s, hold, onClose, showToast }) {
   const attOk = (s.attendance ?? 0) >= ATTENDANCE_MIN
+  const [college, setCollege] = useState(null)
+  const [signatories, setSignatories] = useState([])
+  useEffect(() => {
+    let live = true
+    Promise.all([getCollegeSettings(), getSignatories()])
+      .then(([c, sg]) => { if (live) { setCollege(c); setSignatories(sg) } })
+      .catch(() => {})
+    return () => { live = false }
+  }, [])
 
+  const prog = esc(s.grade)
+  const year = new Date().getFullYear()
   const bodyFor = (key) => {
     switch (key) {
       case 'proof_of_registration':
-        return `<p>This confirms that <b>${s.name}</b> is a registered student at Symanek Specialized College for the ${s.grade} programme in the 2026 academic year.</p>`
+        return `<p>This serves to confirm that <b>${esc(s.name)}</b> (Student Number: ${esc(s.id)}) is a duly registered student at ${esc(college?.name || 'Symanek Specialized College')} for the <b>${prog}</b> programme in the ${year} academic year.</p>
+          <p>This letter is issued upon the student's request for whatever lawful purpose it may serve.</p>`
       case 'exam_permit':
-        return `<p>This examination permit admits <b>${s.name}</b> (${s.id}) to the November 2026 final examinations.</p><table><tr><th>Attendance</th><td>${s.attendance ?? 0}% (minimum ${ATTENDANCE_MIN}%)</td></tr><tr><th>Programme</th><td>${s.grade}</td></tr></table>`
+        return `<p>This examination permit admits <b>${esc(s.name)}</b> (${esc(s.id)}) to the official examinations for the <b>${prog}</b> programme.</p>
+          <table><tr><th>Attendance</th><td>${s.attendance ?? 0}% (minimum ${ATTENDANCE_MIN}%)</td></tr><tr><th>Programme</th><td>${prog}</td></tr></table>
+          <p>The candidate must present this permit together with a valid student card and national ID at every examination sitting.</p>`
       case 'academic_record':
-        return `<p>Academic record for <b>${s.name}</b>. Final marks are computed as 60% continuous assessment + 40% examination.</p>`
+        return `<p>Academic record for <b>${esc(s.name)}</b> (${esc(s.id)}), ${prog}.</p>
+          <p>Final marks are computed as <b>60% continuous assessment + 40% examination</b>. The module pass mark is 50%, with a minimum of 40% in the examination paper; a final mark of 45–49% qualifies for a second opportunity.</p>
+          <p>Detailed module results are available from the Office of the Registrar / examinations office.</p>`
       case 'statement_of_results':
-        return `<p>Statement of results for <b>${s.name}</b>, issued by the examinations office. Pass mark 50%; second opportunity 45–49%.</p>`
+        return `<p>Statement of Result for <b>${esc(s.name)}</b> (${esc(s.id)}), ${prog}, issued by the examinations office.</p>
+          <table><tr><th>Module</th><th>Exam Type</th><th>CA</th><th>Exam</th><th>Final</th><th>Result</th><th>Description</th></tr>
+          <tr><td colspan="7" style="color:#7c93a2">Module results are populated from published gradebook marks.</td></tr></table>
+          <p style="font-size:12px;color:#5a7180">Grade scale: A — Excellent · B — Very Good · C — Good · D — Satisfactory · XX — Fail (sub-minimum not obtained). Final = 60% CA + 40% Exam.</p>`
       case 'admission_letter':
-        return `<p>Dear ${s.name},</p><p>We are pleased to offer you admission to the <b>${s.grade}</b> programme at Symanek Specialized College. Application fee N$200 and registration fee N$500 apply.</p>`
+        return `<p>Dear ${esc(s.name)},</p>
+          <p><b>RE: ADMISSION INTO THE ${prog.toUpperCase()} PROGRAMME — ${year} INTAKE</b></p>
+          <p>We are pleased to inform you that you have been granted <b>provisional admission</b> to the above training programme at ${esc(college?.name || 'Symanek Specialized College')}, Okahandja. Please note that if you do not meet the entry requirements your admission is not guaranteed. This provisional letter of admission must be presented during registration as proof of provisional admission.</p>
+          <p><b>Documents required upon registration:</b> certified copies of your national ID (x2), passport-size photos (x2), certified copies of your Grade 10 and/or 12 certificates, the NQA evaluation (for qualifications obtained outside Namibia), and proof of payment of the registration fee and tuition fee deposit.</p>
+          <p><b>Bank Details</b><br/>
+            Account Name: ${esc(college?.bank_account_name || 'Symanek Training Academy')}<br/>
+            Bank: ${esc(college?.bank_name || 'First National Bank (FNB)')}<br/>
+            Account Number: ${esc(college?.bank_account_no || '64279814676')}<br/>
+            Account Type: ${esc(college?.bank_account_type || 'Cheque')}<br/>
+            Branch: ${esc(college?.bank_branch || 'Okahandja')}<br/>
+            Reference: Student Number + Student Name</p>
+          <p>We congratulate you on your admission and warmly welcome you into ${esc(college?.name || 'Symanek Specialized College')}.</p>`
       case 'rejection_letter':
-        return `<p>Dear ${s.name},</p><p>Thank you for your application to Symanek Specialized College. Regrettably, your application for the ${s.grade} programme was not successful for this intake.</p>`
+        return `<p>Dear ${esc(s.name)},</p>
+          <p>Thank you for your interest in the <b>${prog}</b> programme at ${esc(college?.name || 'Symanek Specialized College')}. We appreciate the time and effort you put into your application.</p>
+          <p>After careful review, we regret to inform you that we are unable to offer you a place in this intake. We understand this news may be disappointing, and we encourage you to explore other opportunities for your education.</p>
+          <p>Thank you once again for considering ${esc(college?.name || 'Symanek Specialized College')}. For any questions or feedback, please contact us at ${esc(college?.cell || '+264 85 804 5679')} or ${esc(college?.email || 'info@symanekacademy.com')}. We wish you all the best in your future endeavours.</p>`
       default:
-        return `<p>Official document for ${s.name}.</p>`
+        return `<p>Official document for ${esc(s.name)}.</p>`
     }
   }
 
   const generate = (d) => {
     if (d.needsClearance && hold) return showToast(`Blocked — ${hold.type} hold must be cleared before issuing ${d.label}`)
     if (d.needsAttendance && !attOk) return showToast(`${d.label} denied — attendance ${s.attendance ?? 0}% is below the ${ATTENDANCE_MIN}% minimum`)
-    printStudentDoc(s, d.label, bodyFor(d.key))
+    const roleKey = SIGN_BY_DOC[d.key] || 'ceo'
+    const signatory = signatories.find((x) => x.role_key === roleKey) || signatories[0] || null
+    printStudentDoc(s, d.label, bodyFor(d.key), college, signatory)
+    // Register the issuance in the backend document register (no-op in mock mode).
+    issueDocument({ studentId: s._uuid || s.id, type: d.key }).catch(() => {})
     showToast(`${d.label} generated for ${s.name}`)
   }
 
@@ -377,7 +450,7 @@ function DocumentsModal({ s, hold, onClose, showToast }) {
           const blocked = (d.needsClearance && hold) || (d.needsAttendance && !attOk)
           return (
             <button key={d.key} className="btn ghost" style={{ justifyContent: 'space-between', opacity: blocked ? 0.55 : 1 }} onClick={() => generate(d)}>
-              <span>⬇ {d.label}</span>
+              <span><Icon name="download" size={14} /> {d.label}</span>
               {blocked ? <Badge tone="red">Blocked</Badge> : <Badge tone="green">Ready</Badge>}
             </button>
           )

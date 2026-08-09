@@ -1,14 +1,24 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { StatCard, Panel, Badge, Progress, Toast, useToast } from '../ui.jsx'
 import { RESIDENCES, ALLOCATIONS, RES_WAITLIST, fmtN } from '../data.js'
+import { listResidences } from '../api.js'
 
 // Student residences — occupancy, room allocation, residence fees, waitlist.
 export default function Accommodation() {
   const [toast, showToast] = useToast()
   const [waitlist, setWaitlist] = useState(RES_WAITLIST)
+  const [residences, setResidences] = useState(RESIDENCES)
 
-  const totalRooms = RESIDENCES.reduce((s, r) => s + r.rooms, 0)
-  const occupied = RESIDENCES.reduce((s, r) => s + r.occupied, 0)
+  useEffect(() => {
+    let alive = true
+    listResidences()
+      .then((rows) => { if (alive && Array.isArray(rows) && rows.length) setResidences(rows) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
+  const totalRooms = residences.reduce((s, r) => s + r.rooms, 0)
+  const occupied = residences.reduce((s, r) => s + r.occupied, 0)
 
   const allocate = (w) => {
     setWaitlist((ws) => ws.filter((x) => x.student !== w.student))
@@ -18,14 +28,14 @@ export default function Accommodation() {
   return (
     <>
       <div className="stat-row c4">
-        <StatCard icon="🏠" label="Residences" value={String(RESIDENCES.length)} delta="on campus" deltaTone="neutral" />
+        <StatCard icon="🏠" label="Residences" value={String(residences.length)} delta="on campus" deltaTone="neutral" />
         <StatCard icon="🛏️" label="Occupancy" value={`${occupied}/${totalRooms}`} delta={`${Math.round((occupied / totalRooms) * 100)}% full`} deltaTone="neutral" />
         <StatCard icon="📝" label="Waitlist" value={String(waitlist.length)} delta="awaiting a room" deltaTone="down" />
         <StatCard icon="💰" label="Residence fees" value={fmtN(ALLOCATIONS.reduce((s, a) => s + a.fee, 0))} delta="billed this term" deltaTone="up" />
       </div>
 
       <Panel title="Blocks & occupancy">
-        {RESIDENCES.map((r) => (
+        {residences.map((r) => (
           <div key={r.block} style={{ padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
             <div className="cf-row" style={{ marginBottom: 8 }}>
               <span style={{ fontWeight: 600 }}>{r.block} <span className="di-sub">· {fmtN(r.fee)}/term</span></span>

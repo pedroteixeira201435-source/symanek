@@ -43,8 +43,41 @@ async function http(path, opts) {
 const _phase2 = http // referenced so bundlers keep it; delete when wiring real endpoints
 
 // ============================ READS ============================
-export const listStudents = () => mock(db.LEARNERS)
-export const getStudent = (id) => mock(db.LEARNERS.find((s) => s.id === id) || null)
+// Map a students row (+programme join) back to the LEARNER shape the modules use.
+function toLearner(s) {
+  const code = s.programmes?.slug ? s.programmes.slug.toUpperCase() : ''
+  const grade = [code, s.year ? `Y${s.year}` : ''].filter(Boolean).join(' ')
+  return {
+    id: s.student_no || s.reference || s.id,
+    _uuid: s.id,
+    name: s.full_name,
+    grade: grade || (s.programmes?.name ?? '—'),
+    guardian: s.next_of_kin || '—',
+    phone: s.phone || '—',
+    status: s.status ? s.status[0].toUpperCase() + s.status.slice(1) : 'Admitted',
+    attendance: s.attendance != null ? Number(s.attendance) : null,
+    intake: s.intake || null,
+  }
+}
+export async function listStudents() {
+  if (useHttp()) {
+    const { data, error } = await supabase.from('students')
+      .select('id,student_no,reference,full_name,next_of_kin,phone,status,attendance,year,intake,programmes(slug,name)')
+    if (error) throw error
+    return (data ?? []).map(toLearner)
+  }
+  return mock(db.LEARNERS)
+}
+export async function getStudent(id) {
+  if (useHttp()) {
+    const { data, error } = await supabase.from('students')
+      .select('id,student_no,reference,full_name,next_of_kin,phone,status,attendance,year,intake,programmes(slug,name)')
+      .or(`student_no.eq.${id},reference.eq.${id}`).maybeSingle()
+    if (error) throw error
+    return data ? toLearner(data) : null
+  }
+  return mock(db.LEARNERS.find((s) => s.id === id) || null)
+}
 
 export async function listProgrammes() {
   if (useHttp()) {
@@ -126,6 +159,54 @@ export async function getSponsorsForStudent(studentName) {
   return mock(db.SPONSORS.filter((s) => s.learners.includes(studentName)))
 }
 
+// Mutable results store (mock) so a lecturer's mark edits and publish flow reach
+// the student's transcript this session. Seeded from data.js; http mode uses the
+// Supabase `results` rows and ignores this store.
+let _results = null
+function results() {
+  if (_results) return _results
+  _results = {}
+  for (const [code, rows] of Object.entries(db.COURSE_RESULTS)) {
+    _results[code] = rows.map((r) => ({ ...r, exam2: r.exam2 ?? null, published: r.published ?? false }))
+  }
+  return _results
+}
+export async function getCourseResults(code) {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('course_marksheet', { p_course_code: code })
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      learner: r.student, student_id: r.student_id,
+      ca: Number(r.ca ?? 0), exam: Number(r.exam ?? 0),
+      exam2: r.exam2 == null ? null : Number(r.exam2), published: r.published,
+    }))
+  }
+  return mock(results()[code] || [])
+}
+export async function saveCourseMarks(code, rows) {
+  if (useHttp()) {
+    const p_marks = rows.map((r) => ({ student_id: r.student_id, ca: r.ca, exam: r.exam, exam2: r.exam2 ?? null }))
+    const { data, error } = await supabase.rpc('save_course_marks', { p_course_code: code, p_marks })
+    if (error) throw error
+    return data
+  }
+  const cur = results()[code] || []
+  rows.forEach((u) => {
+    const r = cur.find((x) => x.learner === u.learner)
+    if (r) { r.ca = u.ca; r.exam = u.exam; if ('exam2' in u) r.exam2 = u.exam2 }
+  })
+  return mock({ ok: true })
+}
+export async function publishCourseResults(code) {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('publish_course_results', { p_course_code: code })
+    if (error) throw error
+    return data
+  }
+  ;(results()[code] || []).forEach((r) => { r.published = true })
+  return mock({ ok: true, code })
+}
+
 export async function getResultsForStudent(studentName) {
   if (useHttp()) {
     const sid = await studentIdByName(studentName)
@@ -136,11 +217,34 @@ export async function getResultsForStudent(studentName) {
     return (data ?? []).flatMap((e) => {
       const r = Array.isArray(e.results) ? e.results[0] : e.results
       if (!r) return []
-      return [{ code: e.courses?.code, ca: Number(r.ca), exam: Number(r.exam), final: Number(r.final), grade: r.grade }]
+      return [{ code: e.courses?.code, ca: Number(r.ca), exam: Number(r.exam), final: Number(r.final), grade: r.grade, published: r.published }]
     })
   }
-  return mock(Object.entries(db.COURSE_RESULTS).flatMap(([code, rows]) =>
+  return mock(Object.entries(results()).flatMap(([code, rows]) =>
     rows.filter((r) => r.learner === studentName).map((r) => ({ code, ...r }))))
+}
+
+// Mock attendance store: name -> { attended, total } sessions, so a lecturer's
+// register updates the student's % this session (drives the 80% permit rule).
+let _attendance = {}
+function seedAttendance(name) {
+  if (_attendance[name]) return _attendance[name]
+  const l = db.LEARNERS.find((x) => x.name === name)
+  const pct = l?.attendance ?? 90
+  const total = 25
+  return (_attendance[name] = { attended: Math.round((pct / 100) * total), total })
+}
+const attendancePercentOf = (name) => {
+  const a = _attendance[name] || seedAttendance(name)
+  return Math.round((a.attended / a.total) * 100)
+}
+export async function getCourseAttendance(names, code) {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('course_attendance', { p_course_code: code })
+    if (error) throw error
+    return Object.fromEntries((data ?? []).map((r) => [r.student, Number(r.percent)]))
+  }
+  return mock(Object.fromEntries((names || []).map((n) => [n, attendancePercentOf(n)])))
 }
 
 // Class attendance for a student — feeds the 80% examination-admission rule.
@@ -152,8 +256,7 @@ export async function getAttendanceForStudent(studentName) {
       .select('percent,hours_attended,hours_total').eq('student_id', sid).maybeSingle()
     return { percent: data?.percent ?? 0, hoursAttended: data?.hours_attended ?? 0, hoursTotal: data?.hours_total ?? 0 }
   }
-  const l = db.LEARNERS.find((x) => x.name === studentName)
-  const percent = l?.attendance ?? 92
+  const percent = attendancePercentOf(studentName)
   const hoursTotal = 240 // demo: contact hours in the semester
   return mock({ percent, hoursAttended: Math.round((percent / 100) * hoursTotal), hoursTotal })
 }
@@ -192,9 +295,45 @@ export async function listExamBoard() {
   }
   return mock(db.EXAM_BOARD)
 }
-export const listApplicants = () => mock(db.APPLICANTS)
-export const listResidences = () => mock(db.RESIDENCES)
-export const listNcheReturns = () => mock(db.NCHE_RETURNS)
+const APP_STAGE_LABEL = {
+  submitted: 'Applied', under_review: 'Under Review', approved: 'Approved',
+  rejected: 'Rejected', paid: 'Paid', enrolled: 'Enrolled',
+}
+export async function listApplicants() {
+  if (useHttp()) {
+    const { data, error } = await supabase.from('applications')
+      .select('id,reference,full_name,programme_slug,stage,created_at').order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((a) => ({
+      id: a.reference || a.id, _uuid: a.id, name: a.full_name,
+      prog: (a.programme_slug || '').toUpperCase(), points: 0,
+      stage: APP_STAGE_LABEL[a.stage] || a.stage,
+      applied: a.created_at ? new Date(a.created_at).toLocaleDateString('en-NA') : '',
+      docs: {},
+    }))
+  }
+  return mock(db.APPLICANTS)
+}
+export async function listResidences() {
+  if (useHttp()) {
+    const { data, error } = await supabase.from('residences')
+      .select('name,capacity,allocations(id)')
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      block: r.name, rooms: r.capacity, occupied: (r.allocations ?? []).length, fee: 0,
+    }))
+  }
+  return mock(db.RESIDENCES)
+}
+export async function listNcheReturns() {
+  if (useHttp()) {
+    const { data, error } = await supabase.from('nche_returns')
+      .select('title,period,due,status').order('due')
+    if (error) throw error
+    return (data ?? []).map((n) => ({ ret: n.title, period: n.period, due: n.due, status: n.status }))
+  }
+  return mock(db.NCHE_RETURNS)
+}
 export const getCourseware = (code) => mock(db.COURSEWARE[code] || null)
 
 export async function listStaff() {
@@ -270,7 +409,20 @@ export async function proofUrl(path) {
   }
   return '#'
 }
-export const submitAssignment = ({ studentId, assignmentId }) => mock({ ok: true, studentId, assignmentId, at: Date.now() })
+export async function submitAssignment({ student, studentId, assignmentId }) {
+  if (useHttp()) {
+    const { data: a } = await supabase.from('assignments').select('id').eq('code', assignmentId).maybeSingle()
+    if (!a) return { ok: false }
+    const { error } = await supabase.rpc('submit_assignment', { p_assignment: a.id })
+    if (error) throw error
+    return { ok: true, assignmentId }
+  }
+  const list = _submissions[assignmentId] || (_submissions[assignmentId] = [])
+  if (student && !list.some((s) => s.student === student)) {
+    list.unshift({ id: 'sub-' + Date.now(), assignmentId, student, submittedAt: new Date().toISOString().slice(0, 10), grade: null, feedback: '', gradedBy: null })
+  }
+  return mock({ ok: true, student, studentId, assignmentId, at: Date.now() })
+}
 export const submitApplication = (payload) => mock({ ok: true, id: 'APP-' + Date.now(), ...payload, stage: 'Applied' })
 export async function issueCertificate({ studentId }) {
   if (useHttp()) {
@@ -301,6 +453,305 @@ export async function publishExamResults({ courseId, courseCode }) {
   return mock({ ok: true, courseCode })
 }
 export const setInstitutionType = (type) => mock({ ok: true, type })
+
+// ============================ FEEDBACK FEATURES (2026 client review) ============================
+
+// --- Announcements ---
+// Module-level mock store so an announcement a lecturer posts this session is
+// read back by the student portal (both go through these two functions). In
+// http mode the Supabase table is the source of truth and this store is unused.
+let _announcements = [
+  { id: 'a1', title: 'Semester registration is open', body: 'Register your modules before the published deadline in the portal.', audience: 'students', author: 'Registrar', pinned: true, created_at: '2026-07-20' },
+  { id: 'a2', title: 'Examination timetable published', body: 'Download it from the portal under Documents.', audience: 'all', author: 'Registrar', pinned: false, created_at: '2026-07-18' },
+]
+export async function listAnnouncements(audience = 'students') {
+  if (useHttp()) {
+    const { data, error } = await supabase.from('announcements')
+      .select('id,title,body,audience,pinned,created_at')
+      .in('audience', [audience, 'all']).order('pinned', { ascending: false }).order('created_at', { ascending: false })
+    if (error) throw error
+    return data ?? []
+  }
+  const rows = _announcements
+    .filter((a) => a.audience === audience || a.audience === 'all')
+    .sort((x, y) => (y.pinned - x.pinned) || (y.created_at < x.created_at ? -1 : 1))
+  return mock(rows)
+}
+export async function createAnnouncement({ title, body, audience = 'students', author = 'Lecturer' }) {
+  if (useHttp()) {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data, error } = await supabase.from('announcements').insert({ title, body, audience, created_by: user?.id }).select().single()
+    if (error) throw error
+    return data
+  }
+  const row = { id: 'a-' + Date.now(), title, body, audience, author, pinned: false, created_at: new Date().toISOString().slice(0, 10) }
+  _announcements = [row, ..._announcements]
+  return mock({ ok: true, ...row })
+}
+
+// --- Courseware submissions & grading (LMS feedback loop) ---
+// Module-level store, seeded so a lecturer has work to grade and the student
+// sees the grade + written feedback come back. Same pattern as announcements;
+// http mode would use a `submissions` table (not yet in the schema).
+let _submissions = {
+  'VTW101-A1': [
+    { id: 'sub-a1-gn', assignmentId: 'VTW101-A1', student: 'Gabriel !Naruseb', submittedAt: '2026-07-17', grade: null, feedback: '', gradedBy: null },
+    { id: 'sub-a1-rn', assignmentId: 'VTW101-A1', student: 'Rauna Nakale', submittedAt: '2026-07-17', grade: 18, feedback: 'Solid grasp of PPE and lockout steps. Revise the fire-class table for the exam.', gradedBy: 'Tobias Shikongo' },
+    { id: 'sub-a1-tg', assignmentId: 'VTW101-A1', student: 'Tuhafeni Gaoseb', submittedAt: '2026-07-18', grade: null, feedback: '', gradedBy: null },
+  ],
+  'VTW101-A2': [
+    { id: 'sub-a2-gn', assignmentId: 'VTW101-A2', student: 'Gabriel !Naruseb', submittedAt: '2026-07-24', grade: null, feedback: '', gradedBy: null },
+    { id: 'sub-a2-as', assignmentId: 'VTW101-A2', student: 'Anna Shiweda', submittedAt: '2026-07-24', grade: null, feedback: '', gradedBy: null },
+  ],
+}
+export async function listSubmissions(assignmentId) {
+  if (useHttp()) {
+    const { data, error } = await supabase.from('submissions')
+      .select('id,submitted_at,grade,feedback,graded_by,students(full_name),assignments!inner(code)')
+      .eq('assignments.code', assignmentId)
+    if (error) throw error
+    return (data ?? []).map((s) => ({
+      id: s.id, assignmentId, student: s.students?.full_name, submittedAt: s.submitted_at,
+      grade: s.grade == null ? null : Number(s.grade), feedback: s.feedback || '', gradedBy: s.graded_by,
+    }))
+  }
+  return mock(_submissions[assignmentId] || [])
+}
+export async function getSubmission(assignmentId, student) {
+  if (useHttp()) {
+    const rows = await listSubmissions(assignmentId)
+    return rows.find((s) => s.student === student) || null
+  }
+  return mock((_submissions[assignmentId] || []).find((s) => s.student === student) || null)
+}
+export async function gradeSubmission({ id, assignmentId, grade, feedback = '', gradedBy = 'Lecturer' }) {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('grade_submission', { p_submission: id, p_grade: grade, p_feedback: feedback })
+    if (error) throw error
+    return data
+  }
+  const row = (_submissions[assignmentId] || []).find((s) => s.id === id)
+  if (row) { row.grade = grade; row.feedback = feedback; row.gradedBy = gradedBy }
+  return mock({ ok: !!row, id, grade, feedback })
+}
+
+// --- Student ↔ lecturer queries (two-way channel) ---
+let _queries = [
+  { id: 'q1', course: 'VTW101', student: 'Gabriel !Naruseb', lecturer: 'Tobias Shikongo', subject: 'Welding practical CA', body: 'Could you confirm my CA mark for the welding practical? I think a session may be missing.', createdAt: '2026-07-22', reply: '', repliedAt: null, status: 'open' },
+]
+export async function listQueries({ lecturer, student } = {}) {
+  if (useHttp()) {
+    // RLS scopes the rows: a student sees only their own; staff see all.
+    const { data, error } = await supabase.from('queries')
+      .select('id,subject,body,reply,status,created_at,replied_at,courses(code),students(full_name),staff(name)')
+      .order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      id: r.id, course: r.courses?.code, student: r.students?.full_name, lecturer: r.staff?.name,
+      subject: r.subject, body: r.body, reply: r.reply || '', status: r.status,
+      createdAt: r.created_at, repliedAt: r.replied_at,
+    }))
+  }
+  let rows = _queries
+  if (lecturer) rows = rows.filter((q) => q.lecturer === lecturer)
+  if (student) rows = rows.filter((q) => q.student === student)
+  return mock([...rows].sort((a, b) => (a.status === b.status ? 0 : a.status === 'open' ? -1 : 1)))
+}
+export async function createQuery({ course, student, lecturer, subject, body }) {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('create_query', { p_course_code: course, p_subject: subject, p_body: body })
+    if (error) throw error
+    return data
+  }
+  const row = { id: 'q-' + Date.now(), course, student, lecturer, subject, body, createdAt: new Date().toISOString().slice(0, 10), reply: '', repliedAt: null, status: 'open' }
+  _queries = [row, ..._queries]
+  return mock({ ok: true, ...row })
+}
+export async function replyQuery({ id, reply }) {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('reply_query', { p_id: id, p_reply: reply })
+    if (error) throw error
+    return data
+  }
+  const q = _queries.find((x) => x.id === id)
+  if (q) { q.reply = reply; q.repliedAt = new Date().toISOString().slice(0, 10); q.status = 'answered' }
+  return mock({ ok: !!q })
+}
+
+// --- Academic control windows (open/close) ---
+export async function listAcademicWindows() {
+  if (useHttp()) {
+    const { data, error } = await supabase.from('academic_windows')
+      .select('id,kind,academic_year,intake,opens_at,closes_at,is_open')
+    if (error) throw error
+    return data ?? []
+  }
+  return mock([
+    { id: 'w1', kind: 'applications', is_open: true, opens_at: '2026-06-01', closes_at: '2026-09-30', academic_year: 2026, intake: 'july' },
+    { id: 'w2', kind: 'registration', is_open: true, opens_at: '2026-07-01', closes_at: '2026-07-31', academic_year: 2026, intake: 'july' },
+    { id: 'w3', kind: 'marks_insertion', is_open: true, opens_at: '2026-11-01', closes_at: '2026-11-20', academic_year: 2026, intake: 'july' },
+    { id: 'w4', kind: 'marks_release', is_open: false, opens_at: '2026-12-05', closes_at: '2026-12-31', academic_year: 2026, intake: 'july' },
+    { id: 'w5', kind: 'second_opportunity', is_open: false, opens_at: '2027-01-12', closes_at: '2027-01-23', academic_year: 2026, intake: 'july' },
+    { id: 'w6', kind: 'graduation_clearance', is_open: false, opens_at: '2027-02-01', closes_at: '2027-02-28', academic_year: 2026, intake: 'july' },
+  ])
+}
+export async function setAcademicWindow({ kind, isOpen, opensAt = null, closesAt = null, year = null, intake = null }) {
+  if (useHttp()) {
+    const { error } = await supabase.rpc('set_academic_window', {
+      p_kind: kind, p_is_open: isOpen, p_opens_at: opensAt, p_closes_at: closesAt, p_year: year, p_intake: intake,
+    })
+    if (error) throw error
+    return { ok: true }
+  }
+  return mock({ ok: true, kind, isOpen })
+}
+
+// --- Attendance (record + read is above via getAttendanceForStudent) ---
+export async function recordAttendance({ student, studentId, courseId, hours = 1, present = true, date }) {
+  if (useHttp()) {
+    const { error } = await supabase.from('attendance').insert({
+      student_id: studentId, course_id: courseId, hours, present, session_date: date || undefined,
+    })
+    if (error) throw error
+    return { ok: true }
+  }
+  if (student) {
+    const a = seedAttendance(student)
+    a.total += 1
+    if (present) a.attended += 1
+  }
+  return mock({ ok: true, student, present })
+}
+// Record a whole session's register in one call.
+export async function recordSession({ present, code }) {
+  if (useHttp()) {
+    const { data } = await supabase.rpc('course_attendance', { p_course_code: code })
+    const idByName = Object.fromEntries((data ?? []).map((r) => [r.student, r.student_id]))
+    const p_present = Object.entries(present || {})
+      .map(([name, isPresent]) => ({ student_id: idByName[name], present: isPresent }))
+      .filter((x) => x.student_id)
+    const { error } = await supabase.rpc('record_attendance_session', { p_course_code: code, p_present })
+    if (error) throw error
+    return { ok: true }
+  }
+  Object.entries(present || {}).forEach(([name, isPresent]) => {
+    const a = seedAttendance(name)
+    a.total += 1
+    if (isPresent) a.attended += 1
+  })
+  return mock({ ok: true })
+}
+
+// --- HR: leave self-service ---
+export async function applyLeave({ type, start, end }) {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('apply_leave', { p_type: type, p_start: start, p_end: end })
+    if (error) throw error
+    return { ok: true, id: data }
+  }
+  return mock({ ok: true, id: 'lv-' + Date.now(), type, start, end, status: 'pending' })
+}
+export async function decideLeave({ id, approve }) {
+  if (useHttp()) {
+    const { error } = await supabase.rpc('decide_leave', { p_id: id, p_approve: approve })
+    if (error) throw error
+    return { ok: true }
+  }
+  return mock({ ok: true, id, status: approve ? 'approved' : 'rejected' })
+}
+export async function listLeaveRequests() {
+  if (useHttp()) {
+    const { data, error } = await supabase.from('leave_requests')
+      .select('id,type,start_date,end_date,status,staff(name)').order('created_at', { ascending: false })
+    if (error) throw error
+    return (data ?? []).map((l) => ({ id: l.id, type: l.type, start: l.start_date, end: l.end_date, status: l.status, staff: l.staff?.name }))
+  }
+  return mock([
+    { id: 'lv1', type: 'Annual', start: '2026-08-01', end: '2026-08-05', status: 'pending', staff: 'M. Amupolo' },
+    { id: 'lv2', type: 'Sick', start: '2026-07-22', end: '2026-07-23', status: 'approved', staff: 'J. Nghipandulwa' },
+  ])
+}
+
+// --- Role permission matrix ---
+export async function listRolePermissions() {
+  if (useHttp()) {
+    const { data, error } = await supabase.from('role_permissions').select('role,module,can_view,can_edit')
+    if (error) throw error
+    return data ?? []
+  }
+  return mock([])
+}
+
+// --- Official documents (register + signed URL; PDF generated app/server-side) ---
+export async function listDocumentsForStudent(studentName) {
+  if (useHttp()) {
+    const sid = await studentIdByName(studentName)
+    if (!sid) return []
+    const { data, error } = await supabase.from('documents')
+      .select('id,type,path,issued_at').eq('student_id', sid).order('issued_at', { ascending: false })
+    if (error) throw error
+    return data ?? []
+  }
+  return mock([
+    { id: 'd1', type: 'proof_of_registration', path: null, issued_at: '2026-07-15' },
+    { id: 'd2', type: 'exam_permit', path: null, issued_at: '2026-07-20' },
+  ])
+}
+export async function issueDocument({ studentId, type, meta = {} }) {
+  if (useHttp()) {
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data, error } = await supabase.from('documents')
+      .insert({ student_id: studentId, type, meta, issued_by: user?.id }).select().single()
+    if (error) throw error
+    return { ok: true, id: data.id }
+  }
+  return mock({ ok: true, id: 'doc-' + Date.now(), type })
+}
+
+// Official college identity + signatories used on generated documents.
+// Mock defaults mirror the college_settings/signatories seed (migration
+// 20260809120000) so letters look identical in mock and http mode.
+const COLLEGE_SETTINGS_DEFAULT = {
+  name: 'Symanek Specialized College',
+  address: 'Extension 6, Okahandja, Republic of Namibia',
+  po_box: 'P.O. Box 4270, Windhoek, Namibia',
+  reg_no: 'cc/2022/10663',
+  tax_no: '13469812-01-1',
+  phone: '+264 62 502227',
+  cell: '+264 85 804 5679',
+  email: 'info@symanekacademy.com',
+  website: 'www.symanekacademy.com',
+  portal_url: 'www.symanek.educims.org',
+  bank_name: 'First National Bank (FNB)',
+  bank_account_name: 'Symanek Training Academy',
+  bank_account_no: '64279814676',
+  bank_account_type: 'Cheque',
+  bank_branch: 'Okahandja',
+  stamp_path: null,
+}
+const SIGNATORIES_DEFAULT = [
+  { role_key: 'ceo', name: 'Mrs. Olivia Nelumbu', title: 'Chief Executive Officer' },
+  { role_key: 'registrar', name: 'Ms. Rebbeka Shilongo', title: 'Administration Assistant, Office of the Registrar' },
+  { role_key: 'admin_assistant', name: 'Ms. Michelle Guchas', title: 'Administrative Assistant' },
+]
+
+export async function getCollegeSettings() {
+  if (useHttp()) {
+    const { data, error } = await supabase.from('college_settings').select('*').limit(1).maybeSingle()
+    if (error) throw error
+    return data ?? COLLEGE_SETTINGS_DEFAULT
+  }
+  return mock(COLLEGE_SETTINGS_DEFAULT)
+}
+
+export async function getSignatories() {
+  if (useHttp()) {
+    const { data, error } = await supabase.from('signatories').select('role_key,name,title,signature_path').eq('active', true)
+    if (error) throw error
+    return (data && data.length ? data : SIGNATORIES_DEFAULT)
+  }
+  return mock(SIGNATORIES_DEFAULT)
+}
 
 // ============================ AUTH / SESSION ============================
 // Phase 1: pick a role card (no password). Phase 2: real credentials + JWT/session,

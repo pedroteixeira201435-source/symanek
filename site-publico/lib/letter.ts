@@ -31,6 +31,8 @@ export async function buildApprovalLetter(opts: {
   text(college.location, M, y, 10, font, muted);
   y -= 12;
   text(`${college.contact.emails[0]}  ·  ${college.contact.phones[0]}`, M, y, 10, font, muted);
+  y -= 12;
+  text(`Reg. No: ${college.registrationNumber}  ·  Tax No: ${college.taxNumber}`, M, y, 9, font, muted);
 
   y -= 28;
   page.drawLine({ start: { x: M, y }, end: { x: width - M, y }, thickness: 1, color: rgb(0.85, 0.88, 0.9) });
@@ -85,6 +87,7 @@ export async function buildApprovalLetter(opts: {
   const rows: [string, string][] = [
     ["Bank", college.bank.bankName],
     ["Account name", college.bank.accountName],
+    ["Account type", college.bank.accountType],
     ["Account number", college.bank.accountNumber],
     ["Branch code", college.bank.branchCode],
     ["SWIFT", college.bank.swift],
@@ -104,9 +107,9 @@ export async function buildApprovalLetter(opts: {
   );
 
   y -= 4;
-  text("Warm regards,", M, y, 11, font, ink);
+  text("Yours sincerely,", M, y, 11, font, ink);
   y -= 18;
-  text("Admissions Office", M, y, 11, bold, ink);
+  text("Office of the Registrar", M, y, 11, bold, ink);
   y -= 15;
   text(college.name, M, y, 11, font, muted);
 

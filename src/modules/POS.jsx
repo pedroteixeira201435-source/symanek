@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { POS_PRODUCTS, POS_CATS, SCHOOL, STUDENT_ACCOUNTS, fmtN } from '../data.js'
-import { Toast, useToast, Modal } from '../ui.jsx'
+import { Toast, useToast, Modal, Icon } from '../ui.jsx'
 
 // SELLER-ONLY screen. Full-screen route with no sidebar and no admin
 // data — this is the locked-down view the spec demos to the client.
@@ -131,7 +131,7 @@ export default function POS({ attendant, onLogout, adminPeek }) {
                 <span className="pname">{p.name}</span>
                 <span className="pprice">{fmtN(p.price)}</span>
                 <span className={`pstock ${left <= 12 ? 'low' : ''}`}>
-                  {left === 0 ? 'Sold out' : left <= 12 ? `⚠ ${left} left` : `${left} in stock`}
+                  {left === 0 ? 'Sold out' : left <= 12 ? <><Icon name="alert" size={11} /> {left} left</> : `${left} in stock`}
                 </span>
               </button>
             )
@@ -149,7 +149,7 @@ export default function POS({ attendant, onLogout, adminPeek }) {
                 className="btn red-ghost sm"
                 onClick={() => { setCart([]); setDisc(0); showToast('Sale cleared — cart emptied') }}
               >
-                ✕ Clear sale
+                <Icon name="x" size={13} /> Clear sale
               </button>
             )}
           </div>
@@ -158,7 +158,7 @@ export default function POS({ attendant, onLogout, adminPeek }) {
         <div className="cart-items">
           {cart.length === 0 ? (
             <div className="cart-empty">
-              <div className="big">🛒</div>
+              <div className="big"><Icon name="cart" size={40} /></div>
               Tap a product to start an order
             </div>
           ) : (
@@ -209,7 +209,7 @@ export default function POS({ attendant, onLogout, adminPeek }) {
           <div className="pay-toggle">
             {['Cash', 'Card', 'Account'].map((m) => (
               <button key={m} className={pay === m ? 'active' : ''} onClick={() => setPay(m)}>
-                {m === 'Cash' ? '💵' : m === 'Card' ? '💳' : '🎓'} {m}
+                <Icon name={m === 'Cash' ? 'cash' : m === 'Card' ? 'card' : 'cap'} size={15} /> {m}
               </button>
             ))}
           </div>
@@ -303,7 +303,7 @@ export default function POS({ attendant, onLogout, adminPeek }) {
             </div>
           )}
           <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-            <button className="btn primary" onClick={() => { setReceipt(null); showToast('Receipt printed') }}>🖨 Print</button>
+            <button className="btn primary" onClick={() => { setReceipt(null); showToast('Receipt printed') }}><Icon name="printer" size={15} /> Print</button>
             <button className="btn ghost" onClick={() => setReceipt(null)}>Skip</button>
           </div>
         </Modal>

@@ -1,0 +1,159 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Symanek — Review Feedback Implementation Report</title>
+<style>
+  @page { margin: 1.8cm; }
+  body { font-family: 'Liberation Sans', Arial, sans-serif; color: #16323f; font-size: 10.5pt; line-height: 1.5; }
+  h1 { color: #0f4f6b; font-size: 20pt; margin: 0 0 2px; }
+  h2 { color: #0f4f6b; font-size: 13.5pt; border-bottom: 2px solid #0f4f6b; padding-bottom: 4px; margin: 22px 0 10px; }
+  h3 { color: #16323f; font-size: 11.5pt; margin: 16px 0 6px; }
+  .sub { color: #5a7180; font-size: 10pt; margin: 0 0 2px; }
+  .lead { background: #eef4f8; border-left: 4px solid #0f4f6b; padding: 10px 14px; margin: 14px 0; }
+  table { border-collapse: collapse; width: 100%; margin: 8px 0 14px; font-size: 9.8pt; }
+  th, td { border: 1px solid #cfdbe3; padding: 5px 8px; text-align: left; vertical-align: top; }
+  th { background: #0f4f6b; color: #fff; font-weight: 600; }
+  td.n { width: 26px; text-align: center; color: #5a7180; }
+  .ok { color: #1a7a44; font-weight: 700; white-space: nowrap; }
+  .hdr { display: flex; align-items: center; gap: 14px; border-bottom: 3px solid #0f4f6b; padding-bottom: 12px; margin-bottom: 6px; }
+  .mark { width: 44px; height: 44px; border-radius: 9px; background: #0f4f6b; color: #fff; font-weight: 800; font-size: 22pt; text-align: center; line-height: 44px; }
+  ul { margin: 4px 0 10px; padding-left: 18px; }
+  li { margin: 3px 0; }
+  a { color: #0f4f6b; }
+  .foot { margin-top: 26px; border-top: 1px solid #cfdbe3; padding-top: 8px; color: #7c93a2; font-size: 8.5pt; }
+  .pending { background: #fff7e9; border-left: 4px solid #d69a2a; padding: 10px 14px; margin: 10px 0; }
+</style></head>
+<body>
+
+<div class="hdr">
+  <div class="mark">S</div>
+  <div>
+    <h1>Review Feedback — Implementation Report</h1>
+    <div class="sub">Symanek Specialized College &nbsp;·&nbsp; ERF 2948, Extension 6, Okahandja, Namibia</div>
+    <div class="sub">Date: 19 July 2026</div>
+  </div>
+</div>
+
+<h2>Summary</h2>
+<p>All the points raised in your review — both the <b>Website / Student Portal</b> notes and the
+<b>System Audit — School Admin</b> notes — have been <b>implemented and deployed to production</b>.</p>
+<div class="lead">
+  <b>Public website:</b> https://symanek-site.vercel.app<br>
+  <b>Management system (Symanek Suite):</b> https://symanek-suite.vercel.app
+</div>
+<p>Every item from your feedback is listed below with its status. A short list of items that require a
+value or content from your side (fees, entry requirements, etc.) appears at the end — these are now
+<b>editable directly from the system's admin area</b>, exactly as requested, so no developer is needed to change them.</p>
+
+<h2>Part 1 — Website</h2>
+
+<h3>Page 1 — Home</h3>
+<table>
+<tr><th class="n">#</th><th>Your request</th><th>Status</th></tr>
+<tr><td class="n">1</td><td>Add "NQA accredited" and "HPCNA registered"</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">2</td><td>Add study mode: part-time with online synchronisation</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">3</td><td>Bachelor Honours is a 1-year programme, NQF Level 8</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">4</td><td>Indicate the duration for all qualifications</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">5</td><td>Bachelor study modes: full-time face-to-face / distance / part-time online sync</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">6</td><td>Application fee for all programmes = N$200</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">7</td><td>Registration fee = N$500 (all), except Caregiving N$1650</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">8</td><td>Address: ERF 2948, Extension 6, Okahandja, Namibia</td><td class="ok">✔ Done</td></tr>
+</table>
+
+<h3>Page 2 — About Us</h3>
+<table>
+<tr><th class="n">#</th><th>Your request</th><th>Status</th></tr>
+<tr><td class="n">1</td><td>Nursing <b>Board</b> of Namibia (not Council); Caregiving is not registrable</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">2</td><td>Registered with NTA for OHS Level 4 <b>and 5</b>, and Office Administration Level 4</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">3</td><td>Registered with the HPCNA</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">4</td><td>Accredited by the Namibia Qualifications Authority (NQA)</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">5</td><td>State that we offer internship</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">6</td><td>Add our values (new "Our Values" section)</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">+</td><td>New "Our Team" section featuring the staff photo you provided</td><td class="ok">✔ Done</td></tr>
+</table>
+
+<h3>Page 2 — Our Programmes</h3>
+<table>
+<tr><th class="n">#</th><th>Your request</th><th>Status</th></tr>
+<tr><td class="n">1</td><td>Rename to "Nursing and Healthcare" (not "Nursing and Care")</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">2</td><td>Indicate fees for all programmes</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">3</td><td>NQF levels: Caregiving = Level 3, Auxiliary Nursing = Level 5</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">4</td><td>Indicate admission requirements for all programmes</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">+</td><td>Mental Health students photo added to the Mental Health programme pages</td><td class="ok">✔ Done</td></tr>
+</table>
+
+<h3>Page 3 — Gallery &amp; Operating hours</h3>
+<table>
+<tr><th class="n">#</th><th>Your request</th><th>Status</th></tr>
+<tr><td class="n">1</td><td>Add more pictures / remove repeats</td><td class="ok">✔ New photo added; ready for Jeremia's graduation photos</td></tr>
+<tr><td class="n">2</td><td>Operating hours: 07:30–17:00 (Mon–Thu), 07:30–13:00 (Fri)</td><td class="ok">✔ Done</td></tr>
+</table>
+
+<h2>Part 2 — Student Portal &amp; System Rules</h2>
+<table>
+<tr><th class="n">#</th><th>Your request</th><th>Status</th></tr>
+<tr><td class="n">1</td><td>HR: staff download payslips online; apply for leave online; manager approves online</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">2</td><td>Record class attendance hours</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">2</td><td>Minimum <b>80% attendance</b> required for admission to the final examination</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">2</td><td>Add examination permit, rejection letter and admission letter as documents</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">2</td><td>Add an announcements section for students</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">3</td><td>First and second opportunity examination marks</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">3</td><td>Download the examination timetable</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">4</td><td>Accommodate January and July intakes</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">5</td><td>Subject weighting: <b>60% CA + 40% examination</b> (previously reversed — now corrected)</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">5</td><td>Minimum formative pass 50%; module pass 50%; exam paper pass 40%</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">5</td><td>Average 45–49% qualifies for a second-opportunity examination</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">6</td><td>Semester subjects (3 formatives: 2 tests + 1 assignment) and year subjects (5 formatives: 3 tests + 2 assignments)</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">7</td><td>All examinations out of 100 marks, written over 3 hours</td><td class="ok">✔ Done</td></tr>
+<tr><td class="n">—</td><td>Open/close functions (marks release, marks insertion, applications, registration, etc.)</td><td class="ok">✔ Done</td></tr>
+</table>
+
+<h2>Part 3 — System Audit: The School Admin</h2>
+<p>The School Admin now has full control of every module, as follows:</p>
+
+<h3>1. Application Component (student biographical information)</h3>
+<ul>
+<li>Admin can <b>add new students</b>.</li>
+<li>Each student record has an <b>Action button</b>: Show profile, Update profile, Documents, Applications, Reset password, Log in as.</li>
+</ul>
+
+<h3>2. Admission</h3>
+<ul><li><b>Manual Admission</b> — list of students with application status and an Action button to <b>process</b> applications (advance or reject).</li></ul>
+
+<h3>3. Registration</h3>
+<ul><li>Modules registration · Qualification management · Modules management · <b>Student Blocks</b> (place/release holds).</li></ul>
+
+<h3>4. Students' Marks</h3>
+<ul>
+<li>My Modules (per lecturer).</li>
+<li><b>Marks Suppression</b> by academic year and intake, choosing which marks to suppress (CA / Exam / Final).</li>
+<li><b>Module Allocation</b> — allocating modules to teaching staff.</li>
+<li><b>Control access, assign permissions and block staff access</b> (role permission matrix + activate/deactivate).</li>
+</ul>
+
+<h3>5. Documents (previously missing)</h3>
+<ul><li>Examination permit · Proof of registration · Academic records · Student letters (admission / rejection) · Statement of results — all generated as official, printable documents on the college letterhead.</li></ul>
+
+<h3>6. Settings</h3>
+<ul><li>Previously empty — now includes institution profile, academic calendar, module toggles, role permissions, user accounts, and the academic control windows above.</li></ul>
+
+<h2>Items awaiting your input (now editable in the admin area)</h2>
+<div class="pending">
+These items are fully wired into the site and system; they only need the correct values/text from the
+college, which can now be entered and edited from the admin area — no developer required:
+<ul>
+<li><b>Bachelor of OHSE (Honours L8, and L7)</b> — tuition fees and admission requirements.</li>
+<li><b>Certificate in Auxiliary Nursing Science</b> — tuition fee, exact duration and admission requirements. <i>(A 12-month duration is shown as a placeholder — please confirm.)</i></li>
+<li><b>Our Values</b> — the wording currently on the site is a first draft based on your mission/vision; please confirm or replace with the official values.</li>
+<li><b>Gallery</b> — please send the additional graduation photos (from Jeremia) so we can remove repeats and complete the gallery.</li>
+</ul>
+</div>
+
+<h2>Technical confirmation</h2>
+<ul>
+<li>Both applications are <b>live in production</b> and verified working.</li>
+<li>The <b>database is in full conformity</b> — all schema migrations are applied on the live database with no discrepancies.</li>
+<li>All changes have been committed to the project's source repository.</li>
+</ul>
+
+<div class="foot">Symanek Specialized College — Review Feedback Implementation Report · 19 July 2026 · Prepared by the development team.</div>
+
+</body></html>

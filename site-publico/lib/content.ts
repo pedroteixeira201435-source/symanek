@@ -10,6 +10,12 @@ export const college = {
   intro:
     "A registered vocational and healthcare training institution dedicated to equipping students with practical skills and professional knowledge in various fields.",
   location: "ERF 2948, Extension 6, Okahandja, Namibia",
+  poBox: "P.O. Box 4270, Windhoek, Namibia",
+  // Official registration & tax numbers, and CEO — from the letterhead template
+  // (Symanek response, 2026-08-09). Shown on the About page and generated letters.
+  registrationNumber: "cc/2022/10663",
+  taxNumber: "13469812-01-1",
+  ceoName: "Mrs. Olivia Nelumbu",
   mission:
     "To provide accessible, industry-responsive, and transformative education, training, research, and innovation that empower individuals, strengthen communities, and contribute to sustainable socio-economic development in Namibia and beyond.",
   vision:
@@ -25,13 +31,16 @@ export const college = {
     "Registered with the NTA for Occupational Health & Safety Levels 4 & 5, and Office Administration Level 4",
     "Registered with the HPCNA",
   ],
-  // TODO(pedro): confirmar/editar os valores institucionais reais (a ser gerido pela área admin).
+  // Official core values confirmed by Symanek (client response, 2026-08).
   values: [
-    { title: "Accessibility", body: "Education that is open, affordable and responsive to the communities we serve." },
-    { title: "Excellence", body: "Industry-responsive, quality training delivered by experienced facilitators." },
-    { title: "Integrity", body: "Honest, professional and ethical conduct in everything we do." },
     { title: "Innovation", body: "Research-driven teaching that keeps our graduates ahead in their fields." },
-    { title: "Community", body: "Strengthening Namibia through skills that drive sustainable development." },
+    { title: "Perseverance", body: "Determination and resilience in the pursuit of every learner's success." },
+    { title: "Caring", body: "Compassion and support at the heart of how we teach and serve." },
+    { title: "Quality and Excellence", body: "Industry-responsive, quality training delivered by experienced facilitators." },
+    { title: "Social Justice", body: "Accessible, affordable education that uplifts the communities we serve." },
+    { title: "Integrity", body: "Honest, professional and ethical conduct in everything we do." },
+    { title: "Leadership", body: "Developing confident professionals who lead in their fields and communities." },
+    { title: "Global Perspective", body: "Preparing graduates to thrive in Namibia and beyond." },
   ],
   contact: {
     phones: ["+264 85 804 5679", "+264 62 502 227"],
@@ -42,14 +51,17 @@ export const college = {
     instagram: "https://instagram.com/Symanektrainingacademy",
     maps: "https://goo.gl/maps/DQ4LPE52wByQV3i29",
   },
-  // TODO(pedro): CONFIRMAR dados bancários reais — usados na carta de aprovação (instrução EFT).
-  // Valores abaixo são PLACEHOLDER; substituir pelos verdadeiros antes de enviar cartas a candidatos.
+  // Official banking details from Symanek's admission-letter & letterhead
+  // templates (2026-08-09). The account is held under the college's registered
+  // banking name "Symanek Training Academy" — used on the approval letter (EFT
+  // instruction) and the website. (Name/type confirmed against official docs.)
   bank: {
-    bankName: "Bank Windhoek",
-    accountName: "Symanek Specialized College",
-    accountNumber: "PLACEHOLDER-0000000000",
-    branchCode: "PLACEHOLDER",
-    swift: "BWLINANX",
+    bankName: "First National Bank (FNB) — Okahandja Branch",
+    accountName: "Symanek Training Academy",
+    accountType: "Cheque",
+    accountNumber: "64279814676",
+    branchCode: "280373",
+    swift: "FIRNNANX", // FNB Namibia
   },
 } as const;
 
@@ -104,9 +116,11 @@ export const categories: Category[] = [
         slug: "certificate-auxiliary-nursing-science",
         name: "Certificate in Auxiliary Nursing Science",
         level: "NQF Level 5",
-        // TODO(pedro): confirmar duração, fee e admission requirements (gerir na área admin).
         duration: "12 Months",
+        fee: 19630,
         modes: "Full-Time, Distance, Part-Time (Online Synchronisation)",
+        requirements:
+          "Valid school-leaving certificate (Grade 11 or 12, NSSCO or NSSAS) with passes in five different subjects and a minimum of 20 points, including an E symbol in English 2nd Language or a D symbol in English 1st Language; passes in two Science subjects (Biology compulsory, plus any of Health & Social Care, Mathematics, Physics or Chemistry). Provision is made for applicants from the most vulnerable groups per the Affirmative Action Act.",
         description:
           "Prepares students to provide basic nursing care and support services under the supervision of registered nurses. Registered with the Nursing Board of Namibia.",
         careers: ["Auxiliary Nurse", "Nursing Assistant", "Care Support Worker", "Clinic Support Staff"],
@@ -136,8 +150,10 @@ export const categories: Category[] = [
         name: "Bachelor of Occupational Health, Safety and Environmental Management, Honours",
         level: "NQF Level 8",
         duration: "1 Year",
+        fee: 18490,
         modes: "Full-Time (Face-to-Face), Distance, Part-Time (Online Synchronisation)",
-        // TODO(pedro): confirmar fee e admission requirements (gerir na área admin).
+        requirements:
+          "A Bachelor Degree (NQF Level 7 or higher) in Occupational Health, Safety and Environmental Management, Environmental Health, Environmental Management, Occupational/Industrial Hygiene, Public Health, Health and Wellness Studies, Safety Management or a closely related field from a recognised institution; or a Science or Engineering degree; or a Nursing / Allied Health professional qualification with relevant work experience in OHSE.",
         description:
           "A one-year honours degree that provides advanced knowledge and professional competencies required for senior safety and environmental management roles.",
       },
@@ -146,8 +162,10 @@ export const categories: Category[] = [
         name: "Bachelor of Occupational Health, Safety and Environmental Management",
         level: "NQF Level 7",
         duration: "3 Years",
+        fee: 18490,
         modes: "Full-Time (Face-to-Face), Distance, Part-Time (Online Synchronisation)",
-        // TODO(pedro): confirmar fee e admission requirements (gerir na área admin).
+        requirements:
+          "A National Senior Secondary Certificate (Ordinary Level) with a minimum of 25 points in the best six subjects, which must include Physical Science, Natural Science or Biology, and English (minimum E symbol); OR a relevant NQF Level 6 National Diploma / Higher Diploma / Advanced Diploma / Certificate in OHS from a recognised institution; OR an NQF Level 5 diploma or certificate in OHS with a minimum of 2 years' work experience in the health and safety environment. Mature-age entry (25+ years) is available for applicants with at least 3 years' related work experience, a Junior Secondary Certificate with an E symbol in English, an acceptable employer reference, and a pass (60%+) in an aptitude test.",
         description:
           "A comprehensive three-year degree designed to prepare graduates to manage workplace safety and environmental concerns.",
       },

@@ -1,4 +1,5 @@
 import React from 'react'
+import { Icon } from './ui.jsx'
 
 // Catches render errors so a single broken module never white-screens the whole
 // Suite during UAT. Shows a recover action instead.
@@ -19,7 +20,7 @@ export default class ErrorBoundary extends React.Component {
       return (
         <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 24, fontFamily: 'Inter, system-ui, sans-serif' }}>
           <div style={{ maxWidth: 440, textAlign: 'center' }}>
-            <div style={{ fontSize: 40, marginBottom: 8 }}>⚠️</div>
+            <div style={{ marginBottom: 8, color: '#c2410c' }}><Icon name="alert" size={40} /></div>
             <h1 style={{ fontSize: 20, margin: '0 0 6px' }}>Something went wrong</h1>
             <p style={{ color: '#5b6b78', fontSize: 14, margin: '0 0 16px' }}>
               This screen hit an unexpected error. Reload to continue — your session is safe.

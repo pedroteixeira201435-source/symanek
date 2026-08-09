@@ -1,13 +1,27 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { StatCard, Panel, Badge, Toast, useToast } from '../ui.jsx'
 import { NCHE_RETURNS, PROGRAMMES, INSTITUTION_TYPES, INSTITUTION_HIDE, getInstType } from '../data.js'
+import { listNcheReturns } from '../api.js'
 
 // Regulatory compliance — NCHE statutory returns, programme accreditation,
 // and the institution-type profile (drives which modules a tenant sees).
 export default function Compliance() {
   const [toast, showToast] = useToast()
   const [type, setType] = useState(getInstType())
+  const [returns, setReturns] = useState(NCHE_RETURNS)
   const [status, setStatus] = useState(Object.fromEntries(NCHE_RETURNS.map((r) => [r.ret, r.status])))
+
+  useEffect(() => {
+    let alive = true
+    listNcheReturns()
+      .then((rows) => {
+        if (!alive || !Array.isArray(rows) || !rows.length) return
+        setReturns(rows)
+        setStatus(Object.fromEntries(rows.map((r) => [r.ret, r.status])))
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
 
   const submit = (ret) => { setStatus((s) => ({ ...s, [ret]: 'Submitted' })); showToast(`${ret} submitted to NCHE`) }
   const tone = (s) => (s === 'Submitted' ? 'green' : s === 'In progress' ? 'amber' : 'red')
@@ -24,7 +38,7 @@ export default function Compliance() {
     <>
       <div className="stat-row c4">
         <StatCard icon="🏛️" label="Regulator" value="NCHE" delta="+ NQA / NTA accreditation" deltaTone="neutral" />
-        <StatCard icon="📋" label="Returns due" value={String(NCHE_RETURNS.length)} delta="statutory this cycle" deltaTone="neutral" />
+        <StatCard icon="📋" label="Returns due" value={String(returns.length)} delta="statutory this cycle" deltaTone="neutral" />
         <StatCard icon="✅" label="Accredited programmes" value={String(PROGRAMMES.filter((p) => /accredited|registered/i.test(p.accreditation)).length)} delta={`of ${PROGRAMMES.length}`} deltaTone="up" />
         <StatCard icon="⚠️" label="Provisional" value={String(PROGRAMMES.filter((p) => /provisional/i.test(p.accreditation)).length)} delta="need renewal" deltaTone="down" />
       </div>
@@ -45,7 +59,7 @@ export default function Compliance() {
         <table className="data">
           <thead><tr><th>Return</th><th>Period</th><th>Due</th><th>Status</th><th style={{ width: 130 }}></th></tr></thead>
           <tbody>
-            {NCHE_RETURNS.map((r) => (
+            {returns.map((r) => (
               <tr key={r.ret}>
                 <td style={{ fontWeight: 600 }}>{r.ret}</td><td>{r.period}</td><td>{r.due}</td>
                 <td><Badge tone={tone(status[r.ret])}>{status[r.ret]}</Badge></td>

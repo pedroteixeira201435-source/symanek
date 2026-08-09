@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { StatCard, Tabs, Panel, Badge, Progress, Modal, Toast, useToast } from '../ui.jsx'
+import { StatCard, Tabs, Panel, Badge, Progress, Modal, Toast, useToast, Icon } from '../ui.jsx'
 import { FIN_STATS, EXPENSE_BREAKDOWN, COLLECTION_BY_BAND, INVOICES, FEE_STRUCTURE, PAYMENTS, DEBTORS, SPONSORS, BUDGET, fmtN } from '../data.js'
 import { Donut } from '../ui.jsx'
 import * as api from '../api.js'
@@ -115,7 +115,7 @@ function Collections() {
                 <td><Badge tone={STAGE_TONE[d.stage]}>{d.stage}</Badge></td>
                 <td>
                   {d.promise ? (
-                    <Badge tone="amber">📌 {d.promise}</Badge>
+                    <Badge tone="amber"><Icon name="pin" size={12} /> {d.promise}</Badge>
                   ) : (
                     <button className="btn ghost sm" onClick={() => logPromise(d.id)}>Log promise</button>
                   )}
@@ -246,7 +246,7 @@ function Budget() {
       <Panel
         title="Budget vs actual — Term 3"
         subtitle="Board-approved budget · overspend needs a virement approved by the principal"
-        actions={<button className="btn ghost sm" onClick={() => showToast('Budget report exported for the board pack')}>⬇ Export</button>}
+        actions={<button className="btn ghost sm" onClick={() => showToast('Budget report exported for the board pack')}><Icon name="download" size={14} /> Export</button>}
         flush
       >
         <table className="data">
@@ -470,7 +470,7 @@ function Invoices({ onPayment }) {
         subtitle="Semester 2, 2026 · 842 issued · click a row for details"
         actions={
           <>
-            <button className="btn ghost sm" onClick={() => showToast('Invoices exported to CSV')}>⬇ Export</button>
+            <button className="btn ghost sm" onClick={() => showToast('Invoices exported to CSV')}><Icon name="download" size={14} /> Export</button>
             <button className="btn primary sm" onClick={() => setShowNew(true)}>+ New invoice</button>
           </>
         }

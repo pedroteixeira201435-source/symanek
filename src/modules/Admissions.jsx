@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
-import { StatCard, Tabs, Panel, Badge, Progress, Modal, Avatar, Toast, useToast } from '../ui.jsx'
+import React, { useState, useEffect } from 'react'
+import { StatCard, Tabs, Panel, Badge, Progress, Modal, Avatar, Toast, useToast, Icon } from '../ui.jsx'
 import { APPLICANTS, ADMISSION_STAGES, INTAKES, PROGRAMMES } from '../data.js'
+import { listApplicants } from '../api.js'
 
 // Admissions — the tertiary front door: applications move Applied →
 // Under Review → Offer Sent → Enrolled; enrolment hands over to Students.
@@ -13,6 +14,16 @@ const progName = (code) => PROGRAMMES.find((p) => p.code === code)?.name || code
 export default function Admissions({ go }) {
   const [tab, setTab] = useState('Pipeline')
   const [apps, setApps] = useState(APPLICANTS)
+
+  // Load the applications pipeline through the seam (backend in http mode).
+  useEffect(() => {
+    let alive = true
+    listApplicants()
+      .then((rows) => { if (alive && Array.isArray(rows) && rows.length) setApps(rows) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
   return (
     <>
       <Tabs tabs={['Pipeline', 'Manual Admission', '2027 Intake']} active={tab} onChange={setTab} />
@@ -63,7 +74,7 @@ function ManualAdmission({ apps, setApps, go }) {
                 <td className="mono" style={{ fontSize: 12 }}>{a.id}</td>
                 <td>{progName(a.prog)}</td>
                 <td className="num">{a.points}</td>
-                <td>{docsMissing(a) > 0 ? <Badge tone="red">{docsMissing(a)} missing</Badge> : <Badge tone="green">✓</Badge>}</td>
+                <td>{docsMissing(a) > 0 ? <Badge tone="red">{docsMissing(a)} missing</Badge> : <Badge tone="green"><Icon name="tick" size={12} /></Badge>}</td>
                 <td><Badge tone={a.stage === 'Rejected' ? 'red' : STAGE_TONE[a.stage]}>{a.stage}</Badge></td>
                 <td>
                   {NEXT[a.stage] ? (
@@ -172,7 +183,7 @@ function Pipeline({ apps, setApps, go }) {
                     {docsMissing(a) > 0 ? (
                       <Badge tone="red">{docsMissing(a)} doc missing</Badge>
                     ) : (
-                      <Badge tone="green">Docs ✓</Badge>
+                      <Badge tone="green">Docs <Icon name="tick" size={12} /></Badge>
                     )}
                   </div>
                 </div>
@@ -242,7 +253,7 @@ function Intake() {
       <Panel
         title="2027 intake — seats vs applications"
         subtitle="Applications close 30 Sep 2026 · offers per programme committee"
-        actions={<button className="btn ghost sm" onClick={() => showToast('Intake report exported for NCHE return')}>⬇ Export</button>}
+        actions={<button className="btn ghost sm" onClick={() => showToast('Intake report exported for NCHE return')}><Icon name="download" size={14} /> Export</button>}
         flush
       >
         <table className="data">

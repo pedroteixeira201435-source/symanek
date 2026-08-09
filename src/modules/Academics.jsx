@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Tabs, Panel, Badge, Toast, useToast } from '../ui.jsx'
+import { Tabs, Panel, Badge, Toast, useToast, Icon } from '../ui.jsx'
 import { MODERATION, AT_RISK, PROGRAMMES } from '../data.js'
 import { INTAKES } from '../lib/controls.js'
 import * as api from '../api.js'
@@ -169,7 +169,7 @@ function Moderation() {
                       <button className="btn red-ghost sm" onClick={() => decide(i, 'Returned')}>Return</button>
                     </span>
                   ) : (
-                    <span style={{ color: 'var(--ink-faint)', fontSize: 12 }}>🔒 locked</span>
+                    <span style={{ color: 'var(--ink-faint)', fontSize: 12 }}><Icon name="lock" size={12} /> locked</span>
                   )}
                 </td>
               </tr>
@@ -241,7 +241,7 @@ function ExamBoard() {
                   {r.status === 'Awaiting approval' ? (
                     <button className="btn green sm" disabled={busy === r.code} onClick={() => publish(r)}>{busy === r.code ? 'Publishing…' : 'Approve & publish'}</button>
                   ) : (
-                    <span style={{ color: 'var(--ink-faint)', fontSize: 12 }}>🔒 on transcripts</span>
+                    <span style={{ color: 'var(--ink-faint)', fontSize: 12 }}><Icon name="lock" size={12} /> on transcripts</span>
                   )}
                 </td>
               </tr>

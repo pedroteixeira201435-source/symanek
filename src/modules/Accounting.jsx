@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { StatCard, Tabs, Panel, Badge, Modal, Toast, useToast } from '../ui.jsx'
+import { StatCard, Tabs, Panel, Badge, Modal, Toast, useToast, Icon } from '../ui.jsx'
 import { JOURNAL, COA, ASSET_REGISTER, TAX_CALENDAR, TAX_CONST, WORKTAG_OF, fmtN } from '../data.js'
 
 // Bookkeeping mirror of public/assets/Namibia_Financial_Model_v8.xlsx —
@@ -63,7 +63,7 @@ function Journal({ journal, setJournal }) {
   return (
     <>
       <div className="note-banner">
-        <span>{diff === 0 ? '✅' : '⚠️'}</span>
+        <Icon name={diff === 0 ? 'check' : 'alert'} size={16} />
         <div>
           <strong>Double-entry check:</strong> total debits {fmtN(dr)} − total credits {fmtN(cr)} ={' '}
           <strong style={{ color: diff === 0 ? 'var(--green)' : 'var(--red)' }}>{fmtN(diff)}</strong> — every
@@ -75,8 +75,8 @@ function Journal({ journal, setJournal }) {
         subtitle="Source of truth: TB, Income Statement and Tax Engine derive from these lines"
         actions={
           <>
-            <a className="btn ghost sm" href="/assets/Namibia_Financial_Model_v8.xlsx" download>⬇ Workbook (.xlsx)</a>
-            <button className="btn ghost sm" onClick={() => showToast('Journal exported — audit-ready CSV')}>⬇ Export</button>
+            <a className="btn ghost sm" href="/assets/Namibia_Financial_Model_v8.xlsx" download><Icon name="download" size={14} /> Workbook (.xlsx)</a>
+            <button className="btn ghost sm" onClick={() => showToast('Journal exported — audit-ready CSV')}><Icon name="download" size={14} /> Export</button>
             <button className="btn primary sm" onClick={() => setShowNew(true)}>+ Journal entry</button>
           </>
         }
@@ -211,7 +211,7 @@ function IncomeStatement({ balances }) {
           </div>
         ))}
         <div className="note-banner" style={{ marginTop: 16 }}>
-          <span>🎓</span>
+          <Icon name="cap" size={16} />
           <div>
             Tuition of {fmtN(1540000)} is a <strong>VAT-exempt educational supply</strong> — it never
             appears in the VAT ledger, only in the income statement.
@@ -351,7 +351,7 @@ function VatCompliance() {
       </div>
 
       <div className="note-banner">
-        <span>⚖️</span>
+        <Icon name="scale" size={16} />
         <div>
           <strong>Mixed supplies:</strong> education (tuition, registration) is VAT-<strong>exempt</strong>, so no
           output VAT is charged and input VAT on education-related costs cannot be claimed. Canteen & hostel sales are

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { SCHOOL, ACTIVITY_FEED, STAFF, INVOICES, CATALOGUE, LEARNERS, APPLICANTS, PROGRAMMES, COURSES, INSTITUTION_HIDE, getInstType } from './data.js'
-import { Avatar, Badge } from './ui.jsx'
+import { Avatar, Badge, Icon } from './ui.jsx'
 import Dashboard from './modules/Dashboard.jsx'
 import Students from './modules/Students.jsx'
 import Academics from './modules/Academics.jsx'
@@ -142,7 +142,7 @@ export default function Shell({ role, onLogout, initialMod }) {
                     className={`sb-item ${active === id ? 'active' : ''}`}
                     onClick={() => setActive(id)}
                   >
-                    <span className="icon">{MODULES[id].icon}</span>
+                    <span className="icon"><Icon glyph={MODULES[id].icon} size={17} /></span>
                     {MODULES[id].label}
                     {MODULES[id].count && <span className="count">{MODULES[id].count}</span>}
                   </button>
@@ -164,7 +164,7 @@ export default function Shell({ role, onLogout, initialMod }) {
           </div>
           <div className="drop-anchor" style={{ marginLeft: 'auto' }}>
             <div className="search" style={{ marginLeft: 0 }}>
-              <span>🔍</span>
+              <span><Icon name="search" size={15} /></span>
               <input
                 placeholder={isStudent ? 'Search my courses, results…' : 'Search learners, staff, invoices…'}
                 value={q}
@@ -193,7 +193,7 @@ export default function Shell({ role, onLogout, initialMod }) {
           {!isStudent && (<>
           <div className="drop-anchor">
             <button className="icon-btn" title="Messages" onClick={() => { setShowMsg((v) => !v); setShowNotif(false) }}>
-              <span className="gs">✉️</span><span className="dot" />
+              <Icon name="mail" /><span className="dot" />
             </button>
             {showMsg && (
               <div className="drop">
@@ -216,14 +216,14 @@ export default function Shell({ role, onLogout, initialMod }) {
           </div>
           <div className="drop-anchor">
             <button className="icon-btn" title="Notifications" onClick={() => { setShowNotif((v) => !v); setShowMsg(false) }}>
-              <span className="gs">🔔</span><span className="dot" />
+              <Icon name="bell" /><span className="dot" />
             </button>
             {showNotif && (
               <div className="drop">
                 <div className="dhead">Notifications</div>
                 {ACTIVITY_FEED.slice(0, 5).map((f, i) => (
                   <button key={i} className="drop-item" onClick={() => goTo(f.mod)}>
-                    <span className="gs" style={{ fontSize: 15 }}>{f.icon}</span>
+                    <span className="gs" style={{ fontSize: 15 }}><Icon glyph={f.icon} size={15} /></span>
                     <div>
                       <div>{f.text}</div>
                       <div className="di-sub">{f.time}</div>

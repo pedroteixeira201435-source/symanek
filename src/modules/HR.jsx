@@ -1,6 +1,19 @@
-import React, { useState } from 'react'
-import { Tabs, Panel, Badge, Avatar, Progress, Toast, useToast, Modal } from '../ui.jsx'
+import React, { useState, useEffect } from 'react'
+import { Tabs, Panel, Badge, Avatar, Progress, Toast, useToast, Modal, Icon } from '../ui.jsx'
 import { STAFF, LEAVE_REQUESTS, PAYROLL, LEAVE_BALANCES, CONTRACTS, QUALIFICATIONS, RECRUITS, RECRUIT_STAGES, WORKLOAD, PAYE_BRACKETS, payeMonthly, sscMonthly, VET_LEVY_RATE, staffEmail, fmtN } from '../data.js'
+import { listStaff, listLeaveRequests, decideLeave } from '../api.js'
+
+// Map a backend leave_requests row to the shape this module renders.
+const LEAVE_STATUS = { pending: 'Pending', approved: 'Approved', rejected: 'Declined' }
+function toLeaveRow(r) {
+  const days = r.start && r.end
+    ? Math.max(1, Math.round((new Date(r.end) - new Date(r.start)) / 86400000) + 1) : null
+  return {
+    id: r.id, name: r.staff || '—', type: r.type || 'Annual', days,
+    period: [r.start, r.end].filter(Boolean).join(' – '),
+    status: LEAVE_STATUS[r.status] || r.status || 'Pending',
+  }
+}
 
 const CONTRACT_TONE = { Permanent: 'teal', Contract: 'blue', Casual: 'amber' }
 const LEAVE_TONE = { Sick: 'red', Annual: 'blue', Maternity: 'purple', Compassionate: 'orange' }
@@ -80,7 +93,7 @@ function Recruitment() {
                   </div>
                   <div className="pipe-meta">
                     <span>applied {r.applied.slice(0, 6)}</span>
-                    {r.score && <Badge tone="teal">★ {r.score}</Badge>}
+                    {r.score && <Badge tone="teal"><Icon name="star" size={11} /> {r.score}</Badge>}
                   </div>
                 </div>
               ))}
@@ -223,6 +236,14 @@ function Directory({ openPayroll }) {
   const [profile, setProfile] = useState(null)
   const [toast, showToast] = useToast()
 
+  useEffect(() => {
+    let alive = true
+    listStaff()
+      .then((rows) => { if (alive && Array.isArray(rows) && rows.length) setStaff(rows) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
   const addStaff = (e) => {
     e.preventDefault()
     const f = e.target
@@ -341,10 +362,19 @@ function Leave() {
   const [toast, showToast] = useToast()
   const pending = requests.filter((r) => r.status === 'Pending').length
 
-  const decide = (id, status) => {
+  useEffect(() => {
+    let alive = true
+    listLeaveRequests()
+      .then((rows) => { if (alive && Array.isArray(rows) && rows.length) setRequests(rows.map(toLeaveRow)) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
+  const decide = async (id, status) => {
     setRequests((rs) => rs.map((r) => (r.id === id ? { ...r, status } : r)))
     const r = requests.find((r) => r.id === id)
     showToast(`${r.name} — ${r.type} leave ${status.toLowerCase()}`)
+    try { await decideLeave({ id, approve: status === 'Approved' }) } catch { /* mock/no-op */ }
   }
 
   return (
@@ -429,10 +459,10 @@ function Payroll({ readOnly }) {
         subtitle="Sample of 6 employees (of 64) · click a row for the payslip"
         actions={
           <>
-            <a className="btn ghost sm" href="/assets/Genesis_HR_v4_Hybrid_Payroll.xlsx" download>⬇ Workbook (.xlsx)</a>
+            <a className="btn ghost sm" href="/assets/Genesis_HR_v4_Hybrid_Payroll.xlsx" download><Icon name="download" size={14} /> Workbook (.xlsx)</a>
             {!readOnly &&
               (runDone ? (
-                <Badge tone="green">✓ July run completed</Badge>
+                <Badge tone="green"><Icon name="tick" size={12} /> July run completed</Badge>
               ) : (
                 <button className="btn amber sm" onClick={() => setConfirmRun(true)}>▶ Run payroll</button>
               ))}
@@ -524,7 +554,7 @@ function Payroll({ readOnly }) {
             PAYE per NamRA 2024/25 tables · SSC 0.9% (cap N$ 81) · paid to bank account on file
           </div>
           <button className="btn ghost sm" onClick={() => { setSel(null); showToast(`Payslip PDF for ${sel.name} downloaded`) }}>
-            ⬇ Download PDF
+            <Icon name="download" size={14} /> Download PDF
           </button>
         </Modal>
       )}

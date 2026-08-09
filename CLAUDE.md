@@ -75,7 +75,7 @@ but student data is RLS-gated, so it only fully works once signed in (`B3`).
   `auth.uid()`): `register_course` (holds → prereq → credit-cap → capacity/waitlist → charge),
   `pay_invoice` (records payment, reduces balance, **auto-releases financial holds** when cleared),
   `graduation_clearance`/`issue_certificate` (finance+library+academic, gated), `publish_exam_results`
-  (`final = 0.4*CA + 0.6*exam`, locks marks — RLS blocks editing a published result), `graduation_board`.
+  (`final = 0.6*CA + 0.4*exam`, locks marks — RLS blocks editing a published result), `graduation_board`.
   **Manual-EFT proof model** (no gateway): `submit_invoice_proof` (student, sits PENDING, balance
   unchanged) → `confirm_invoice_payment` (staff → reduces balance + releases holds); `pending_payment_proofs`
   lists them for the bursar (Suite `Finance → Payments`).
@@ -123,7 +123,8 @@ carries real ids). `src/ui.jsx` holds shared primitives (`StatCard`, `Tabs`, `Pa
 - Currency **N$** (`fmtN`/`formatN`); UI copy is English. Compliance: **NamRA** (tax), **NCHE/NQA/NTA**
   (accreditation), **Labour Act 2007** (PAYE/SSC/VET in payroll).
 - Academic calendar is **semesters** (S1/S2); marks are **continuous assessment** (CA);
-  `final = 0.4*CA + 0.6*exam`. University nomenclature (Student/Programme/Semester/Credit/GPA) — avoid
+  `final = 0.6*CA + 0.4*exam` (client rule, 2026; source of truth `src/lib/academics.js`). University
+  nomenclature (Student/Programme/Semester/Credit/GPA) — avoid
   reintroducing school terms (learner/grade/guardian/term).
 - "Today" in the demo is fixed around **3 Jul 2026**; keep new dates in that window. Headline numbers are
   reconciled (476 total enrolment across `SCHOOL`/`PROGRAMMES`/`FEE_STRUCTURE`) — keep them consistent.

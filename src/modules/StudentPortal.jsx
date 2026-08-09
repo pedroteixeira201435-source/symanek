@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { StatCard, Tabs, Panel, Badge, Progress, Modal, Toast, useToast } from '../ui.jsx'
+import { StatCard, Tabs, Panel, Badge, Progress, Modal, Toast, useToast, Icon } from '../ui.jsx'
 import { COURSES, EXAM_BOARD, gradeOf, fmtN } from '../data.js'
 import { evaluateResult, WEIGHTS } from '../lib/academics.js'
 import { ANNOUNCEMENTS, STUDENT_DOCUMENTS, ATTENDANCE_MIN, isWindowOpen } from '../lib/controls.js'
@@ -54,7 +54,7 @@ export default function StudentPortal({ role }) {
   return (
     <>
       <Tabs
-        tabs={['My Studies', 'Registration', 'Grades & Transcript', 'My Timetable', 'My Finance', 'Announcements', 'Holds & Documents']}
+        tabs={['My Studies', 'Registration', 'Grades & Transcript', 'My Timetable', 'My Finance', 'Announcements', 'Ask Lecturer', 'Holds & Documents']}
         active={tab}
         onChange={setTab}
       />
@@ -64,6 +64,7 @@ export default function StudentPortal({ role }) {
       {tab === 'My Timetable' && <MyTimetable {...ctx} />}
       {tab === 'My Finance' && <MyFinance {...ctx} />}
       {tab === 'Announcements' && <Announcements {...ctx} />}
+      {tab === 'Ask Lecturer' && <AskLecturer {...ctx} />}
       {tab === 'Holds & Documents' && <HoldsDocs {...ctx} />}
     </>
   )
@@ -87,7 +88,7 @@ function MyStudies({ audit, prog, attendance }) {
       </div>
 
       <div className="note-banner" style={attOk ? { background: 'var(--green-soft)', borderColor: '#cfe6d4' } : { background: 'var(--red-soft)', borderColor: '#eccfc9' }}>
-        <span>{attOk ? '✅' : '🚫'}</span>
+        <Icon name={attOk ? 'check' : 'ban'} size={16} />
         <div>
           {attOk ? (
             <>Your attendance is <strong>{att.percent}%</strong> — above the {ATTENDANCE_MIN}% minimum, so you are <strong>eligible for the final examination</strong> and your examination permit.</>
@@ -157,7 +158,7 @@ function Registration({ audit, passedCodes, myHolds, registered, setRegistered }
   // evaluate the rules engine for a course, in the documented order:
   // holds → already passed → capacity → prerequisite → eligible
   const evaluate = (c) => {
-    if (registered.includes(c.code)) return { state: 'registered', label: '✓ Registered', tone: 'green' }
+    if (registered.includes(c.code)) return { state: 'registered', label: 'Registered', tone: 'green' }
     if (passedCodes.includes(c.code)) return { state: 'passed', label: 'Already passed', tone: 'blue' }
     if (c.enrolled >= c.cap) return { state: 'full', label: 'Full — join waitlist', tone: 'amber' }
     if (c.prereq !== '—' && !passedCodes.includes(c.prereq)) return { state: 'prereq', label: `Prerequisite ${c.prereq} not met`, tone: 'red' }
@@ -167,7 +168,7 @@ function Registration({ audit, passedCodes, myHolds, registered, setRegistered }
   return (
     <>
       <div className={`note-banner`} style={blockingHold ? { background: 'var(--red-soft)', borderColor: '#eccfc9' } : undefined}>
-        <span>{blockingHold ? '🚫' : 'ℹ️'}</span>
+        <Icon name={blockingHold ? 'ban' : 'info'} size={16} />
         <div>
           {blockingHold ? (
             <><strong style={{ color: 'var(--red)' }}>{blockingHold.type} hold</strong> — {blockingHold.reason}. Registration is blocked until it clears.</>
@@ -232,16 +233,16 @@ function Transcript({ audit, myResults }) {
 
   return (
     <>
-      {!released && (
+      {!released && myResults.some((r) => !r.published) && (
         <div className="note-banner" style={{ background: 'var(--amber-soft, #fff6e6)', borderColor: '#ecdcc0' }}>
-          <span>🔒</span>
-          <div>Marks release is currently <strong>closed</strong> by the registrar — the marks below are <strong>provisional</strong> until the exam board publishes and the release window opens.</div>
+          <Icon name="lock" size={16} />
+          <div>Some marks are still <strong>provisional</strong> — your lecturer has entered them but the exam board has not yet published the final grade.</div>
         </div>
       )}
 
       {secondOpp.length > 0 && (
         <div className="note-banner" style={{ background: '#fff6e6', borderColor: '#ecdcc0' }}>
-          <span>📝</span>
+          <Icon name="edit" size={16} />
           <div>
             You qualify for a <strong>second-opportunity examination</strong> in {secondOpp.map((r) => r.code).join(', ')}
             {' '}(final mark 45–49%, or exam paper below 40%).
@@ -265,7 +266,7 @@ function Transcript({ audit, myResults }) {
               {myResults.map((r) => {
                 const res = evaluateResult({ ca: r.ca, exam: r.exam })
                 const g = gradeOf(res.final)
-                const pub = publishedOf(r.code) && released
+                const pub = r.published === true || (publishedOf(r.code) && released)
                 const title = COURSES.find((c) => c.code === r.code)?.title
                 return (
                   <tr key={r.code}>
@@ -332,7 +333,7 @@ function MyTimetable({ audit, prog }) {
       <Panel
         title="My weekly timetable"
         subtitle={`${audit?.prog || ''} ${prog?.name ? '· ' + prog.name : ''} · Semester 2, 2026`}
-        actions={<button className="btn ghost sm" onClick={downloadExamTimetable}>⬇ Download exam timetable</button>}
+        actions={<button className="btn ghost sm" onClick={downloadExamTimetable}><Icon name="download" size={14} /> Download exam timetable</button>}
       >
         <TimetableGrid data={MY_TT} />
       </Panel>
@@ -341,14 +342,99 @@ function MyTimetable({ audit, prog }) {
   )
 }
 
+// ---------- Ask Lecturer (student side of the two-way query channel) ----------
+function AskLecturer({ me, myResults }) {
+  const [rows, setRows] = useState([])
+  const [busy, setBusy] = useState(false)
+  const [toast, showToast] = useToast()
+  const myCourses = myResults
+    .map((r) => { const c = COURSES.find((x) => x.code === r.code); return { code: r.code, title: c?.title, lecturer: c?.lecturer } })
+    .filter((c) => c.lecturer)
+
+  const load = () => api.listQueries({ student: me }).then((r) => setRows(Array.isArray(r) ? r : [])).catch(() => {})
+  useEffect(() => { load() }, [me])
+
+  const submit = async (e) => {
+    e.preventDefault()
+    const f = e.target
+    const subject = f.subject.value.trim()
+    const body = f.body.value.trim()
+    if (!subject || !body) { showToast('Add a subject and your question'); return }
+    const c = myCourses.find((x) => x.code === f.course.value)
+    setBusy(true)
+    try {
+      await api.createQuery({ course: f.course.value, student: me, lecturer: c?.lecturer, subject, body })
+      showToast('Sent to your lecturer')
+      f.reset(); await load()
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <>
+      <div className="grid2">
+        <Panel title="Ask your lecturer" subtitle="A question about one of your courses">
+          {myCourses.length === 0 ? (
+            <div className="di-sub">You have no active courses to ask about yet.</div>
+          ) : (
+            <form onSubmit={submit}>
+              <div className="field">
+                <label>Course</label>
+                <select name="course">{myCourses.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.title}</option>)}</select>
+              </div>
+              <div className="field"><label>Subject</label><input name="subject" maxLength={90} placeholder="e.g. CA mark query" /></div>
+              <div className="field"><label>Your question</label><textarea name="body" rows={4} placeholder="Write your question…" /></div>
+              <button className="btn primary" type="submit" disabled={busy}>{busy ? 'Sending…' : 'Send to lecturer'}</button>
+            </form>
+          )}
+        </Panel>
+
+        <Panel title="My questions" subtitle="Replies from your lecturers" flush>
+          <div style={{ padding: 4 }}>
+            {rows.length === 0 && <div className="di-sub" style={{ padding: 12 }}>No questions yet.</div>}
+            {rows.map((q) => (
+              <div key={q.id} className="note-banner" style={{ marginBottom: 10, alignItems: 'flex-start' }}>
+                <Icon name={q.status === 'answered' ? 'check' : 'send'} size={16} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                    <strong>{q.subject}</strong><span className="di-sub">{q.course} · {q.createdAt}</span>
+                  </div>
+                  <div className="di-sub" style={{ marginTop: 2 }}>{q.body}</div>
+                  {q.status === 'answered' ? (
+                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--line)' }}>
+                      <Badge tone="green"><Icon name="tick" size={12} /> Reply</Badge> {q.reply}
+                      <div className="di-sub" style={{ marginTop: 4, fontStyle: 'italic' }}>— {q.lecturer}</div>
+                    </div>
+                  ) : <div style={{ marginTop: 6 }}><Badge tone="amber">Awaiting reply</Badge></div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Panel>
+      </div>
+      <Toast msg={toast} />
+    </>
+  )
+}
+
 // ---------- Announcements ----------
 function Announcements() {
+  const [items, setItems] = useState(ANNOUNCEMENTS)
+  useEffect(() => {
+    let alive = true
+    api.listAnnouncements('students')
+      .then((rows) => {
+        if (!alive || !Array.isArray(rows) || !rows.length) return
+        setItems(rows.map((a) => ({ id: a.id, title: a.title, body: a.body, date: a.date || a.created_at || '' })))
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
   return (
     <Panel title="Announcements" subtitle="Notices from the registrar and your lecturers" flush>
       <div style={{ padding: 4 }}>
-        {ANNOUNCEMENTS.map((a) => (
+        {items.map((a) => (
           <div key={a.id} className="note-banner" style={{ marginBottom: 10 }}>
-            <span>📢</span>
+            <Icon name="send" size={16} />
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                 <strong>{a.title}</strong>
@@ -504,13 +590,13 @@ function HoldsDocs({ myHolds, attendance }) {
     <>
       {!hasHold ? (
         <div className="note-banner" style={{ background: 'var(--green-soft)', borderColor: '#cfe6d4' }}>
-          <span>✅</span>
+          <Icon name="check" size={16} />
           <div>No active holds on your record — you are <strong>cleared to register</strong> and to request documents.</div>
         </div>
       ) : (
         myHolds.map((h, i) => (
           <div key={i} className="note-banner" style={{ background: 'var(--red-soft)', borderColor: '#eccfc9' }}>
-            <span>🚫</span>
+            <Icon name="ban" size={16} />
             <div>
               <strong style={{ color: 'var(--red)' }}>{h.type} hold since {h.since}</strong> — {h.reason}.{' '}
               {h.impact.map((im) => <Badge key={im} tone="red">{im}</Badge>)}{' '}
@@ -533,7 +619,7 @@ function HoldsDocs({ myHolds, attendance }) {
                 title={blocked || ''}
                 onClick={() => showToast(`${d.label} requested — ready to download within 24h (demo)`)}
               >
-                ⬇ {d.label}{blocked ? ` — ${blocked}` : ''}
+                <Icon name="download" size={14} /> {d.label}{blocked ? ` — ${blocked}` : ''}
               </button>
             )
           })}

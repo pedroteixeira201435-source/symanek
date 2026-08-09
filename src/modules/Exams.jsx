@@ -1,5 +1,5 @@
 import React from 'react'
-import { StatCard, Panel, Badge, Toast, useToast } from '../ui.jsx'
+import { StatCard, Panel, Badge, Toast, useToast, Icon } from '../ui.jsx'
 import { EXAM_SCHEDULE } from '../data.js'
 import { SUBJECT_TYPES, EXAM_CONFIG, PASS, WEIGHTS, POLICY_SUMMARY } from '../lib/academics.js'
 
@@ -20,7 +20,7 @@ export default function Exams() {
 
       <Panel title="Assessment & examination policy" subtitle="Institutional marking rules applied across every module">
         <div className="note-banner" style={{ marginTop: 0 }}>
-          <span>📐</span>
+          <Icon name="edit" size={16} />
           <div>{POLICY_SUMMARY}</div>
         </div>
         <div className="grid2" style={{ gap: 14, marginTop: 8 }}>

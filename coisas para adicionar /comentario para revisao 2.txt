@@ -1,0 +1,41 @@
+﻿SYSTEM AUDIT PARTIAL FEEDBACK
+The School Admin
+It is said to have the full control of every module
+
+So, the following is expected:
+    1. Application Component
+    • Students’ Biographical information
+Here the admin must be able to add new students
+The students’ bio should have Action Button that one can perform:
+    • Show profile
+    • Update profile
+    • Document
+    • Applications
+    • Rest Password
+    • Log in as
+
+    2. Admission
+    • Manual Admission 
+Here you will see the list of the students and their application status.
+It should have an Action Button that gives you an option to process the students’ applications.
+    3. Registration
+    • Modules registration
+    • Qualification management
+    • Modules management
+    • Students Blocks
+
+    4. Students’ marks
+    • My Modules
+    • Marks Suppression based on academic year and in-take
+What Marks to Suppress (CA, Exam, Final Marks)
+    • Modules Allocation, allocating modules to teaching staffs
+The System admin must be able to Control Access, Assign Permissions and block staff Access.
+
+I did not see Exam permit, Proof of registration, Academic records, Student letters and Statement of results.
+Those are just some of the key components and modules that I did not see on the admin interface. Under settings there is nothing to set up.
+
+
+
+
+
+

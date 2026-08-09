@@ -13,6 +13,7 @@
 //      – minimum 50% final mark to pass the module
 //      – minimum 40% in the examination paper to pass the paper
 //      – final mark of 45–49% qualifies for a second-opportunity examination
+//      – a second-opportunity (re-sit) final mark is capped at 50% (bare pass)
 //  • Two intakes per year: January and July
 
 export const WEIGHTS = Object.freeze({ ca: 0.6, exam: 0.4 });
@@ -25,6 +26,7 @@ export const PASS = Object.freeze({
   examPaperMin: 40, // minimum % in the exam paper to pass the paper
   secondOppLow: 45, // final mark band (inclusive) that earns a
   secondOppHigh: 49, // second-opportunity examination
+  resitCap: 50, // a second-opportunity (re-sit) final mark is capped at 50%
 });
 
 // Subject types and their formative assessment structure.
@@ -54,6 +56,19 @@ export const INTAKES = Object.freeze([
   { key: 'july', label: 'July intake' },
 ]);
 
+// Exam types shown on the Statement of Result (client's official document).
+export const EXAM_TYPES = Object.freeze(['Normal Exams', 'Supplementary/Special Exams']);
+
+// Official result descriptions keyed to the letter grade, matching the college's
+// Statement of Result. 'XX' = wrote the exam but sub-minimum was not obtained.
+// NB: the exact mark→letter boundaries are being reconfirmed with the college
+// (their sample shows 79→C); gradeOf() below keeps the current boundaries.
+export const RESULT_DESCRIPTIONS = Object.freeze({
+  A: 'Excellent', B: 'Very Good', C: 'Good', D: 'Satisfactory',
+  XX: 'Fail - Sub minimum not obtained', F: 'Fail',
+});
+export const describeGrade = (letter) => RESULT_DESCRIPTIONS[String(letter || '').toUpperCase()] || '';
+
 // Letter grade + GPA points from a % mark (institutional scale).
 export function gradeOf(mark) {
   if (mark >= 80) return { letter: 'A', gpa: 4.0 };
@@ -74,6 +89,13 @@ export function caFromComponents(marks) {
 // Final module mark = 60% CA + 40% exam, rounded to a whole percentage.
 export function finalMark(ca, exam) {
   return Math.round(Number(ca) * WEIGHTS.ca + Number(exam) * WEIGHTS.exam);
+}
+
+// Second-opportunity (re-sit) final mark. The re-sit paper replaces the first
+// exam in the 60/40 formula, but the resulting final is CAPPED at 50% — a
+// second-opportunity pass is recorded as a bare pass (client rule D2, 2026).
+export function resitFinal(ca, exam2) {
+  return Math.min(finalMark(ca, exam2), PASS.resitCap);
 }
 
 // Evaluate a module result against the institutional rules.
@@ -113,5 +135,6 @@ export const POLICY_SUMMARY =
   `Final mark = ${Math.round(WEIGHTS.ca * 100)}% continuous assessment + ` +
   `${Math.round(WEIGHTS.exam * 100)}% examination. ` +
   `Pass the module with ${PASS.moduleFinalMin}%+ (exam paper ${PASS.examPaperMin}%+); ` +
-  `${PASS.secondOppLow}–${PASS.secondOppHigh}% qualifies for a second opportunity. ` +
+  `${PASS.secondOppLow}–${PASS.secondOppHigh}% qualifies for a second opportunity ` +
+  `(re-sit final capped at ${PASS.resitCap}%). ` +
   `Exams are out of ${EXAM_CONFIG.outOf} marks over ${EXAM_CONFIG.durationHours} hours.`;

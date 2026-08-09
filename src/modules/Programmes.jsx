@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
-import { Tabs, Panel, Badge, Progress, Modal, Donut, Toast, useToast } from '../ui.jsx'
+import React, { useState, useEffect } from 'react'
+import { Tabs, Panel, Badge, Progress, Modal, Donut, Toast, useToast, Icon } from '../ui.jsx'
 import { PROGRAMMES, COURSES, HOLDS, DEGREE_AUDIT, STAFF, fmtN } from '../data.js'
+import { listProgrammes, listCourses } from '../api.js'
 
 // Programmes & curriculum — the tertiary academic structure:
 // NQF-levelled programmes, credit-bearing courses, semester enrolments.
@@ -140,6 +141,14 @@ function ProgrammeList() {
   const [showNew, setShowNew] = useState(false)
   const [toast, showToast] = useToast()
 
+  useEffect(() => {
+    let alive = true
+    listProgrammes()
+      .then((rows) => { if (alive && Array.isArray(rows) && rows.length) setProgs(rows) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
   const create = (e) => {
     e.preventDefault()
     const f = e.target
@@ -248,6 +257,14 @@ function Catalogue() {
   const [showNew, setShowNew] = useState(false)
   const [toast, showToast] = useToast()
 
+  useEffect(() => {
+    let alive = true
+    listCourses()
+      .then((rows) => { if (alive && Array.isArray(rows) && rows.length) setCourses(rows) })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
   const addCourse = (e) => {
     e.preventDefault()
     const f = e.target
@@ -281,7 +298,7 @@ function Catalogue() {
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
-            <button className="btn ghost sm" onClick={() => showToast('Catalogue exported to PDF prospectus')}>⬇ Export</button>
+            <button className="btn ghost sm" onClick={() => showToast('Catalogue exported to PDF prospectus')}><Icon name="download" size={14} /> Export</button>
             <button className="btn primary sm" onClick={() => setShowNew(true)}>+ Add course</button>
           </>
         }
@@ -388,7 +405,7 @@ function Enrolments() {
       <Panel
         title="Semester 2 enrolments — class capacity"
         subtitle="Registration per course · waitlist opens when a class is full"
-        actions={<button className="btn ghost sm" onClick={() => showToast('Add/drop period closed — class lists locked')}>🔒 Close add/drop</button>}
+        actions={<button className="btn ghost sm" onClick={() => showToast('Add/drop period closed — class lists locked')}><Icon name="lock" size={14} /> Close add/drop</button>}
         flush
       >
         <table className="data">
@@ -449,7 +466,7 @@ function Enrolments() {
           {checks.map(([label, ok, note]) => (
             <div key={label} className="cf-row" style={{ padding: '5px 0', fontSize: 12.5 }}>
               <span>
-                <span style={{ color: ok ? 'var(--green)' : 'var(--red)', fontWeight: 700, marginRight: 8 }}>{ok ? '✓' : '✕'}</span>
+                <span style={{ color: ok ? 'var(--green)' : 'var(--red)', marginRight: 8 }}><Icon name={ok ? 'tick' : 'x'} size={13} /></span>
                 {label}
               </span>
               <span style={{ color: ok ? 'var(--ink-faint)' : 'var(--red)', fontSize: 11.5, textAlign: 'right', maxWidth: 240 }}>{note}</span>
@@ -474,7 +491,7 @@ function Enrolments() {
             </button>
           ) : (
             <div className="note-banner" style={{ marginTop: 14, marginBottom: 0 }}>
-              <span>🚫</span>
+              <span><Icon name="ban" size={14} /></span>
               <div>
                 <strong>Registration blocked by the rules engine.</strong>{' '}
                 {hold ? 'The hold must be resolved (payment or advising) — it then auto-releases and registration re-opens.' : 'The prerequisite must appear as completed on the transcript.'}

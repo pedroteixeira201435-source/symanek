@@ -63,11 +63,13 @@ h1, h2, h3 { font-family: var(--font-display); font-weight: 700; letter-spacing:
 
 /* mono emoji glyphs — kills the playful look without swapping icon sets
    (login role icons stay colored on purpose: first-touch warmth) */
-.gs, .sb-item .icon, .topbar .search > span,
+.gs,
 .mini-card .ml, .cart-empty .big, .banner > span, .note-banner > span,
 .feed-item .ficon, .toast > span:first-child {
   filter: grayscale(1); opacity: 0.78;
 }
+/* SVG line icons render in the inherited (petrol/text) colour */
+.sb-item .icon svg, .topbar .search > span svg { color: inherit; }
 
 button { font-family: inherit; cursor: pointer; }
 input, select { font-family: inherit; }
@@ -264,6 +266,7 @@ input, select { font-family: inherit; }
   display: inline-flex; align-items: center; justify-content: center;
   background: var(--petrol-50); border: 1px solid var(--petrol-100);
   border-radius: 10px; font-size: 16px;
+  color: var(--petrol-600); /* stroke colour for the SVG line icon */
 }
 .stat-card .value { font-family: var(--font-mono); font-size: 24px; font-weight: 600; color: var(--petrol-900); margin: 7px 0 4px; }
 .stat-card .delta { font-size: 12px; font-weight: 500; }

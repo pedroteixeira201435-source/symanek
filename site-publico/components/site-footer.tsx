@@ -68,7 +68,7 @@ export function SiteFooter() {
 
       <div className="border-t border-white/10">
         <div className="container-max flex flex-col items-center justify-between gap-3 py-6 text-xs text-petrol-400 sm:flex-row">
-          <p>© {new Date().getFullYear()} {college.name}. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} {college.name}. All rights reserved. · Reg. No: {college.registrationNumber} · Tax No: {college.taxNumber}</p>
           <div className="flex gap-5">
             <a href={college.contact.facebook} target="_blank" rel="noopener noreferrer" className="hover:text-white">Facebook</a>
             <a href={college.contact.instagram} target="_blank" rel="noopener noreferrer" className="hover:text-white">Instagram</a>

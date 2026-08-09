@@ -1,0 +1,46 @@
+﻿WEBSITE:
+Page 1, Home:
+    1. Add also NQA accredited and also HPCNA registered
+    2. Study mode also part-time with Online synchronisation 
+    3. The bachelor degree honours is a 1-year program, and is a level 8
+    4. Indicate the duration for all qualifications
+    5. Study mode for bachelors is full time face to face or distance or part-time with online sychnronisation
+    6. Application fee for all programme is 200
+    7. Registration fee for all programme is 500 apart from caregiving which is 1650.
+    8. Visit us at ERF 2948, Extension 6, Okahandja, Namibia
+
+Page 2, About Us: 
+    1. Registered with the Nursing Board of Namibia for Auxiliary Nursing programme (Caregiving is not a registrable program). Nursing Council has been changed to Nursing Board.
+    2. Registered with the NTA for Occupational Health & Safety Level 4 and 5; and Office Administration Level 4
+    3. Registered with the HPCNA
+    4. Accredited by the Namibia Qualifications Authority
+    5. All add that we offer internship
+    6. Add our values as well
+
+Page 2, Our Programmes: 
+    1. Make it Nursing and Healthcare not Nursing and Care
+    2. Indicate fees for all programmes
+    3. Indicate all NQF Level: Caregiving is level 3 and Auxiliary is level 5
+    4. Indicate all the admission requirements for the programmes
+
+Page 3, Gallery:
+    1. Get more pictures and remove those ones that are repeating. Request Jeremia to send you more graduation photos.
+
+Our operating hours:
+07:30 – 17:00 (Monday to Thursday)
+07:30 – 13:00 (Fridays)
+
+
+
+Student Portal
+Everything seems fine to me, just few questions:
+    1. HR: are the people able to download payslips online? Can they apply for leave online and can the manager also be able to approve the leave online?
+    2. Students (holds and documents): I did not see where the class attendance hours should be recorded, a student needs a minimum of 80% class attendance for them to be admitted to the final examination. Also add examination permit as a document, rejection letter, and admission letter as a document. Also add section for announcements to the students.
+    3. Registrar: is there a section for first and second opportunity examination marks and where to download the examination timetable?
+    4. Is the different intakes able to be accommodated? We usually have January and July intakes per year.
+    5. The formula for subject weighting is 60% CA marks and 40% examination marks, in order to get the final marks for examination. These formulas must be incorporated already in the system. Minimum pass mark for all subject during formative assessment is 50%. The student is expected to get a minimum of 50% to pass the module during the final examination. For the student to pass the examination paper, they should have obtained a minimum of 40%. For a student to qualify for second opportunity examination, they should have obtained an average score of 45 – 49%. 
+    6. We have 2 types subjects: semester subjects and year subjects/modules. The semester subjects have 3 formative assessments (2 tests and 1 assignment). The year subjects have 5 formative assessments (3 tests and 2 assignment).
+    7. All examinations are out of 100 marks and are written for a duration of 3 hours.
+
+The system should have a function where we are able to close or open certain functions for example marks release dates, marks insertion dates, application periods, registration periods, etc.
+
