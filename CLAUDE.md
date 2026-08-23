@@ -83,15 +83,22 @@ but student data is RLS-gated, so it only fully works once signed in (`B3`).
   `approve_application`/`mark_paid`.
 - **Storage buckets** (private): `approval-letters` (generated PDFs), `application-docs`,
   `payment-proofs` (applicant EFT proofs). Uploads/signing happen server-side via the service role.
-- **Seeds**: `seed_programmes.sql` (auto-generated from `site-publico/lib/content.ts` — slugs MUST match
-  or `submit_application` rejects), `seed.sql`, `seed_suite.sql` (demo slice around student
-  **Gabriel !Naruseb**, CVT-4), `seed_auth.sh` (9 demo accounts, password `symanek123`). `db push` does
-  NOT run seed files — they are bundled into a migration for cloud, or applied directly.
+- **Seeds**: `seed_programmes.sql` (auto-generated from `site-publico/lib/content.ts` via
+  `site-publico/scripts/gen-seed.ts` — slugs MUST match or `submit_application` rejects; regenerate after
+  editing programmes, don't hand-edit), `seed.sql`, `seed_suite.sql` (demo slice around student
+  **Gabriel !Naruseb**, CVT-4), `seed_golive.sql` (**REAL** go-live data — staff, the OHS L4/L5
+  NQA unit-standard modules with unit-ID codes, lecturer-per-module mapping, Auxiliary roster; idempotent,
+  applied directly, NOT in the migration chain), `seed_auth.sh` (9 demo accounts, password `symanek123`).
+  `db push` does NOT run seed files — they are bundled into a migration for cloud, or applied directly.
 
 ### Public-site server routes (Next, `nodejs` runtime, service-role)
 
 - `app/api/letter/route.ts` — lazily generates the approval-letter PDF (`lib/letter.ts`, `pdf-lib`) into
-  `approval-letters` and redirects to a signed URL. Portal links here via `/api/letter?ref=…`.
+  `approval-letters` and redirects to a signed URL. Portal links here via `/api/letter?ref=…`. The
+  **official stamp** is `public/stamp.png` (extracted from the 18 Aug 2026 scan; a light provisional
+  image — swap when the cleaner one arrives): `letter.ts` embeds it via `embedPng`, and the Suite letters
+  (`src/modules/Students.jsx`) use `college_settings.stamp_path` with a `${origin}/stamp.png` fallback.
+  Signatures are printed name + title only (client declined scanned signatures — forgery risk).
 - `app/api/payment-proof/route.ts` — applicant uploads EFT proof (file + amount); validates the ref is
   approved, stores it, flags the application. Admin reviews it in `/admin` and records the payment.
 
@@ -129,7 +136,9 @@ carries real ids). `src/ui.jsx` holds shared primitives (`StatCard`, `Tabs`, `Pa
 - "Today" in the demo is fixed around **3 Jul 2026**; keep new dates in that window. Headline numbers are
   reconciled (476 total enrolment across `SCHOOL`/`PROGRAMMES`/`FEE_STRUCTURE`) — keep them consistent.
 - **Payments are manual EFT + uploaded proof — no gateway.** Emails are **generated in-app but sent
-  manually** (admin "Copy email"). Real bank details in `content.ts` `college.bank` are still PLACEHOLDER.
+  manually** (admin "Copy email"). Bank details are **REAL and confirmed** (client, 2026-08-23):
+  `content.ts` `college.bank` and `college_settings` = *Symanek Specialized College* /
+  *Enterprise Business Account* / FNB Okahandja / `64279814676` / branch `280373`. No cash / ATM.
 
 ## Env & deploy
 
@@ -159,3 +168,10 @@ carries real ids). `src/ui.jsx` holds shared primitives (`StatCard`, `Tabs`, `Pa
 - `supabase db push` connects to cloud via the access token (no DB password needed); a `pg-delta`
   certificate warning is **non-fatal** — the migration still applies. Changing an RPC's return type needs
   `drop function` first (a bare `create or replace` errors).
+- **Applying SQL to cloud when the CLI isn't available** (verified 2026-08-23): the `supabase` CLI and
+  `psql` are NOT installed and the **direct** connection `db.<ref>.supabase.co:5432` is **IPv6-only**
+  (unreachable from this sandbox → `ENETUNREACH`). Working path: `npm i pg` (network is available), then
+  connect with the **Session pooler** URI (IPv4, port **5432**, user `postgres.<ref>`,
+  host `aws-0-<region>.pooler.supabase.com`) and `ssl:{rejectUnauthorized:false}`; wrap each file in
+  `BEGIN/COMMIT`. Do **not** use the transaction pooler (6543) for DDL. The Session-pooler string carries
+  the DB password — ask the user for it, keep it out of committed files, and have them rotate it after.
