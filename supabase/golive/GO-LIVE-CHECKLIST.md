@@ -15,11 +15,13 @@ Legend: **[Pedro]** you do it · **[Client]** the college must supply · **[Auto
 - [ ] **[Client]** **A4 — exact grade boundaries (A/B/C/D/Fail).** Until received, official
       Statements of Result may not match the college's documents. Blocks transcripts only.
 
-## 1. Make the Suite persist (Phase B) — ⏳ needs Pedro
-- [ ] **[Pedro] B1 — set the Suite's Vercel env vars** (project `symanek-suite`, root `.`):
-      `VITE_API_MODE=http`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-      (see `site-publico/VERCEL-DEPLOY.md` for the values). Redeploy. This removes the
-      role-picker and requires real login. **Without this the Suite stays mock in prod.**
+## 1. Make the Suite persist (Phase B)
+- [x] **B1 — DONE (live) 2026-08-23** — the Suite now runs in `http` in production
+      automatically (production build defaults to http + embedded public Supabase
+      URL/anon fallback in `config.js`/`supabaseClient.js`); no Vercel env vars needed.
+      `https://symanek-suite.vercel.app` is live with the real email login against the
+      cloud project. (Setting `VITE_API_MODE`/`VITE_SUPABASE_*` in Vercel still overrides,
+      e.g. to point at a different project.)
 - [ ] **[Pedro] B2 — provision real accounts & retire demo:**
       1. Create staff auth accounts from the `staff` table (needs their emails — some are
          still NULL, see D2). Assign each a `profiles.suite_role` (bursar/registrar/hr/…).

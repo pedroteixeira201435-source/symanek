@@ -16,7 +16,7 @@ Good news vs. the stale `PRODUCTION-PLAN.md` (28 Jul): the plan's headline "Bloc
 
 ### Top 5 blockers (status after the 23 Aug hardening pass)
 
-1. **Suite runs in mock in "production"** — no env vars on `symanek-suite.vercel.app` ⇒ role-picker login, in-memory data, nothing persists. ⏳ **OPEN — needs Pedro** to set the Suite's Vercel env vars (B1). (`CLAUDE.md:152-153`)
+1. **Suite runs in mock in "production"** — ✅ **RESOLVED & LIVE 2026-08-23** — the Suite now defaults to `http` in production builds with an embedded public Supabase URL+anon key fallback (`config.js`/`supabaseClient.js`), so no Vercel env vars are needed. **Verified live:** `https://symanek-suite.vercel.app` serves the http build, shows the real email login, and a real login + `dashboard_stats` RPC against the cloud returns live data (128 students / 18 staff). **The Suite is operational in production.** (Follow-up: replace the demo `symanek123` accounts with real ones — B2 — and rotate the DB password.)
 2. **RLS has no privilege separation** — ✅ **FIXED** — `has_suite_role()` + role-scoped write policies on all operational tables (`20260823140000`, `20260823160000`); `audit_log` write-protected; verified by tests.
 3. **Unauthenticated PII leak on `/api/letter`** — ✅ **FIXED** — per-application `access_token`, released only on email lookup; letter requires `ref`+`t` (`20260823130000`). Filter-injection in `/api/payment-proof` also fixed.
 4. **Real data is one cohort only** — ⏳ **OPEN — needs client** (rosters for the other programmes). The fabricated "476" no longer reaches a real dashboard (B4 done). (`seed_golive.sql:19-20`)
