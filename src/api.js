@@ -482,6 +482,24 @@ export const setInstitutionType = (type) => mock({ ok: true, type })
 // (http) vs optimistic in-memory updates (mock demo).
 export const isHttpMode = () => useHttp()
 
+// --- Canteen (http-backed): POS records sales, CanteenAdmin reads the summary ---
+export async function canteenRecordSale({ total, pay, lines }) {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('canteen_record_sale', { p_total: total, p_pay: pay, p_lines: lines })
+    if (error) throw error
+    return { ok: true, id: data }
+  }
+  return mock({ ok: true })
+}
+export async function getCanteenSummary() {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('canteen_summary')
+    if (error) throw error
+    return data // { sales_today, transactions, avg_basket, top_sellers }
+  }
+  return mock(null) // CanteenAdmin keeps its demo constants in mock
+}
+
 // --- General ledger (http-backed): journal drives trial balance / income stmt ---
 export async function getGlJournal() {
   if (useHttp()) {

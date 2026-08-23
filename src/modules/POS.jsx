@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
 import { POS_PRODUCTS, POS_CATS, SCHOOL, STUDENT_ACCOUNTS, fmtN } from '../data.js'
+import { canteenRecordSale, isHttpMode } from '../api.js'
 import { Toast, useToast, Modal, Icon } from '../ui.jsx'
 
 // SELLER-ONLY screen. Full-screen route with no sidebar and no admin
@@ -66,6 +67,11 @@ export default function POS({ attendant, onLogout, adminPeek }) {
   const insufficient = pay === 'Account' && acctBalance < total
 
   const confirmSale = () => {
+    // Persist the sale in http mode (fire-and-forget so the till stays instant);
+    // the local state below drives the receipt + shift reconciliation.
+    if (isHttpMode()) {
+      canteenRecordSale({ total, pay, lines: cart.map((l) => ({ name: l.name, qty: l.qty, price: l.price })) }).catch(() => {})
+    }
     setStock((s) => {
       const next = { ...s }
       cart.forEach((l) => { next[l.id] -= l.qty })

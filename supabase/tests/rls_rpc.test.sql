@@ -159,6 +159,13 @@ begin
       '[{"acc":"Salaries & Wages","dr":100,"cr":0},{"acc":"Cash & Cash Equivalents","dr":0,"cr":100}]'::jsonb) is not null,
     'gl_post accepts a balanced entry');
 
+  raise notice '== canteen ==';
+  perform pg_temp.ok(
+    public.canteen_record_sale(20, 'Cash', '[{"name":"Water 500ml","qty":2,"price":10}]'::jsonb) is not null,
+    'canteen_record_sale records a sale');
+  perform pg_temp.ok((public.canteen_summary()::jsonb) ? 'sales_today',
+    'canteen_summary returns today''s figures');
+
   perform set_config('request.jwt.claims', '', true);
   raise notice 'ALL TESTS PASSED';
 end $$;

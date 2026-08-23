@@ -48,9 +48,14 @@ real apply/portal flow. **Scheduling's academic timetable is now backed** (`time
 + RPCs, `20260823210000`); its relief board & duty roster stay demo. **Accounting is now backed** — a real double-entry GL (`gl_accounts`/`gl_journal`/`gl_lines`
 + `gl_post` balanced-entry / `gl_journal_list` / `gl_trial_balance`, `20260823220000`);
 the Journal, Trial Balance, Income Statement and Tax Engine all derive from the real
-journal (asset register & VAT calendar stay demo). So the genuinely unbacked demo modules
-are down to **2** — `POS`, `CanteenAdmin` (canteen/till — a cafeteria domain, likely
-out of day-1 scope for a nursing/OHS college).
+journal (asset register & VAT calendar stay demo). So **the canteen is now backed too** — `canteen_products`/`canteen_sales`/`canteen_sale_lines`
++ `canteen_record_sale` (seller) / `canteen_summary` / `canteen_products_list`
+(`20260823230000`): POS persists each sale and CanteenAdmin's Sales Dashboard shows the
+real today's figures. **So there are now ZERO fully-mock-only modules** — every Suite
+module has a real http backend path (a few secondary tabs — asset register, VAT calendar,
+canteen inventory/till, relief board, duty roster — remain demo, but no whole module is
+mock-only). **This closes the C1 blocker**: the backend exists for every module, so the
+college can enable whichever it needs at day-1 without further build.
 **Production-safety (2026-08-23):** these modules now render a **"Demo data — not
 connected to live records" banner in http mode** (`MockDataNotice`), so a real
 deployment never presents mock journals/timetables/canteen figures as if live.

@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
-import { StatCard, Tabs, Panel, Badge, Modal, Toast, useToast, MockDataNotice } from '../ui.jsx'
-import { isHttpMode } from '../api.js'
+import React, { useState, useEffect } from 'react'
+import { StatCard, Tabs, Panel, Badge, Modal, Toast, useToast } from '../ui.jsx'
+import { getCanteenSummary } from '../api.js'
 import { CANTEEN_STATS, TOP_SELLERS, HOURLY_SALES, INVENTORY, TILL_SESSIONS, fmtN } from '../data.js'
 
 export default function CanteenAdmin({ role, openPOS }) {
@@ -10,7 +10,6 @@ export default function CanteenAdmin({ role, openPOS }) {
 
   return (
     <>
-      <MockDataNotice show={isHttpMode()} />
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
         {!readOnly && (
           <button className="btn amber sm" onClick={openPOS}>Open POS screen</button>
@@ -26,12 +25,15 @@ export default function CanteenAdmin({ role, openPOS }) {
 
 function Sales() {
   const max = Math.max(...HOURLY_SALES.map((h) => h.v))
+  // Real today's summary in http mode; demo constants in mock.
+  const [sum, setSum] = useState(null)
+  useEffect(() => { getCanteenSummary().then(setSum).catch(() => {}) }, [])
   return (
     <>
       <div className="stat-row c4">
-        <StatCard icon="💵" label="Sales Today" value={fmtN(CANTEEN_STATS.salesToday)} delta="+12% vs avg day" />
-        <StatCard icon="🧾" label="Transactions" value={CANTEEN_STATS.transactions} delta="Since 07:05" deltaTone="neutral" />
-        <StatCard icon="🧺" label="Avg Basket" value={fmtN(CANTEEN_STATS.avgBasket)} delta="+N$ 1.10 vs yesterday" />
+        <StatCard icon="💵" label="Sales Today" value={fmtN(sum ? sum.sales_today : CANTEEN_STATS.salesToday)} delta="today" />
+        <StatCard icon="🧾" label="Transactions" value={sum ? sum.transactions : CANTEEN_STATS.transactions} delta="today" deltaTone="neutral" />
+        <StatCard icon="🧺" label="Avg Basket" value={fmtN(sum ? sum.avg_basket : CANTEEN_STATS.avgBasket)} delta="per sale" />
         <StatCard icon="📊" label="Gross Margin" value={`${CANTEEN_STATS.margin}%`} delta="Target 38%" />
       </div>
 
