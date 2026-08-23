@@ -121,9 +121,17 @@ function ResultCard({ status }: { status: Extract<ApplicationStatus, { found: tr
           {!enrolled && status.reference ? <ProofBlock reference={status.reference} submitted={status.proofSubmitted} /> : null}
 
           <div className="flex flex-wrap gap-3">
-            <a href={status.approvalLetterUrl ?? "#"} className="btn btn-primary btn-md">
-              Download approval letter <ArrowRight />
-            </a>
+            {status.approvalLetterUrl ? (
+              <a href={status.approvalLetterUrl} className="btn btn-primary btn-md">
+                Download approval letter <ArrowRight />
+              </a>
+            ) : (
+              <p className="rounded-xl bg-petrol-50 px-4 py-3 text-sm text-petrol-600">
+                To download your approval letter, look up your application again using the{" "}
+                <strong>email you applied with</strong> (for your security, the letter isn&apos;t
+                available when you search by reference code alone).
+              </p>
+            )}
             {enrolled && (
               <a href="https://symanek.educims.org/" target="_blank" rel="noopener noreferrer" className="btn btn-accent btn-md">
                 Enter Student Portal <ArrowRight />

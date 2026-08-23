@@ -13,13 +13,24 @@ const BUCKET = "approval-letters";
 // bucket on first request, and redirects to a short-lived signed URL.
 export async function GET(req: NextRequest) {
   const ref = req.nextUrl.searchParams.get("ref")?.trim();
+  const token = req.nextUrl.searchParams.get("t")?.trim();
   if (!ref) return NextResponse.json({ error: "Missing reference" }, { status: 400 });
+  // Auth: the letter is gated by the per-application access token. References are
+  // enumerable, so ref alone must never unlock the PDF. The token is obtained from
+  // the Student Portal by looking up with the email you applied with.
+  if (!token) {
+    return NextResponse.json(
+      { error: "Open your approval letter from the Student Portal (look up with the email you applied with)." },
+      { status: 401 }
+    );
+  }
   if (!supabaseAdmin) return NextResponse.json({ error: "Server not configured" }, { status: 500 });
 
   const { data: app, error } = await supabaseAdmin
     .from("applications")
     .select("reference,full_name,programme_slug,amount_due,stage,approval_letter_path")
     .eq("reference", ref)
+    .eq("access_token", token)
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: "Lookup failed" }, { status: 500 });

@@ -122,7 +122,13 @@ export async function lookupApplication(refOrEmail: string): Promise<Application
       stage: row.stage,
       reference: row.reference ?? undefined,
       amountDue: row.amount_due != null ? Number(row.amount_due) : undefined,
-      approvalLetterUrl: row.reference ? `/api/letter?ref=${encodeURIComponent(row.reference)}` : undefined,
+      // The letter URL needs the per-application access token, which the RPC only
+      // returns when the lookup was by email (proof of ownership). Looked up by a
+      // bare reference → no token → no download link (prevents enumeration).
+      approvalLetterUrl:
+        row.reference && row.access_token
+          ? `/api/letter?ref=${encodeURIComponent(row.reference)}&t=${encodeURIComponent(row.access_token)}`
+          : undefined,
       proofSubmitted: !!row.proof_submitted,
       proofAmount: row.proof_amount != null ? Number(row.proof_amount) : undefined,
     };

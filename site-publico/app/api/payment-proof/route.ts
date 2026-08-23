@@ -30,13 +30,33 @@ export async function POST(req: NextRequest) {
 
   const fileName = (file as { name?: string }).name ?? "proof";
 
-  const { data: app } = await supabaseAdmin
-    .from("applications")
-    .select("id,reference,stage")
-    .or(`reference.eq.${ref},email.eq.${ref.toLowerCase()}`)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // Look up by reference, then fall back to email. Use parameterized .eq()
+  // (never interpolate user input into a PostgREST .or() filter — that allows
+  // filter injection, e.g. a crafted ref smuggling in `,stage.eq.approved`).
+  const pick = (rows: { id: string; reference: string; stage: string }[] | null) =>
+    rows && rows.length ? rows[0] : null;
+  let app = pick(
+    (
+      await supabaseAdmin
+        .from("applications")
+        .select("id,reference,stage")
+        .eq("reference", ref)
+        .order("created_at", { ascending: false })
+        .limit(1)
+    ).data
+  );
+  if (!app) {
+    app = pick(
+      (
+        await supabaseAdmin
+          .from("applications")
+          .select("id,reference,stage")
+          .eq("email", ref.toLowerCase())
+          .order("created_at", { ascending: false })
+          .limit(1)
+      ).data
+    );
+  }
 
   if (!app || !["approved", "paid"].includes(app.stage)) {
     return NextResponse.json({ error: "Application not found or not yet approved" }, { status: 404 });
