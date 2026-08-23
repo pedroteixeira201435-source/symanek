@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { Tabs, Panel, Badge, Modal, Toast, useToast, Icon } from '../ui.jsx'
+import { Tabs, Panel, Badge, Modal, Toast, useToast, Icon, MockDataNotice } from '../ui.jsx'
+import { isHttpMode } from '../api.js'
 import { PERIODS, TIMETABLES, DUTY_ROSTER, RELIEF_TODAY, SUBJECT_STYLES } from '../data.js'
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
@@ -9,6 +10,7 @@ export default function Scheduling() {
 
   return (
     <>
+      <MockDataNotice show={isHttpMode()} />
       <Tabs tabs={['Relief — Today', 'Academic Timetable', 'Staff Duty Roster']} active={tab} onChange={setTab} />
       {tab === 'Relief — Today' && <ReliefBoard />}
       {tab === 'Academic Timetable' && <Timetable />}

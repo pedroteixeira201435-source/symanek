@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { StatCard, Tabs, Panel, Badge, Modal, Toast, useToast } from '../ui.jsx'
+import { StatCard, Tabs, Panel, Badge, Modal, Toast, useToast, MockDataNotice } from '../ui.jsx'
+import { isHttpMode } from '../api.js'
 import { CANTEEN_STATS, TOP_SELLERS, HOURLY_SALES, INVENTORY, TILL_SESSIONS, fmtN } from '../data.js'
 
 export default function CanteenAdmin({ role, openPOS }) {
@@ -9,6 +10,7 @@ export default function CanteenAdmin({ role, openPOS }) {
 
   return (
     <>
+      <MockDataNotice show={isHttpMode()} />
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
         {!readOnly && (
           <button className="btn amber sm" onClick={openPOS}>Open POS screen</button>

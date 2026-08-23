@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react'
-import { StatCard, Tabs, Panel, Badge, Modal, Toast, useToast, Icon } from '../ui.jsx'
+import { StatCard, Tabs, Panel, Badge, Modal, Toast, useToast, Icon, MockDataNotice } from '../ui.jsx'
+import { isHttpMode } from '../api.js'
 import { JOURNAL, COA, ASSET_REGISTER, TAX_CALENDAR, TAX_CONST, WORKTAG_OF, fmtN } from '../data.js'
 
 // Bookkeeping mirror of public/assets/Namibia_Financial_Model_v8.xlsx —
@@ -20,6 +21,7 @@ export default function Accounting({ role }) {
 
   return (
     <>
+      <MockDataNotice show={isHttpMode()} />
       <Tabs
         tabs={['Journal', 'Trial Balance', 'Income Statement', 'Tax Engine', 'Asset Register', 'VAT & Compliance']}
         active={tab}

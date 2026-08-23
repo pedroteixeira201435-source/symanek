@@ -44,6 +44,10 @@ new backend — books/loans/fines + issue/return/renew RPCs, `20260823190000`):
 `Accounting`, `POS`, `Scheduling`, `ApplyOnline`, `CanteenAdmin`. Of these, Accounting/POS/
 Scheduling need a **new backend schema** (ledger, sales, timetable) — scope to day-1 (C1);
 ApplyOnline duplicates the public-site apply flow (likely retire, not build).
+**Production-safety (2026-08-23):** these modules now render a **"Demo data — not
+connected to live records" banner in http mode** (`MockDataNotice`), so a real
+deployment never presents mock journals/timetables/canteen figures as if live.
+(POS is exempt — its fullscreen till layout; it's out of day-1 scope for this college.)
 
 **Caveat — "wired" ≠ "persists" (re-checked 2026-08-23):** of the flagged pure-mock functions, most are actually **dead exports** — `getCourseware`, `allocateRoom`, `submitNcheReturn`, `setInstitutionType`, `submitApplication` are imported by **0 modules** (Courseware/Accommodation/Compliance read `data.js` directly). Only two were genuinely used: **`listExamSchedule`** (now backed by the `exam_schedule()` RPC — DONE) and **`getDegreeAudit`** (StudentPortal), which is the one real remaining gap — a faithful degree audit needs a **curriculum-requirements model** (requirement groups / credits-per-group) that doesn't exist yet, so it's a small new feature, not a stub. All 13 modules still `import from '../data'` for secondary datasets, so `data.js` is not eliminable yet.
 

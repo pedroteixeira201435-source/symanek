@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { Panel, Badge, Toast, useToast } from '../ui.jsx'
+import { Panel, Badge, Toast, useToast, MockDataNotice } from '../ui.jsx'
+import { isHttpMode } from '../api.js'
 import { PROGRAMMES, ADMISSION_STAGES } from '../data.js'
 
 // Public applicant self-service — submit an application and track its stage.
@@ -16,6 +17,7 @@ export default function ApplyOnline({ role }) {
 
   return (
     <>
+      <MockDataNotice show={isHttpMode()} />
       {!app ? (
         <Panel title="Apply online — 2027 intake" subtitle={`Welcome ${role.user} · complete your application below`}>
           <form onSubmit={submit} style={{ maxWidth: 460 }}>

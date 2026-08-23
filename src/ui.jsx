@@ -213,6 +213,19 @@ export function Toast({ msg }) {
   )
 }
 
+// Shown (in http/backend mode) on modules that still read demo data, so a real
+// deployment never presents mock content as if it were live. `show` is passed by
+// the module (typically isHttpMode()) to keep ui.jsx decoupled from the data layer.
+export function MockDataNotice({ show }) {
+  if (!show) return null
+  return (
+    <div className="banner" style={{ background: '#fff7ed', borderColor: '#fed7aa', color: '#9a3412' }}>
+      <Icon name="alert" size={16} />
+      <div><strong>Demo data</strong> — this module isn’t connected to live records yet; the figures below are sample data.</div>
+    </div>
+  )
+}
+
 // hook: transient toast message
 export function useToast() {
   const [msg, setMsg] = useState(null)
