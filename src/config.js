@@ -1,7 +1,9 @@
 // Runtime configuration — the single switch between the mock prototype and a real backend.
-// Phase 1 (now): API_MODE = 'mock' — api.js returns the in-memory data in data.js.
-// Phase 2 (backend): set API_MODE = 'http' (or VITE_API_MODE=http) — api.js calls fetch(API_BASE/...).
-export const API_MODE = (import.meta.env && import.meta.env.VITE_API_MODE) || 'mock'
+// `VITE_API_MODE` wins if set. Otherwise: PRODUCTION builds default to 'http' (the
+// backend is live on Supabase — see supabaseClient.js cloud fallback), while local
+// dev defaults to 'mock' so the demo/UAT experience is preserved without a backend.
+const _env = (typeof import.meta !== 'undefined' && import.meta.env) || {}
+export const API_MODE = _env.VITE_API_MODE || (_env.PROD ? 'http' : 'mock')
 export const API_BASE = (import.meta.env && import.meta.env.VITE_API_BASE) || '/api'
 
 // Multi-tenant: every request is scoped to one institution. In Phase 2 this comes
