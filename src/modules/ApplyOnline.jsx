@@ -15,6 +15,29 @@ export default function ApplyOnline({ role }) {
     showToast('Application submitted — you will be notified as it progresses')
   }
 
+  // In a real (http) deployment, applications are submitted on the public
+  // website (the authoritative channel: submit → reference → EFT → portal), not
+  // through this Suite form. Direct applicants there instead of faking a submit.
+  if (isHttpMode()) {
+    const site = 'https://symanekacademy.com'
+    return (
+      <>
+        <Panel title="Apply to Symanek" subtitle="Applications are handled on our public website">
+          <div className="di-sub" style={{ maxWidth: 560, lineHeight: 1.6 }}>
+            To apply, use the college website. You&apos;ll submit your programme choice and
+            documents, receive a unique reference and approval letter, pay your fees by EFT
+            using that reference, then track your status and enrol from the Student Portal.
+          </div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+            <a className="btn primary" href={`${site}/apply`} target="_blank" rel="noopener noreferrer">Start an application</a>
+            <a className="btn ghost" href={`${site}/portal`} target="_blank" rel="noopener noreferrer">Track my application</a>
+          </div>
+        </Panel>
+        <Toast msg={toast} />
+      </>
+    )
+  }
+
   return (
     <>
       <MockDataNotice show={isHttpMode()} />
