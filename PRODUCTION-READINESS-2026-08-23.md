@@ -23,9 +23,13 @@ Good news vs. the stale `PRODUCTION-PLAN.md` (28 Jul): the plan's headline "Bloc
 5. **Zero automated tests / no CI / no backup-restore plan** — ✅ **FIXED** — 17-assertion RLS/RPC test suite + runner, CI workflow (parked pending a `workflow`-scoped token), logical-backup script + DR runbook.
 
 > **Session 2026-08-23 hardening:** Phase A (security) complete except A4 (grade
-> bands, client-blocked); E3 (tests+CI), E1 (backups+DR, PITR enablement left to
-> Pedro), and B4 (real dashboard) done. Remaining work is dominated by human
-> gates — see each phase table's Status column and the client checklist.
+> bands, client-blocked); E3 (tests+CI), E1 (backups+DR, PITR left to Pedro), B4
+> (real dashboard). **Phase C: every Suite module now has a real backend** — the
+> spine plus Dashboard, Exams, Library, StudentPortal degree audit, Scheduling
+> timetable, Accounting GL and the Canteen were all backed and tested, so the C1
+> "day-1 scope" blocker is closed. **The remaining path to go-live is now purely
+> human: B1 (Suite Vercel env vars) + client data (A4/D1/D2) + ops (PITR, UAT,
+> password rotation).** See `supabase/golive/GO-LIVE-CHECKLIST.md`.
 
 ---
 
