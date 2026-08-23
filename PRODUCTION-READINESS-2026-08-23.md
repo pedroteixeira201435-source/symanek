@@ -127,7 +127,7 @@ Effort: **S** ≤ half-day · **M** 1–3 days · **L** ≥ several days. "Block
 | # | Item | Effort | Blocker |
 |---|---|---|---|
 | B1 | Set Suite Vercel env vars (`VITE_API_MODE=http`, Supabase URL+anon key); remove role-picker in prod; require real login. | S | **Yes** |
-| B2 | Provision real staff/student auth accounts; retire the 9 `symanek123` demo accounts + demo `Gabriel !Naruseb` slice. | M | **Yes** |
+| B2 | Provision real staff/student auth accounts; retire the 9 `symanek123` demo accounts + demo `Gabriel !Naruseb` slice. | M | **Yes** | 🟡 **TOOLING READY 2026-08-23** — `supabase/golive/retire_demo_accounts.sql` (guarded: refuses unless a real account exists; safety verified) + `GO-LIVE-CHECKLIST.md` runbook. **Left for Pedro:** create the real staff/student logins (needs client emails, D2) then run it. |
 | B3 | Replace the mock write-stubs used by "wired" modules (`allocateRoom`, `submitNcheReturn`, `setInstitutionType`) with real RPCs. | M | No |
 | B4 | Purge demo numbers (476 etc.) from any prod-visible dashboard; drive Dashboard from real aggregates. | M | **Yes** if Dashboard is day-1 | ✅ **DONE 2026-08-23** — `dashboard_stats()` RPC (`20260823170000`) returns real counts (students/staff/fees/pending/enrolment-by-programme); Dashboard KPIs + enrolment chart use it in http mode, keeping demo constants only in mock. Canteen/Books KPIs stay mock (no backend yet — Phase C). |
 
