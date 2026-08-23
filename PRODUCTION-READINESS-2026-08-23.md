@@ -14,13 +14,18 @@ The public site + applicant flow and the backend's *authoritative RPCs* are genu
 
 Good news vs. the stale `PRODUCTION-PLAN.md` (28 Jul): the plan's headline "Blocker #1 — grade formula inconsistent" is **already fixed** (migration `20260728120000_fix_grading_formula.sql` aligns the backend RPC to `0.6*CA + 0.4*exam`, matching `src/lib/academics.js`). Suite backend coverage is also better than the plan's "~5 of 21" — **13 modules now import `api.js`**.
 
-### Top 5 blockers (must fix before go-live)
+### Top 5 blockers (status after the 23 Aug hardening pass)
 
-1. **Suite runs in mock in "production"** — no env vars on `symanek-suite.vercel.app` ⇒ role-picker login, in-memory data, nothing persists. Any real admin work is lost. (`CLAUDE.md:152-153`)
-2. **RLS has no privilege separation** — `is_admin()` returns true for role `admin` OR `staff` (`20260714120000_init.sql:35-41`), and `suite_role` is **never referenced in any RLS policy**. Any authenticated staff account can read/write students, applications, payments, results directly. Role scoping exists only in the client nav (`ROLE_NAV`).
-3. **Unauthenticated PII leak on `/api/letter`** — `GET /api/letter?ref=SYM-2026-NNNN` has no auth; references are sequential/enumerable, so anyone can pull any applicant's approval letter (name, programme, amount due) (`site-publico/app/api/letter/route.ts:14-28`).
-4. **Real data is one cohort only** — go-live seed has **7 staff + 24 real Auxiliary-Nursing students** (`seed_golive.sql:197-228`); every other programme's students are still pending from the client. The "476 enrolment" headline is **demo-only** (`src/data.js:10`).
-5. **Zero automated tests / no CI / no backup-restore plan** — `npm run build` is the only "verification"; no `.github/workflows`, no test files, no DR runbook.
+1. **Suite runs in mock in "production"** — no env vars on `symanek-suite.vercel.app` ⇒ role-picker login, in-memory data, nothing persists. ⏳ **OPEN — needs Pedro** to set the Suite's Vercel env vars (B1). (`CLAUDE.md:152-153`)
+2. **RLS has no privilege separation** — ✅ **FIXED** — `has_suite_role()` + role-scoped write policies on all operational tables (`20260823140000`, `20260823160000`); `audit_log` write-protected; verified by tests.
+3. **Unauthenticated PII leak on `/api/letter`** — ✅ **FIXED** — per-application `access_token`, released only on email lookup; letter requires `ref`+`t` (`20260823130000`). Filter-injection in `/api/payment-proof` also fixed.
+4. **Real data is one cohort only** — ⏳ **OPEN — needs client** (rosters for the other programmes). The fabricated "476" no longer reaches a real dashboard (B4 done). (`seed_golive.sql:19-20`)
+5. **Zero automated tests / no CI / no backup-restore plan** — ✅ **FIXED** — 17-assertion RLS/RPC test suite + runner, CI workflow (parked pending a `workflow`-scoped token), logical-backup script + DR runbook.
+
+> **Session 2026-08-23 hardening:** Phase A (security) complete except A4 (grade
+> bands, client-blocked); E3 (tests+CI), E1 (backups+DR, PITR enablement left to
+> Pedro), and B4 (real dashboard) done. Remaining work is dominated by human
+> gates — see each phase table's Status column and the client checklist.
 
 ---
 
