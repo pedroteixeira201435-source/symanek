@@ -100,3 +100,28 @@ Conflict Management & Resolution (2d, 750) · Project Management Fundamentals (4
 - REVISED-2026-APPLICATION-FORM.pdf
 - SHORT-COURSES-REGISTRATION-FORM.pdf
 - Manual_How_to_Apply_online.pdf
+
+---
+
+# Atualizações da resposta do cliente (23 Ago 2026)
+> Fonte: `respostas symanek 23-08-2026/` (FEE STRUCTURES 2027, carimbo, lista de docentes, respostas)
+
+- **Banco (corrigido):** nome da conta **"Symanek Specialized College"**, tipo
+  **Enterprise Business Account**, FNB Okahandja, conta **64279814676**, branch
+  **280373**. Sem dinheiro/ATM; referência = nome completo ou nº de estudante.
+  (Substitui o antigo "Symanek Training Academy / Cheque".)
+- **Carimbo oficial:** extraído do scan de 18 Ago 2026 → `public/stamp.png`
+  (transparente) e `public/stamp-white.png`. Provisório — trocar quando o cliente
+  enviar a foto mais nítida.
+- **Assinaturas:** o cliente NÃO quer assinaturas digitalizadas online (risco de
+  falsificação) — cartas mostram nome + cargo + carimbo.
+- **Bachelor OHSE:** tuition N$16.000, total **N$18.490** (confirmado).
+- **Programas novos adicionados** (do documento oficial de propinas 2027, não
+  estavam no site): Solar Equipment Installation & Maintenance (L1–3, N$19.670);
+  Agriculture – Horticulture & Crop Husbandry (L2–3, N$19.670); Wholesale & Retail
+  Operation / Distribution (L2, N$18.920 cada); Wholesale & Retail Merchandising
+  (L3, N$18.920). Descrições redigidas pela equipa — **a confirmar com o cliente**.
+- **Módulos OHS L4/L5:** unit standards NQA (Q0172 / Q0173) carregados como
+  módulos na Suite (`seed_golive.sql`); unit ID = código do módulo.
+- **Docentes por módulo:** mapeados em `seed_golive.sql`.
+- **AINDA PENDENTE:** fronteiras de notas exatas (A/B/C/D) e fotos de graduação.

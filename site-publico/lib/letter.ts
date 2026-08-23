@@ -1,5 +1,18 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { promises as fs } from "fs";
+import path from "path";
 import { college, formatN } from "./content";
+
+// The official stamp — extracted from the college's 18 Aug 2026 stamp scan
+// (transparent PNG in /public). Swap for the cleaner image when it arrives.
+async function loadStamp(doc: PDFDocument) {
+  try {
+    const bytes = await fs.readFile(path.join(process.cwd(), "public", "stamp.png"));
+    return await doc.embedPng(bytes);
+  } catch {
+    return null;
+  }
+}
 
 // Builds the official approval / EFT-instruction letter as a PDF (A4).
 // Server-only (called from /api/letter). Bank details come from college.bank —
@@ -107,11 +120,20 @@ export async function buildApprovalLetter(opts: {
   );
 
   y -= 4;
+  const sigY = y;
   text("Yours sincerely,", M, y, 11, font, ink);
   y -= 18;
   text("Office of the Registrar", M, y, 11, bold, ink);
   y -= 15;
   text(college.name, M, y, 11, font, muted);
+
+  // Official stamp, placed to the right of the signature block.
+  const stamp = await loadStamp(doc);
+  if (stamp) {
+    const sw = 150;
+    const sh = (stamp.height / stamp.width) * sw;
+    page.drawImage(stamp, { x: width - M - sw, y: sigY - sh + 10, width: sw, height: sh });
+  }
 
   return doc.save();
 }

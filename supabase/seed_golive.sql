@@ -8,11 +8,17 @@
 -- unblocks the cloud:  supabase db execute --file supabase/seed_golive.sql
 -- (or paste into the SQL editor).  NOT part of the migration chain.
 --
--- PENDING from client (do not invent):
---   • OHS Level 4 & 5 modules — NQA unit-standard qualifications; module
---     list not seeded here (source is unit-standard PDFs, titles truncated).
---   • lecturer-per-module mapping (E1) — lecturer_staff_id left NULL.
+-- RESOLVED (Symanek response 2026-08-23):
+--   • OHS Level 4 (Q0172) & Level 5 (Q0173) modules — seeded from the NQA
+--     unit-standard qualifications (unit ID = module code, per the college).
+--   • lecturer-per-module mapping (E1) — set below from the lecturer list.
+--
+--   • "Zidane Muhuka" (23 Aug) resolved to the existing "Muhuka Ratukara"
+--     (SYM-STF-006) — same surname/title/role, only other nursing lecturer.
+--
+-- STILL PENDING from client (do not invent):
 --   • students for programmes other than Auxiliary Nursing (E3).
+--   • staff emails for the newly named lecturers (left NULL below).
 -- ============================================================================
 
 -- ---------- staff (real) ----------
@@ -220,5 +226,100 @@ from (values
   ('202586674','Uyarurapo Albertina Katjivikua','albertinakatjivikua@gmail.com')
 ) as v(ref,name,email)
 where not exists (select 1 from public.students s where s.reference = v.ref);
+
+-- ---------- additional lecturers (Symanek response 2026-08-23) ----------
+-- Emails unknown (not supplied by the college) — left NULL, to be filled later.
+insert into public.staff (tenant_id, staff_no, name, email, role, department)
+select (select id from public.institutions where name='Symanek Specialized College'),
+       v.no, v.name, v.email, v.role, v.dept
+from (values
+  ('SYM-STF-008','Josephine Ipinge',   null::text, 'Lecturer — Medical Office Administration','Medical Office Administration'),
+  -- NB: the 23 Aug response names the Auxiliary lecturer "Zidane Muhuka"; the
+  -- earlier staff list (ICT System info) has "Muhuka Ratukara" (Mr., Lecturer,
+  -- Nursing, ratukaram@) — same surname/title/role, the only other nursing
+  -- lecturer, so treated as the SAME person (SYM-STF-006). No new record added.
+  ('SYM-STF-010','Rakkel',              null::text, 'Lecturer — Mental Health & Psychosocial Counselling','Mental Health'),
+  ('SYM-STF-011','Sithembinkosi Moyo',  null::text, 'Lecturer — OHSE (Bachelor)','Occupational Health & Safety'),
+  ('SYM-STF-012','Julia Abel',          null::text, 'Lecturer — OHSE (Bachelor, first semester)','Occupational Health & Safety')
+) as v(no,name,email,role,dept)
+where not exists (select 1 from public.staff s where s.staff_no = v.no);
+
+-- ---------- OHS Level 4 & 5 modules (NQA unit standards; code = unit ID) ----------
+insert into public.courses (tenant_id, code, title, programme_id, credits, semester)
+select (select id from public.institutions where name='Symanek Specialized College'),
+       v.code, v.title, (select id from public.programmes where slug=v.slug), v.credits, v.sem
+from (values
+  -- Certificate in OHS Level 4 (Q0172) — compulsory + supervisor + representative strands
+  ('846','Ensure your own actions reduce risks to health and safety','certificate-ohs-level-4',3,'Compulsory (L3)'),
+  ('847','Demonstrate responsibility within the workplace to protect the environment','certificate-ohs-level-4',5,'Compulsory (L3)'),
+  ('849','Monitor procedures to safely control work operations','certificate-ohs-level-4',5,'Compulsory (L4)'),
+  ('850','Supervise the health, safety and welfare of an employee new to a role in the workplace','certificate-ohs-level-4',8,'Compulsory (L4)'),
+  ('851','Advocate and keep pace with improvements in health and safety practice','certificate-ohs-level-4',6,'Compulsory (L4)'),
+  ('852','Develop and maintain individual and organisational competence in health and safety matters','certificate-ohs-level-4',8,'Compulsory (L4)'),
+  ('853','Develop and implement the health and safety programme','certificate-ohs-level-4',7,'Compulsory (L5)'),
+  ('848','Develop procedures to safely control work operations','certificate-ohs-level-4',6,'Supervisor strand (L4)'),
+  ('859','Promote a positive health and safety culture in workplaces','certificate-ohs-level-4',10,'Representative strand (L5)'),
+  ('863','Contribute to health and safety legal actions','certificate-ohs-level-4',6,'Representative strand (L5)'),
+  -- Diploma in OHS Level 5 (Q0173) — all compulsory
+  ('846','Ensure your own actions reduce risks to health and safety','diploma-ohs-level-5',3,'Compulsory (L3)'),
+  ('847','Demonstrate responsibility within the workplace to protect the environment','diploma-ohs-level-5',3,'Compulsory (L3)'),
+  ('848','Develop procedures to safely control work operations','diploma-ohs-level-5',6,'Compulsory (L4)'),
+  ('849','Monitor procedures to safely control work operations','diploma-ohs-level-5',5,'Compulsory (L4)'),
+  ('850','Supervise the health, safety and welfare of an employee new to a role in the workplace','diploma-ohs-level-5',8,'Compulsory (L4)'),
+  ('851','Advocate and keep pace with improvements in health and safety practices','diploma-ohs-level-5',6,'Compulsory (L4)'),
+  ('852','Develop and maintain individual and organisational competence in health and safety matters','diploma-ohs-level-5',8,'Compulsory (L4)'),
+  ('853','Develop and implement effective communication systems for health and safety information','diploma-ohs-level-5',7,'Compulsory (L4)'),
+  ('854','Develop and implement the health and safety programme','diploma-ohs-level-5',7,'Compulsory (L5)'),
+  ('855','Conduct a health and safety risk assessment in a workplace','diploma-ohs-level-5',10,'Compulsory (L5)'),
+  ('856','Develop and carry out health and safety audit systems','diploma-ohs-level-5',8,'Compulsory (L5)'),
+  ('857','Develop and implement health and safety emergency response systems and procedures','diploma-ohs-level-5',6,'Compulsory (L5)'),
+  ('858','Investigate and evaluate health and safety incidents, accidents and complaints in the workplace','diploma-ohs-level-5',8,'Compulsory (L5)'),
+  ('859','Promote a positive health and safety culture in workplaces','diploma-ohs-level-5',10,'Compulsory (L5)'),
+  ('860','Review health and safety procedures in workplaces','diploma-ohs-level-5',8,'Compulsory (L5)'),
+  ('861','Develop and review the organisation''s health and safety strategy','diploma-ohs-level-5',12,'Compulsory (L5)'),
+  ('862','Develop and implement health and safety review systems','diploma-ohs-level-5',8,'Compulsory (L5)'),
+  ('863','Contribute to health and safety legal actions','diploma-ohs-level-5',6,'Compulsory (L5)')
+) as v(code,title,slug,credits,sem)
+where (select id from public.programmes where slug=v.slug) is not null
+  and not exists (
+    select 1 from public.courses c
+    where c.code = v.code
+      and c.programme_id = (select id from public.programmes where slug=v.slug)
+  );
+
+-- ---------- lecturer-per-module mapping (Symanek response 2026-08-23) ----------
+-- Set the broad rule per programme first, then override the exceptions.
+
+-- OHS Level 4 & 5 → Ms. Dortea L. Shimunyengu
+update public.courses set lecturer_staff_id = (select id from public.staff where staff_no='SYM-STF-007')
+where programme_id in (select id from public.programmes where slug in ('certificate-ohs-level-4','diploma-ohs-level-5'));
+
+-- Caregiving → Ms. Katrina Inkembwa
+update public.courses set lecturer_staff_id = (select id from public.staff where staff_no='SYM-STF-004')
+where programme_id = (select id from public.programmes where slug='certificate-caregiving');
+
+-- Auxiliary Nursing → Mr. Muhuka Ratukara (a.k.a. "Zidane Muhuka", SYM-STF-006),
+-- except First Aid + Ethos of Nursing → Ms. Katrina Inkembwa
+update public.courses set lecturer_staff_id = (select id from public.staff where staff_no='SYM-STF-006')
+where programme_id = (select id from public.programmes where slug='certificate-auxiliary-nursing-science');
+update public.courses set lecturer_staff_id = (select id from public.staff where staff_no='SYM-STF-004')
+where programme_id = (select id from public.programmes where slug='certificate-auxiliary-nursing-science')
+  and code in ('FAN1500','ENP1500');
+
+-- Medical Office Administration (L4 & L5) → Ms. Josephine Ipinge
+update public.courses set lecturer_staff_id = (select id from public.staff where staff_no='SYM-STF-008')
+where programme_id in (select id from public.programmes where slug in ('certificate-medical-office-admin-level-4','diploma-medical-office-admin-level-5'));
+
+-- Mental Health Support & Psychosocial Counselling (L4 & L5) → Ms. Rakkel
+update public.courses set lecturer_staff_id = (select id from public.staff where staff_no='SYM-STF-010')
+where programme_id in (select id from public.programmes where slug in ('certificate-mental-health-level-4','diploma-mental-health-level-5'));
+
+-- Bachelor OHSE (L7 & Honours L8) → Ms. Sithembinkosi Moyo;
+-- first semester of the Level 7 (Y1 S1, being implemented now) → Ms. Julia Abel
+update public.courses set lecturer_staff_id = (select id from public.staff where staff_no='SYM-STF-011')
+where programme_id in (select id from public.programmes where slug in ('bachelor-ohse-nqf7','bachelor-ohse-honours-nqf8'));
+update public.courses set lecturer_staff_id = (select id from public.staff where staff_no='SYM-STF-012')
+where programme_id = (select id from public.programmes where slug='bachelor-ohse-nqf7')
+  and semester = 'Y1 S1';
 
 notify pgrst, 'reload schema';

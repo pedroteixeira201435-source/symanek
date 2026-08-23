@@ -723,10 +723,10 @@ const COLLEGE_SETTINGS_DEFAULT = {
   website: 'www.symanekacademy.com',
   portal_url: 'www.symanek.educims.org',
   bank_name: 'First National Bank (FNB)',
-  bank_account_name: 'Symanek Training Academy',
+  bank_account_name: 'Symanek Specialized College',
   bank_account_no: '64279814676',
-  bank_account_type: 'Cheque',
-  bank_branch: 'Okahandja',
+  bank_account_type: 'Enterprise Business Account',
+  bank_branch: 'Okahandja (branch code 280373)',
   stamp_path: null,
 }
 const SIGNATORIES_DEFAULT = [

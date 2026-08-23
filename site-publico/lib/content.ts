@@ -51,14 +51,15 @@ export const college = {
     instagram: "https://instagram.com/Symanektrainingacademy",
     maps: "https://goo.gl/maps/DQ4LPE52wByQV3i29",
   },
-  // Official banking details from Symanek's admission-letter & letterhead
-  // templates (2026-08-09). The account is held under the college's registered
-  // banking name "Symanek Training Academy" — used on the approval letter (EFT
-  // instruction) and the website. (Name/type confirmed against official docs.)
+  // Official banking details — confirmed by Symanek's 2027 fee-structure
+  // document (client response, 2026-08-23), which supersedes the earlier
+  // admission-letter template. Account name is "Symanek Specialized College"
+  // (an Enterprise Business Account), FNB Okahandja. Used on the approval
+  // letter (EFT instruction) and the website. No cash / ATM deposits accepted.
   bank: {
     bankName: "First National Bank (FNB) — Okahandja Branch",
-    accountName: "Symanek Training Academy",
-    accountType: "Cheque",
+    accountName: "Symanek Specialized College",
+    accountType: "Enterprise Business Account",
     accountNumber: "64279814676",
     branchCode: "280373",
     swift: "FIRNNANX", // FNB Namibia
@@ -271,6 +272,70 @@ export const categories: Category[] = [
         requirements: "National Vocational Certificate in Nutrition and Dietetics Level 4 or Community Health Level 4.",
         description: "Advanced nutrition assessment, diet planning, health promotion, food safety, occupational nutrition and community programmes.",
         careers: ["Nutrition Technician", "Community Nutrition Practitioner", "Workplace Wellness Coordinator", "Health Promotion Officer", "Food Service Supervisor"],
+      },
+      {
+        slug: "certificate-solar-installation-level-1-3",
+        name: "Certificate in Solar Equipment Installation and Maintenance",
+        level: "Level 1 – 3",
+        duration: "12 Months",
+        fee: 19670,
+        modes: "Full-Time (Preferred), Distance",
+        requirements:
+          "Level 1: minimum admission requirements met (20 points in Grade 11/12, or 22 points in Grade 10, with at least an E symbol in English). Level 2: completed Level 1. Level 3: completed Level 2.",
+        description:
+          "Practical training in the installation, wiring, testing and maintenance of solar photovoltaic systems and equipment — building skills for Namibia's growing renewable-energy sector.",
+        careers: ["Solar Installer", "Solar Maintenance Technician", "PV Systems Assistant", "Renewable Energy Technician"],
+      },
+      {
+        slug: "certificate-agriculture-horticulture-level-2-3",
+        name: "Certificate in Agriculture (Horticulture and Crop Husbandry)",
+        level: "Level 2 – 3",
+        duration: "12 Months",
+        fee: 19670,
+        modes: "Full-Time (Preferred), Distance",
+        requirements:
+          "Level 2: minimum admission requirements met. Level 3: completed Level 2.",
+        description:
+          "Hands-on training in crop production, horticulture, soil and land preparation, irrigation and sustainable farming practices for food production and agribusiness.",
+        careers: ["Horticulture Assistant", "Crop Production Worker", "Farm Supervisor", "Agri-business Assistant"],
+      },
+      {
+        slug: "certificate-wholesale-retail-operation-level-2",
+        name: "Certificate in Wholesale and Retail Operation",
+        level: "Level 2",
+        duration: "12 Months",
+        fee: 18920,
+        modes: "Full-Time (Preferred), Distance",
+        requirements:
+          "Grade 11 or 12 with minimum 20 points. Grade 10 (old curriculum) with minimum 22 points. English with an E symbol or better.",
+        description:
+          "Foundational skills for wholesale and retail operations — stock handling, point-of-sale service, merchandising basics and customer care.",
+        careers: ["Retail Assistant", "Sales Assistant", "Stock Controller", "Cashier"],
+      },
+      {
+        slug: "certificate-wholesale-retail-distribution-level-2",
+        name: "Certificate in Wholesale and Retail Distribution",
+        level: "Level 2",
+        duration: "12 Months",
+        fee: 18920,
+        modes: "Full-Time (Preferred), Distance",
+        requirements:
+          "Grade 11 or 12 with minimum 20 points. Grade 10 (old curriculum) with minimum 22 points. English with an E symbol or better.",
+        description:
+          "Skills for the distribution side of wholesale and retail — receiving, warehousing, order picking, dispatch and inventory control.",
+        careers: ["Distribution Assistant", "Warehouse Assistant", "Stock Clerk", "Dispatch Clerk"],
+      },
+      {
+        slug: "certificate-wholesale-retail-merchandising-level-3",
+        name: "Certificate in Wholesale and Retail Merchandising",
+        level: "Level 3",
+        duration: "12 Months",
+        fee: 18920,
+        modes: "Full-Time (Preferred), Distance",
+        requirements: "Passed Wholesale and Retail Operation or Distribution Level 2.",
+        description:
+          "Advances into merchandising — product display and planograms, stock replenishment, pricing, promotions and retail-floor management.",
+        careers: ["Merchandiser", "Retail Supervisor", "Floor Supervisor", "Visual Merchandising Assistant"],
       },
     ],
   },

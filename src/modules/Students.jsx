@@ -18,6 +18,13 @@ function printStudentDoc(student, docLabel, bodyHtml, college, signatory) {
   const regLine = [c.reg_no && `Reg. No: ${c.reg_no}`, c.tax_no && `Tax No: ${c.tax_no}`]
     .filter(Boolean).map(esc).join('  ·  ')
   const sig = signatory || {}
+  // Official stamp: prefer the uploaded asset URL from college_settings.stamp_path;
+  // otherwise fall back to the bundled /stamp.png (extracted from the college's
+  // 18 Aug 2026 stamp scan — replace with the cleaner image when it arrives).
+  const stampSrc = c.stamp_path || (typeof window !== 'undefined' ? `${window.location.origin}/stamp.png` : '/stamp.png')
+  const stampHtml = stampSrc
+    ? `<img class="stamp-img" src="${esc(stampSrc)}" alt="Official stamp of ${name}"/>`
+    : `<div class="stamp">OFFICIAL<br/>STAMP</div>`
   const w = window.open('', '_blank', 'width=760,height=900')
   if (!w) return
   w.document.write(`<!doctype html><html><head><title>${esc(docLabel)} — ${esc(student.name)}</title>
@@ -32,6 +39,7 @@ function printStudentDoc(student, docLabel, bodyHtml, college, signatory) {
       td,th{border:1px solid #d7e0e7;padding:6px 9px;text-align:left}
       .sig{margin-top:54px;font-size:13px;display:flex;justify-content:space-between;align-items:flex-end}
       .stamp{width:120px;height:120px;border:2px dashed #b7c6d0;border-radius:50%;display:grid;place-items:center;color:#9fb0bb;font-size:10px;text-align:center}
+      .stamp-img{width:170px;height:auto;opacity:.9;transform:rotate(-4deg)}
       .foot{margin-top:36px;font-size:11px;color:#7c93a2;border-top:1px solid #d7e0e7;padding-top:10px}
     </style></head><body>
     <div class="lh"><div class="m">${esc(initial)}</div><div>
@@ -45,7 +53,7 @@ function printStudentDoc(student, docLabel, bodyHtml, college, signatory) {
     ${bodyHtml}
     <div class="sig">
       <div>_____________________________<br/><b>${esc(sig.name || '')}</b><br/>${esc(sig.title || '')}<br/>${name}</div>
-      <div class="stamp">OFFICIAL<br/>STAMP</div>
+      ${stampHtml}
     </div>
     <div class="foot">This is a computer-generated document from the Symanek Suite${c.portal_url ? ` · Portal: ${esc(c.portal_url)}` : ''}. Verify authenticity with the Office of the Registrar.</div>
     </body></html>`)
@@ -411,11 +419,11 @@ function DocumentsModal({ s, hold, onClose, showToast }) {
           <p>We are pleased to inform you that you have been granted <b>provisional admission</b> to the above training programme at ${esc(college?.name || 'Symanek Specialized College')}, Okahandja. Please note that if you do not meet the entry requirements your admission is not guaranteed. This provisional letter of admission must be presented during registration as proof of provisional admission.</p>
           <p><b>Documents required upon registration:</b> certified copies of your national ID (x2), passport-size photos (x2), certified copies of your Grade 10 and/or 12 certificates, the NQA evaluation (for qualifications obtained outside Namibia), and proof of payment of the registration fee and tuition fee deposit.</p>
           <p><b>Bank Details</b><br/>
-            Account Name: ${esc(college?.bank_account_name || 'Symanek Training Academy')}<br/>
+            Account Name: ${esc(college?.bank_account_name || 'Symanek Specialized College')}<br/>
             Bank: ${esc(college?.bank_name || 'First National Bank (FNB)')}<br/>
             Account Number: ${esc(college?.bank_account_no || '64279814676')}<br/>
-            Account Type: ${esc(college?.bank_account_type || 'Cheque')}<br/>
-            Branch: ${esc(college?.bank_branch || 'Okahandja')}<br/>
+            Account Type: ${esc(college?.bank_account_type || 'Enterprise Business Account')}<br/>
+            Branch: ${esc(college?.bank_branch || 'Okahandja (branch code 280373)')}<br/>
             Reference: Student Number + Student Name</p>
           <p>We congratulate you on your admission and warmly welcome you into ${esc(college?.name || 'Symanek Specialized College')}.</p>`
       case 'rejection_letter':
