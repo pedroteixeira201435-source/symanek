@@ -43,9 +43,10 @@ Verified by grepping every `src/modules/*.jsx` for `../api` vs `../data` imports
 new backend — books/loans/fines + issue/return/renew RPCs, `20260823190000`):
 `Accounting`, `POS`, `Scheduling`, `ApplyOnline`, `CanteenAdmin`. Of these, Accounting/POS/
 Scheduling need a **new backend schema** (ledger, sales, timetable) — scope to day-1 (C1);
-**ApplyOnline is resolved** — in http mode it now directs applicants to the public
-website's real apply/portal flow instead of a fake in-Suite submit (so 4 modules —
-Accounting/POS/Scheduling/CanteenAdmin — remain genuinely unbacked demo).
+**ApplyOnline is resolved** — in http mode it directs applicants to the public website's
+real apply/portal flow. **Scheduling's academic timetable is now backed** (`timetable_slots`
++ RPCs, `20260823210000`); its relief board & duty roster stay demo. So the genuinely
+unbacked demo modules are down to **3** — `Accounting`, `POS`, `CanteenAdmin`.
 **Production-safety (2026-08-23):** these modules now render a **"Demo data — not
 connected to live records" banner in http mode** (`MockDataNotice`), so a real
 deployment never presents mock journals/timetables/canteen figures as if live.

@@ -482,6 +482,32 @@ export const setInstitutionType = (type) => mock({ ok: true, type })
 // (http) vs optimistic in-memory updates (mock demo).
 export const isHttpMode = () => useHttp()
 
+// --- Class timetable (http-backed) ---
+// Returns the TIMETABLES shape { class: { periodId: [Mon..Fri slot|null] } }.
+export async function getTimetables() {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('timetable')
+    if (error) throw error
+    const periods = db.PERIODS.filter((p) => p.id !== 'BRK').map((p) => p.id)
+    const out = {}
+    for (const s of data ?? []) {
+      if (!out[s.class_group]) { out[s.class_group] = {}; periods.forEach((pid) => { out[s.class_group][pid] = [null, null, null, null, null] }) }
+      const arr = out[s.class_group][s.period_id]
+      if (arr) arr[s.day_of_week - 1] = { s: s.subject, r: s.venue || '' }
+    }
+    return out
+  }
+  return mock(db.TIMETABLES)
+}
+export async function timetableSet({ classGroup, day, period, subject, venue }) {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('timetable_set', { p_class: classGroup, p_day: day, p_period: period, p_subject: subject, p_venue: venue })
+    if (error) throw error
+    return { ok: true, id: data }
+  }
+  return mock({ ok: true })
+}
+
 // --- Library (http-backed: catalogue + loans + issue/return/renew) ---
 export async function listLibraryCatalogue() {
   if (useHttp()) {

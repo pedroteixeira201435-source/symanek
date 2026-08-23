@@ -142,6 +142,13 @@ begin
     (public.degree_audit((select id from public.students limit 1))::jsonb) ? 'reqs',
     'degree_audit() returns real credit progress');
 
+  raise notice '== timetable ==';
+  -- claims are admin here (admin passes has_suite_role('registrar'))
+  perform pg_temp.ok(public.timetable_set('TEST-CLS', 1, 'P1', 'Maths', 'Rm 1', null) is not null,
+    'timetable_set upserts a slot');
+  perform pg_temp.ok((select count(*) from public.timetable('TEST-CLS')) = 1,
+    'timetable() returns the slot');
+
   perform set_config('request.jwt.claims', '', true);
   raise notice 'ALL TESTS PASSED';
 end $$;

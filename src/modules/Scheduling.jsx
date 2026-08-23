@@ -1,6 +1,6 @@
-import React, { useState } from 'react'
-import { Tabs, Panel, Badge, Modal, Toast, useToast, Icon, MockDataNotice } from '../ui.jsx'
-import { isHttpMode } from '../api.js'
+import React, { useState, useEffect } from 'react'
+import { Tabs, Panel, Badge, Modal, Toast, useToast, Icon } from '../ui.jsx'
+import { isHttpMode, getTimetables, timetableSet } from '../api.js'
 import { PERIODS, TIMETABLES, DUTY_ROSTER, RELIEF_TODAY, SUBJECT_STYLES } from '../data.js'
 
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
@@ -10,7 +10,6 @@ export default function Scheduling() {
 
   return (
     <>
-      <MockDataNotice show={isHttpMode()} />
       <Tabs tabs={['Relief — Today', 'Academic Timetable', 'Staff Duty Roster']} active={tab} onChange={setTab} />
       {tab === 'Relief — Today' && <ReliefBoard />}
       {tab === 'Academic Timetable' && <Timetable />}
@@ -139,20 +138,35 @@ function Timetable() {
   const [slotSel, setSlotSel] = useState({ day: 0, period: 'P1' })
   const [toast, showToast] = useToast()
 
-  const occupied = tts[cls][slotSel.period]?.[slotSel.day]
+  // Load the real timetable in http mode (mock keeps the demo grids).
+  const load = () => getTimetables().then((t) => {
+    if (t && Object.keys(t).length) { setTts(t); setCls((c) => (t[c] ? c : Object.keys(t)[0])) }
+  }).catch(() => {})
+  useEffect(() => { load() }, [])
 
-  const addSlot = (e) => {
+  const occupied = tts[cls]?.[slotSel.period]?.[slotSel.day]
+
+  const addSlot = async (e) => {
     e.preventDefault()
     const f = e.target
     const slot = { s: f.subject.value, r: f.room.value }
-    setTts((t) => ({
-      ...t,
-      [cls]: {
-        ...t[cls],
-        [slotSel.period]: t[cls][slotSel.period].map((s, i) => (i === slotSel.day ? slot : s)),
-      },
-    }))
-    setShowNew(false)
+    if (isHttpMode()) {
+      try {
+        const res = await timetableSet({ classGroup: cls, day: slotSel.day + 1, period: slotSel.period, subject: slot.s, venue: slot.r })
+        if (res.ok === false) throw new Error(res.error)
+      } catch (err) { showToast('Could not save slot' + (err?.message ? `: ${err.message}` : '')); return }
+      setShowNew(false)
+      await load()
+    } else {
+      setTts((t) => ({
+        ...t,
+        [cls]: {
+          ...t[cls],
+          [slotSel.period]: t[cls][slotSel.period].map((s, i) => (i === slotSel.day ? slot : s)),
+        },
+      }))
+      setShowNew(false)
+    }
     showToast(`${slot.s} scheduled — ${cls}, ${DAYS[slotSel.day]} ${slotSel.period}`)
   }
 
