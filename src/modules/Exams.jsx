@@ -1,21 +1,25 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { StatCard, Panel, Badge, Toast, useToast, Icon } from '../ui.jsx'
 import { EXAM_SCHEDULE } from '../data.js'
+import { listExamSchedule } from '../api.js'
 import { SUBJECT_TYPES, EXAM_CONFIG, PASS, WEIGHTS, POLICY_SUMMARY } from '../lib/academics.js'
 
 // Examinations logistics — sittings, venues, seat allocation, invigilation.
 export default function Exams() {
   const [toast, showToast] = useToast()
-  const totalSeats = EXAM_SCHEDULE.reduce((s, e) => s + e.seats, 0)
-  const totalSat = EXAM_SCHEDULE.reduce((s, e) => s + e.sat, 0)
+  // Real sittings in http mode (exam_schedule RPC); demo constants in mock.
+  const [schedule, setSchedule] = useState(EXAM_SCHEDULE)
+  useEffect(() => { listExamSchedule().then((r) => { if (r && r.length) setSchedule(r) }).catch(() => {}) }, [])
+  const totalSeats = schedule.reduce((s, e) => s + (e.seats || 0), 0)
+  const totalSat = schedule.reduce((s, e) => s + (e.sat || 0), 0)
 
   return (
     <>
       <div className="stat-row c4">
-        <StatCard icon="📅" label="Sittings" value={String(EXAM_SCHEDULE.length)} delta="Nov 2026 exam period" deltaTone="neutral" />
+        <StatCard icon="📅" label="Sittings" value={String(schedule.length)} delta="Nov 2026 exam period" deltaTone="neutral" />
         <StatCard icon="🪑" label="Seats booked" value={`${totalSat}/${totalSeats}`} delta="across all venues" deltaTone="neutral" />
-        <StatCard icon="👤" label="Invigilators" value={String(new Set(EXAM_SCHEDULE.map((e) => e.invigilator)).size)} delta="assigned" deltaTone="up" />
-        <StatCard icon="🏫" label="Venues" value={String(new Set(EXAM_SCHEDULE.map((e) => e.venue)).size)} delta="halls / labs / workshop" deltaTone="neutral" />
+        <StatCard icon="👤" label="Invigilators" value={String(new Set(schedule.map((e) => e.invigilator)).size)} delta="assigned" deltaTone="up" />
+        <StatCard icon="🏫" label="Venues" value={String(new Set(schedule.map((e) => e.venue)).size)} delta="halls / labs / workshop" deltaTone="neutral" />
       </div>
 
       <Panel title="Assessment & examination policy" subtitle="Institutional marking rules applied across every module">
@@ -61,7 +65,7 @@ export default function Exams() {
             <tr><th>Course</th><th>Date</th><th>Time</th><th>Venue</th><th className="num">Seats</th><th>Invigilator</th><th style={{ width: 130 }}></th></tr>
           </thead>
           <tbody>
-            {EXAM_SCHEDULE.map((e) => (
+            {schedule.map((e) => (
               <tr key={e.code}>
                 <td><div style={{ fontWeight: 600 }}>{e.code}</div><div className="di-sub">{e.title}</div></td>
                 <td>{e.date}</td>
