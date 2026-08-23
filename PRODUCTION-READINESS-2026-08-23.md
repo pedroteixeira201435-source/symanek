@@ -144,7 +144,7 @@ Effort: **S** ≤ half-day · **M** 1–3 days · **L** ≥ several days. "Block
 ### Phase E — Ops / QA (production non-negotiables)
 | # | Item | Effort | Blocker |
 |---|---|---|---|
-| E1 | Configure + test Supabase automated backups; write a restore runbook. | M | **Yes** |
+| E1 | Configure + test Supabase automated backups; write a restore runbook. | M | **Yes** | 🟡 **PARTIAL 2026-08-23** — logical-backup script (`supabase/backups/backup.sh`, local+cloud via the container's pg_dump) + `DR-RUNBOOK.md` (PITR, restore, quarterly verification); restore round-trip proven on a scratch DB. **Left for Pedro:** enable PITR in the dashboard + schedule an off-site copy. |
 | E2 | Add error tracking (Sentry) + uptime monitoring. | S | No |
 | E3 | Add a minimal automated test suite: RLS/RPC integration tests + applicant-flow smoke test in CI. | M–L | No (strongly advised) | ✅ **DONE 2026-08-23** — `supabase/tests/rls_rpc.test.sql` (17 assertions: RLS privilege separation, applicant flow, letter-token gating, audit trigger) + `run.sh`; `.github/workflows/ci.yml` typechecks + builds both apps on every push. |
 | E4 | Server-side pagination/search for students/invoices ahead of growth. | M | No |

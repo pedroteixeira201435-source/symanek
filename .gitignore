@@ -28,3 +28,6 @@ supabase/.env.deploy
 /tmp/
 .vercel
 .env*
+
+# logical DB dumps — contain PII, never commit
+supabase/backups/dumps/
