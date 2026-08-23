@@ -1,0 +1,47 @@
+# CI workflow for Symanek — typecheck + build both apps on every push/PR.
+#
+# NOTE: this lives here (not in .github/workflows/) because the current git PAT
+# lacks the `workflow` scope and GitHub refuses pushes that touch
+# `.github/workflows/`. To ENABLE CI, either:
+#   • copy this file to `.github/workflows/ci.yml` and commit it with a token
+#     that has the `workflow` scope, or
+#   • create it via the GitHub web UI (Actions → New workflow → paste).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  suite:
+    name: Suite (Vite) build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run build
+
+  site:
+    name: Public site (Next) typecheck + build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: site-publico
+    # Build in mock mode so no real Supabase project is needed in CI.
+    env:
+      NEXT_PUBLIC_API_MODE: mock
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
