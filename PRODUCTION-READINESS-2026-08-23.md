@@ -124,7 +124,7 @@ Effort: **S** ≤ half-day · **M** 1–3 days · **L** ≥ several days. "Block
 | B1 | Set Suite Vercel env vars (`VITE_API_MODE=http`, Supabase URL+anon key); remove role-picker in prod; require real login. | S | **Yes** |
 | B2 | Provision real staff/student auth accounts; retire the 9 `symanek123` demo accounts + demo `Gabriel !Naruseb` slice. | M | **Yes** |
 | B3 | Replace the mock write-stubs used by "wired" modules (`allocateRoom`, `submitNcheReturn`, `setInstitutionType`) with real RPCs. | M | No |
-| B4 | Purge demo numbers (476 etc.) from any prod-visible dashboard; drive Dashboard from real aggregates. | M | **Yes** if Dashboard is day-1 |
+| B4 | Purge demo numbers (476 etc.) from any prod-visible dashboard; drive Dashboard from real aggregates. | M | **Yes** if Dashboard is day-1 | ✅ **DONE 2026-08-23** — `dashboard_stats()` RPC (`20260823170000`) returns real counts (students/staff/fees/pending/enrolment-by-programme); Dashboard KPIs + enrolment chart use it in http mode, keeping demo constants only in mock. Canteen/Books KPIs stay mock (no backend yet — Phase C). |
 
 ### Phase C — Backend for the 8 mock-only modules (scope to day-1 need)
 | # | Item | Effort | Blocker |

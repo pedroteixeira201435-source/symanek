@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { StatCard, Panel, Progress, Badge, Toast, useToast, Icon } from '../ui.jsx'
 import { ENROLMENT_BY_GRADE, FEE_COLLECTION, ACTIVITY_FEED, CASHFLOW, WORK_QUEUE, SCHOOL, fmtN } from '../data.js'
+import { getDashboardStats } from '../api.js'
 
 const linkStyle = {
   background: 'none', border: 'none', padding: 0, font: 'inherit',
@@ -77,6 +78,14 @@ export default function Dashboard({ go }) {
   const [toast, showToast] = useToast()
   const openCount = queue.filter((t) => !t.done).length
 
+  // Real aggregates in http mode; null in mock (keeps the demo constants below).
+  const [stats, setStats] = useState(null)
+  useEffect(() => { getDashboardStats().then(setStats).catch(() => {}) }, [])
+  const enrolChart = stats?.enrolment_by_programme?.length
+    ? stats.enrolment_by_programme.map((p) => ({ grade: p.name, count: p.count }))
+    : ENROLMENT_BY_GRADE
+  const maxEnrolReal = Math.max(1, ...enrolChart.map((g) => g.count))
+
   const toggle = (id) => {
     setQueue((qs) => qs.map((t) => (t.id === id ? { ...t, done: !t.done } : t)))
     const t = queue.find((t) => t.id === id)
@@ -97,9 +106,9 @@ export default function Dashboard({ go }) {
       </div>
 
       <div className="stat-row c5">
-        <StatCard icon="🎓" label="Enrolled Students" value={SCHOOL.learners} delta="+18 this term" onClick={() => go('students')} />
-        <StatCard icon="🧑‍🏫" label="Staff Members" value={SCHOOL.staff} delta="+3 vs last term" onClick={() => go('hr')} />
-        <StatCard icon="💰" label="Fees Collected" value="N$ 1.42M" delta={`${pct}% of term target`} deltaTone="neutral" onClick={() => go('finance')} />
+        <StatCard icon="🎓" label="Enrolled Students" value={stats ? stats.enrolled_students : SCHOOL.learners} delta={stats ? `${stats.total_students} total` : '+18 this term'} onClick={() => go('students')} />
+        <StatCard icon="🧑‍🏫" label="Staff Members" value={stats ? stats.staff_count : SCHOOL.staff} delta={stats ? 'from records' : '+3 vs last term'} onClick={() => go('hr')} />
+        <StatCard icon="💰" label="Fees Collected" value={stats ? fmtN(stats.fees_collected) : 'N$ 1.42M'} delta={stats ? `${stats.applications_pending} applications pending` : `${pct}% of term target`} deltaTone="neutral" onClick={() => go('finance')} />
         <StatCard icon="🍽️" label="Canteen Sales Today" value={fmtN(4180)} delta="+12% vs avg day" onClick={() => go('canteen')} />
         <StatCard icon="📚" label="Books on Loan" value="213" delta="9 overdue" deltaTone="down" onClick={() => go('library')} />
       </div>
@@ -126,12 +135,12 @@ export default function Dashboard({ go }) {
       <div className="grid31">
         <Panel title="Enrolment by programme" subtitle={SCHOOL.term}>
           <div className="chart" style={{ height: 150 }}>
-            {ENROLMENT_BY_GRADE.map((g) => (
+            {enrolChart.map((g) => (
               <div key={g.grade} className="bar-wrap">
                 <span className="bval">{g.count}</span>
                 <div
                   className={`bar ${g.grade === 'Vocational' || g.grade === 'Adult Ed' ? 'amber' : ''}`}
-                  style={{ height: `${(g.count / maxEnrol) * 100}%` }}
+                  style={{ height: `${(g.count / maxEnrolReal) * 100}%` }}
                 />
                 <span className="blabel">{g.grade}</span>
               </div>

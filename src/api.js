@@ -454,6 +454,17 @@ export async function publishExamResults({ courseId, courseCode }) {
 }
 export const setInstitutionType = (type) => mock({ ok: true, type })
 
+// Real dashboard aggregates (http). In mock mode returns null so the Dashboard
+// keeps its demo constants — no fabricated numbers reach a real (http) deployment.
+export async function getDashboardStats() {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('dashboard_stats')
+    if (error) throw error
+    return data // { enrolled_students, staff_count, fees_collected, enrolment_by_programme, … }
+  }
+  return mock(null)
+}
+
 // ============================ FEEDBACK FEATURES (2026 client review) ============================
 
 // --- Announcements ---
