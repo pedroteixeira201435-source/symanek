@@ -116,6 +116,12 @@ begin
   select count(*) into v_after from public.audit_log;
   perform pg_temp.ok(v_after > v_before, 'a payment writes an audit_log row (trigger)');
 
+  raise notice '== spine RPCs ==';
+  perform pg_temp.ok((select count(*) from public.exam_schedule()) >= 0,
+    'exam_schedule() RPC is callable and returns the timetable shape');
+  perform pg_temp.ok((public.dashboard_stats()::jsonb) ? 'enrolled_students',
+    'dashboard_stats() returns real aggregates');
+
   perform set_config('request.jwt.claims', '', true);
   raise notice 'ALL TESTS PASSED';
 end $$;

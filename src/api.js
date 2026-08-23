@@ -273,7 +273,22 @@ export async function listGraduands() {
   }
   return mock(db.GRADUANDS)
 }
-export const listExamSchedule = () => mock(db.EXAM_SCHEDULE)
+export async function listExamSchedule() {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('exam_schedule')
+    if (error) throw error
+    return (data ?? []).map((r) => {
+      const d = r.at ? new Date(r.at) : null
+      return {
+        code: r.code, title: r.title,
+        date: d ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
+        time: d ? d.toTimeString().slice(0, 5) : '',
+        venue: r.venue, seats: r.seats, sat: r.sat, invigilator: r.invigilator,
+      }
+    })
+  }
+  return mock(db.EXAM_SCHEDULE)
+}
 
 // Exam board — per-course result aggregate + publication status. http computes
 // from courses→enrolments→results; a course is 'Published' only when all its
