@@ -177,7 +177,7 @@ Effort: **S** ≤ half-day · **M** 1–3 days · **L** ≥ several days. "Block
 | E2 | Add error tracking (Sentry) + uptime monitoring. | S | No |
 | E3 | Add a minimal automated test suite: RLS/RPC integration tests + applicant-flow smoke test in CI. | M–L | No (strongly advised) | ✅ **DONE 2026-08-23** — `supabase/tests/rls_rpc.test.sql` (17 assertions: RLS privilege separation, applicant flow, letter-token gating, audit trigger) + `run.sh`; `.github/workflows/ci.yml` typechecks + builds both apps on every push. |
 | E4 | Server-side pagination/search for students/invoices ahead of growth. | M | No |
-| E5 | Final UAT per role against the real backend; sign-off (`UAT-GUIA.md`). | M | **Yes** |
+| E5 | Final UAT per role against the real backend; sign-off (`UAT-GUIA.md`). | M | **Yes** | 🟡 **API-LEVEL DONE 2026-08-23** — validated the http data path end-to-end through PostgREST as an authenticated user: all module RPCs return real data, and authorization is enforced (writes role-scoped; staff-only reads guarded — a gap where finance/loan reads were open to students was **caught here and fixed**, `20260823240000`). **Left for Pedro:** in-browser click-through UAT per role once B1 is set. |
 
 **Critical path:** A1→A2→A3 (security) and B1→B2 (persist) are the gate to letting anyone touch real records. A4 + D1 gate official academics. E1 + E5 gate go-live.
 
