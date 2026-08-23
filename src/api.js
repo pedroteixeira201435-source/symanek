@@ -482,6 +482,28 @@ export const setInstitutionType = (type) => mock({ ok: true, type })
 // (http) vs optimistic in-memory updates (mock demo).
 export const isHttpMode = () => useHttp()
 
+// --- General ledger (http-backed): journal drives trial balance / income stmt ---
+export async function getGlJournal() {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('gl_journal_list')
+    if (error) throw error
+    return (data ?? []).map((r) => ({
+      date: r.entry_date ? new Date(r.entry_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : '',
+      desc: r.description, acc: r.account, dr: Number(r.dr), cr: Number(r.cr), vat: r.vat || '—',
+    }))
+  }
+  return mock(db.JOURNAL)
+}
+export async function glPost({ desc, drAcc, crAcc, amount }) {
+  if (useHttp()) {
+    const lines = [{ acc: drAcc, dr: amount, cr: 0, vat: '—' }, { acc: crAcc, dr: 0, cr: amount, vat: '—' }]
+    const { data, error } = await supabase.rpc('gl_post', { p_date: new Date().toISOString().slice(0, 10), p_desc: desc, p_lines: lines })
+    if (error) throw error
+    return { ok: true, id: data }
+  }
+  return mock({ ok: true })
+}
+
 // --- Class timetable (http-backed) ---
 // Returns the TIMETABLES shape { class: { periodId: [Mon..Fri slot|null] } }.
 export async function getTimetables() {

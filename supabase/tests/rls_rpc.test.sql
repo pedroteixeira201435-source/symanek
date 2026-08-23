@@ -149,6 +149,16 @@ begin
   perform pg_temp.ok((select count(*) from public.timetable('TEST-CLS')) = 1,
     'timetable() returns the slot');
 
+  raise notice '== general ledger ==';
+  perform pg_temp.ok(
+    (select coalesce(sum(dr),0) from public.gl_journal_list())
+      = (select coalesce(sum(cr),0) from public.gl_journal_list()),
+    'ledger is balanced (total debits = total credits)');
+  perform pg_temp.ok(
+    public.gl_post(current_date, 'Test entry',
+      '[{"acc":"Salaries & Wages","dr":100,"cr":0},{"acc":"Cash & Cash Equivalents","dr":0,"cr":100}]'::jsonb) is not null,
+    'gl_post accepts a balanced entry');
+
   perform set_config('request.jwt.claims', '', true);
   raise notice 'ALL TESTS PASSED';
 end $$;

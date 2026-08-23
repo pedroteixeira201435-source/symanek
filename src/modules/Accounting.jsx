@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react'
-import { StatCard, Tabs, Panel, Badge, Modal, Toast, useToast, Icon, MockDataNotice } from '../ui.jsx'
-import { isHttpMode } from '../api.js'
+import React, { useMemo, useState, useEffect } from 'react'
+import { StatCard, Tabs, Panel, Badge, Modal, Toast, useToast, Icon } from '../ui.jsx'
+import { isHttpMode, getGlJournal, glPost } from '../api.js'
 import { JOURNAL, COA, ASSET_REGISTER, TAX_CALENDAR, TAX_CONST, WORKTAG_OF, fmtN } from '../data.js'
 
 // Bookkeeping mirror of public/assets/Namibia_Financial_Model_v8.xlsx —
@@ -9,6 +9,11 @@ import { JOURNAL, COA, ASSET_REGISTER, TAX_CALENDAR, TAX_CONST, WORKTAG_OF, fmtN
 export default function Accounting({ role }) {
   const [tab, setTab] = useState('Journal')
   const [journal, setJournal] = useState(JOURNAL)
+
+  // Load the real general ledger in http mode (everything downstream — trial
+  // balance, income statement, tax — derives from `journal`). Mock keeps demo.
+  const reload = () => getGlJournal().then((j) => { if (j && j.length) setJournal(j) }).catch(() => {})
+  useEffect(() => { reload() }, [])
 
   // net balance per account (Dr positive for debit-normal accounts)
   const balances = useMemo(() => {
@@ -21,13 +26,12 @@ export default function Accounting({ role }) {
 
   return (
     <>
-      <MockDataNotice show={isHttpMode()} />
       <Tabs
         tabs={['Journal', 'Trial Balance', 'Income Statement', 'Tax Engine', 'Asset Register', 'VAT & Compliance']}
         active={tab}
         onChange={setTab}
       />
-      {tab === 'Journal' && <Journal journal={journal} setJournal={setJournal} />}
+      {tab === 'Journal' && <Journal journal={journal} setJournal={setJournal} reload={reload} />}
       {tab === 'Trial Balance' && <TrialBalance balances={balances} />}
       {tab === 'Income Statement' && <IncomeStatement balances={balances} />}
       {tab === 'Tax Engine' && <TaxEngine balances={balances} />}
@@ -40,25 +44,34 @@ export default function Accounting({ role }) {
 const isRevenue = (acc) => COA[acc]?.[0] === 'Revenue'
 const isExpense = (acc) => COA[acc]?.[0] === 'Expense'
 
-function Journal({ journal, setJournal }) {
+function Journal({ journal, setJournal, reload }) {
   const [toast, showToast] = useToast()
   const [showNew, setShowNew] = useState(false)
   const dr = journal.reduce((s, l) => s + l.dr, 0)
   const cr = journal.reduce((s, l) => s + l.cr, 0)
   const diff = dr - cr
 
-  const postEntry = (e) => {
+  const postEntry = async (e) => {
     e.preventDefault()
     const f = e.target
     const amt = Number(f.amount.value) || 0
     if (amt <= 0 || f.drAcc.value === f.crAcc.value) return
     const desc = f.desc.value || 'Manual journal entry'
-    setJournal((j) => [
-      ...j,
-      { date: '04 Jul', desc, acc: f.drAcc.value, dr: amt, cr: 0, vat: '—' },
-      { date: '04 Jul', desc, acc: f.crAcc.value, dr: 0, cr: amt, vat: '—' },
-    ])
-    setShowNew(false)
+    if (isHttpMode()) {
+      try {
+        const res = await glPost({ desc, drAcc: f.drAcc.value, crAcc: f.crAcc.value, amount: amt })
+        if (res.ok === false) throw new Error(res.error)
+      } catch (err) { showToast('Could not post entry' + (err?.message ? `: ${err.message}` : '')); return }
+      setShowNew(false)
+      await reload()
+    } else {
+      setJournal((j) => [
+        ...j,
+        { date: '04 Jul', desc, acc: f.drAcc.value, dr: amt, cr: 0, vat: '—' },
+        { date: '04 Jul', desc, acc: f.crAcc.value, dr: 0, cr: amt, vat: '—' },
+      ])
+      setShowNew(false)
+    }
     showToast(`Posted — Dr ${f.drAcc.value} / Cr ${f.crAcc.value} · ${fmtN(amt)} (audit-logged)`)
   }
 

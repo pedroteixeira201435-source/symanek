@@ -45,8 +45,12 @@ new backend — books/loans/fines + issue/return/renew RPCs, `20260823190000`):
 Scheduling need a **new backend schema** (ledger, sales, timetable) — scope to day-1 (C1);
 **ApplyOnline is resolved** — in http mode it directs applicants to the public website's
 real apply/portal flow. **Scheduling's academic timetable is now backed** (`timetable_slots`
-+ RPCs, `20260823210000`); its relief board & duty roster stay demo. So the genuinely
-unbacked demo modules are down to **3** — `Accounting`, `POS`, `CanteenAdmin`.
++ RPCs, `20260823210000`); its relief board & duty roster stay demo. **Accounting is now backed** — a real double-entry GL (`gl_accounts`/`gl_journal`/`gl_lines`
++ `gl_post` balanced-entry / `gl_journal_list` / `gl_trial_balance`, `20260823220000`);
+the Journal, Trial Balance, Income Statement and Tax Engine all derive from the real
+journal (asset register & VAT calendar stay demo). So the genuinely unbacked demo modules
+are down to **2** — `POS`, `CanteenAdmin` (canteen/till — a cafeteria domain, likely
+out of day-1 scope for a nursing/OHS college).
 **Production-safety (2026-08-23):** these modules now render a **"Demo data — not
 connected to live records" banner in http mode** (`MockDataNotice`), so a real
 deployment never presents mock journals/timetables/canteen figures as if live.
