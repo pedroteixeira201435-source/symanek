@@ -135,6 +135,13 @@ begin
   select avail into v_avail1 from public.library_catalogue() where isbn = '978-0-435905-25-5';
   perform pg_temp.ok(v_avail1 = v_avail0, 'library_return restores availability');
 
+  raise notice '== degree audit ==';
+  perform set_config('request.jwt.claims',
+    json_build_object('sub',(select id from auth.users where email='admin@symanek.local')::text)::text, true);
+  perform pg_temp.ok(
+    (public.degree_audit((select id from public.students limit 1))::jsonb) ? 'reqs',
+    'degree_audit() returns real credit progress');
+
   perform set_config('request.jwt.claims', '', true);
   raise notice 'ALL TESTS PASSED';
 end $$;

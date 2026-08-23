@@ -109,7 +109,16 @@ export async function listCourses(progCode) {
   return mock(progCode ? db.COURSES.filter((c) => c.prog === progCode) : db.COURSES)
 }
 
-export const getDegreeAudit = (studentName) => mock(db.DEGREE_AUDIT[studentName] || null)
+export async function getDegreeAudit(studentName) {
+  if (useHttp()) {
+    const sid = await studentIdByName(studentName)
+    if (!sid) return null
+    const { data, error } = await supabase.rpc('degree_audit', { p_student: sid })
+    if (error) throw error
+    return data // { prog, catalog, gpa, reqs: [...] }
+  }
+  return mock(db.DEGREE_AUDIT[studentName] || null)
+}
 
 // Reads wired to the backend (mapped back to the mock-compatible shapes the
 // modules already consume). Others follow the same pattern in later B2 passes.
