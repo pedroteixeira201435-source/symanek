@@ -1,6 +1,7 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { StatCard, Tabs, Panel, Badge, Toast, useToast, Modal, Icon } from '../ui.jsx'
 import { LIBRARY_STATS, CATALOGUE, LOANS, FINES, RESERVATIONS, fmtN } from '../data.js'
+import { listLibraryCatalogue, listLibraryLoans, libraryIssue, libraryReturn, libraryRenew, isHttpMode } from '../api.js'
 
 const CAT_TONE = { Textbook: 'teal', Literature: 'purple', Reference: 'blue', Biography: 'amber' }
 const LOAN_TONE = { 'On Loan': 'blue', 'Due Soon': 'orange', Overdue: 'red' }
@@ -14,37 +15,63 @@ export default function Library() {
   const [showIssue, setShowIssue] = useState(false)
   const [toast, showToast] = useToast()
 
+  // Load the real catalogue + active loans in http mode (mock returns the demo
+  // constants, so the demo is unchanged). Mutations below persist via RPC.
+  useEffect(() => {
+    listLibraryCatalogue().then((b) => { if (b && b.length) setBooks(b) }).catch(() => {})
+    listLibraryLoans().then((l) => { if (l) setLoans(l) }).catch(() => {})
+  }, [])
+
   const TODAY = new Date('2026-07-04')
   const fmtDate = (d) => d.toLocaleDateString('en-NA', { day: '2-digit', month: 'short', year: 'numeric' })
 
   const bumpAvail = (title, d) =>
     setBooks((bs) => bs.map((b) => (b.title === title ? { ...b, avail: Math.max(0, Math.min(b.total, b.avail + d)) } : b)))
 
-  const issueBook = (e) => {
+  // http: refetch canonical state from the backend after a mutation.
+  const reload = () => {
+    listLibraryCatalogue().then((b) => { if (b) setBooks(b) }).catch(() => {})
+    listLibraryLoans().then((l) => { if (l) setLoans(l) }).catch(() => {})
+  }
+
+  const issueBook = async (e) => {
     e.preventDefault()
     const f = e.target
     const title = f.book.value
-    const loan = {
-      id: Date.now(),
-      book: title,
-      borrower: f.borrower.value || 'New borrower',
-      grade: f.grade.value,
-      issued: '04 Jul 2026',
-      due: '18 Jul 2026',
-      status: 'On Loan',
-    }
-    setLoans((ls) => [loan, ...ls])
-    bumpAvail(title, -1)
+    const borrower = f.borrower.value || 'New borrower'
+    const grade = f.grade.value
+    const book = books.find((b) => b.title === title)
+    try {
+      const res = await libraryIssue({ isbn: book?.isbn, borrower, days: 14 })
+      if (res.ok === false) throw new Error(res.error)
+    } catch (err) { showToast('Could not issue book' + (err?.message ? `: ${err.message}` : '')); return }
     setShowIssue(false)
     setTab('Active Loans')
-    showToast(`"${title}" issued to ${loan.borrower} — due 18 Jul`)
+    if (isHttpMode()) {
+      reload()
+      showToast(`"${title}" issued to ${borrower}`)
+    } else {
+      setLoans((ls) => [{ id: Date.now(), book: title, borrower, grade, issued: '04 Jul 2026', due: '18 Jul 2026', status: 'On Loan' }, ...ls])
+      bumpAvail(title, -1)
+      showToast(`"${title}" issued to ${borrower} — due 18 Jul`)
+    }
   }
 
-  const returnBook = (id) => {
+  const returnBook = async (id) => {
     const l = loans.find((l) => l.id === id)
+    try {
+      const res = await libraryReturn(id)
+      if (res.ok === false) throw new Error(res.error)
+      if (isHttpMode()) {
+        reload()
+        if (res.overdue_days > 0) showToast(`"${l.book}" returned ${res.overdue_days}d late — fine of ${fmtN(res.fine)} created`)
+        else showToast(`"${l.book}" returned — back in catalogue`)
+        return
+      }
+    } catch (err) { showToast('Could not return book' + (err?.message ? `: ${err.message}` : '')); return }
+    // mock: optimistic update + local fine at N$2/day
     setLoans((ls) => ls.filter((l) => l.id !== id))
     bumpAvail(l.book, +1)
-    // overdue return → fine auto-created at N$2/day
     const days = Math.ceil((TODAY - new Date(l.due)) / 86400000)
     if (days > 0) {
       setFines((fs) => [{ id: Date.now(), borrower: l.borrower, book: l.book, days }, ...fs])
@@ -54,8 +81,17 @@ export default function Library() {
     }
   }
 
-  const renewLoan = (id) => {
+  const renewLoan = async (id) => {
     const l = loans.find((l) => l.id === id)
+    try {
+      const res = await libraryRenew(id)
+      if (res.ok === false) throw new Error(res.error)
+    } catch (err) { showToast('Could not renew loan' + (err?.message ? `: ${err.message}` : '')); return }
+    if (isHttpMode()) {
+      reload()
+      showToast(`"${l.book}" renewed`)
+      return
+    }
     const newDue = new Date(new Date(l.due).getTime() + 14 * 86400000)
     setLoans((ls) => ls.map((x) => (x.id === id ? { ...x, due: fmtDate(newDue), status: 'On Loan' } : x)))
     showToast(`"${l.book}" renewed — now due ${fmtDate(newDue)}`)

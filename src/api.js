@@ -469,6 +469,53 @@ export async function publishExamResults({ courseId, courseCode }) {
 }
 export const setInstitutionType = (type) => mock({ ok: true, type })
 
+// True when the backend (Supabase) is active; lets modules pick persist+reload
+// (http) vs optimistic in-memory updates (mock demo).
+export const isHttpMode = () => useHttp()
+
+// --- Library (http-backed: catalogue + loans + issue/return/renew) ---
+export async function listLibraryCatalogue() {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('library_catalogue')
+    if (error) throw error
+    return (data ?? []).map((b) => ({ isbn: b.isbn, title: b.title, author: b.author, cat: b.category, avail: b.avail, total: b.total }))
+  }
+  return mock(db.CATALOGUE)
+}
+export async function listLibraryLoans() {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('library_loans_active')
+    if (error) throw error
+    const fmt = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '')
+    return (data ?? []).map((l) => ({ id: l.id, book: l.book, borrower: l.borrower, grade: '', issued: fmt(l.issued), due: fmt(l.due), status: l.status }))
+  }
+  return mock(db.LOANS)
+}
+export async function libraryIssue({ isbn, borrower, days = 14 }) {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('library_issue', { p_isbn: isbn, p_borrower: borrower, p_days: days })
+    if (error) throw error
+    return { ok: true, id: data }
+  }
+  return mock({ ok: true, id: 'loan-' + Date.now() })
+}
+export async function libraryReturn(loanId) {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('library_return', { p_loan: loanId })
+    if (error) throw error
+    return data // { ok, overdue_days, fine }
+  }
+  return mock({ ok: true })
+}
+export async function libraryRenew(loanId, days = 14) {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('library_renew', { p_loan: loanId, p_days: days })
+    if (error) throw error
+    return { ok: true, due: data }
+  }
+  return mock({ ok: true })
+}
+
 // Real dashboard aggregates (http). In mock mode returns null so the Dashboard
 // keeps its demo constants — no fabricated numbers reach a real (http) deployment.
 export async function getDashboardStats() {

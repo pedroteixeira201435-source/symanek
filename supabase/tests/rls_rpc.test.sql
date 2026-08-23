@@ -53,6 +53,7 @@ do $$
 declare
   v_app uuid; v_stu uuid; v_slug text; v_ref text; v_token text; v_stage text;
   v_before int; v_after int;
+  v_avail0 int; v_avail1 int; v_loan uuid; v_ret json;
 begin
   raise notice '== RLS privilege separation ==';
   -- pick real FK targets so only RLS (WITH CHECK), not FK, decides
@@ -121,6 +122,18 @@ begin
     'exam_schedule() RPC is callable and returns the timetable shape');
   perform pg_temp.ok((public.dashboard_stats()::jsonb) ? 'enrolled_students',
     'dashboard_stats() returns real aggregates');
+
+  raise notice '== library backend ==';
+  perform set_config('request.jwt.claims',
+    json_build_object('sub',(select id from auth.users where email='librarian@symanek.local')::text)::text, true);
+  select avail into v_avail0 from public.library_catalogue() where isbn = '978-0-435905-25-5';
+  v_loan := public.library_issue('978-0-435905-25-5', 'Test Borrower', 14);
+  select avail into v_avail1 from public.library_catalogue() where isbn = '978-0-435905-25-5';
+  perform pg_temp.ok(v_avail1 = v_avail0 - 1, 'library_issue decrements availability');
+  v_ret := public.library_return(v_loan);
+  perform pg_temp.ok((v_ret->>'ok')::boolean, 'library_return succeeds');
+  select avail into v_avail1 from public.library_catalogue() where isbn = '978-0-435905-25-5';
+  perform pg_temp.ok(v_avail1 = v_avail0, 'library_return restores availability');
 
   perform set_config('request.jwt.claims', '', true);
   raise notice 'ALL TESTS PASSED';
