@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  suite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npm run build
+  site:
+    runs-on: ubuntu-latest
+    defaults:
+      run: { working-directory: site-publico }
+    env:
+      NEXT_PUBLIC_API_MODE: mock
+      NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm, cache-dependency-path: site-publico/package-lock.json }
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+  rls-rpc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - run: supabase start
+      - run: |
+          eval "$(supabase status -o env)"
+          export SERVICE_ROLE_KEY
+          ./supabase/seed_auth.sh
+          ./supabase/tests/run.sh
