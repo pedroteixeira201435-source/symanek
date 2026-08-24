@@ -59,9 +59,12 @@ begin
   -- pick real FK targets so only RLS (WITH CHECK), not FK, decides
   select id into v_app from public.applications limit 1;
 
+  -- Payments are audit-sensitive: the app records them only through SECURITY DEFINER
+  -- RPCs (mark_paid / pay_invoice / confirm_invoice_payment), never via a raw client
+  -- INSERT. So RLS correctly denies a direct write even to the bursar.
   perform pg_temp.ok(pg_temp.as_user('bursar@symanek.local',
-    format('insert into public.payments(application_id,reference,amount) values (%L,%L,1)', v_app,'T')) = 'ok',
-    'bursar may write payments');
+    format('insert into public.payments(application_id,reference,amount) values (%L,%L,1)', v_app,'T')) = 'blocked',
+    'payments are written via RPC, not raw insert (denied even to bursar)');
   perform pg_temp.ok(pg_temp.as_user('librarian@symanek.local',
     format('insert into public.payments(application_id,reference,amount) values (%L,%L,1)', v_app,'T')) = 'blocked',
     'librarian may NOT write payments');
