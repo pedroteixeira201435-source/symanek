@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { rateLimit, verifyTurnstile } from "@/lib/public-security";
+import { rateLimit } from "@/lib/public-security";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,8 +21,6 @@ export async function POST(req: NextRequest) {
   const ref = String(form.get("ref") ?? "").trim();
   const amount = Number(form.get("amount") ?? 0);
   const file = form.get("file");
-  const human = await verifyTurnstile(form.get("turnstileToken"), req);
-  if (!human.ok) return NextResponse.json({ error: human.error }, { status: 400 });
 
   // Note: the `File` global is not available on Node 18 — duck-type on Blob.
   if (!ref) return NextResponse.json({ error: "Missing reference" }, { status: 400 });

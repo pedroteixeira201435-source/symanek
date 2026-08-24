@@ -41,8 +41,7 @@ GitHub repo first) → add the env vars → Deploy. Framework auto-detects Next.
 1. Open the deployment URL → `/apply` → submit an application → success screen.
 2. `/admin` → sign in with a real staff account → Approve → Record EFT.
 3. `/portal` → look up the reference → status + Download approval letter (PDF).
-4. Public forms should be protected by the server-side rate limiter. CAPTCHA is
-   optional and disabled unless Turnstile env vars are explicitly configured.
+4. Public forms should be protected by the server-side rate limiter.
 
 ## Production account policy
 Create and test real staff accounts before launch. Then run

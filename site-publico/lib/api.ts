@@ -28,7 +28,6 @@ export type ApplicationInput = {
   programmeSlug: string;
   mode: string;
   message?: string;
-  turnstileToken: string;
 };
 
 export type ApplicationResult = { ok: true; applicationId: string };
@@ -57,7 +56,7 @@ export async function submitApplication(input: ApplicationInput): Promise<Applic
 // ---------------------------------------------------------------------------
 // Contact
 // ---------------------------------------------------------------------------
-export type ContactInput = { name: string; email: string; subject: string; message: string; turnstileToken: string };
+export type ContactInput = { name: string; email: string; subject: string; message: string };
 
 export async function submitContact(input: ContactInput): Promise<{ ok: true }> {
   requireConfiguredBackend();
@@ -110,11 +109,11 @@ const demoStatuses: Record<string, Extract<ApplicationStatus, { found: true }>> 
   },
 };
 
-export async function lookupApplication(refOrEmail: string, turnstileToken: string): Promise<ApplicationStatus> {
+export async function lookupApplication(refOrEmail: string): Promise<ApplicationStatus> {
   requireConfiguredBackend();
   if (useSupabase()) {
     const response = await fetch("/api/public/application-status", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: refOrEmail.trim(), turnstileToken }),
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: refOrEmail.trim() }),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || "Could not check application status");
@@ -148,8 +147,7 @@ export async function lookupApplication(refOrEmail: string, turnstileToken: stri
 export async function submitPaymentProof(
   ref: string,
   file: File,
-  amount: number,
-  turnstileToken: string
+  amount: number
 ): Promise<{ ok: boolean; error?: string }> {
   try { requireConfiguredBackend(); } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Backend unavailable" }; }
   if (useSupabase()) {
@@ -157,7 +155,6 @@ export async function submitPaymentProof(
     fd.append("ref", ref);
     fd.append("amount", String(amount));
     fd.append("file", file);
-    fd.append("turnstileToken", turnstileToken);
     const res = await fetch("/api/payment-proof", { method: "POST", body: fd });
     const j = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: j.error || "Upload failed" };
@@ -270,7 +267,7 @@ export async function approveApplication(id: string): Promise<string> {
 export async function rejectApplication(id: string): Promise<{ ok: boolean; error?: string }> {
   try { requireConfiguredBackend(); } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Backend unavailable" }; }
   if (useSupabase()) {
-    const { error } = await supabase!.from("applications").update({ stage: "rejected" }).eq("id", id);
+    const { error } = await supabase!.rpc("reject_application", { p_app: id, p_reason: null });
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   }

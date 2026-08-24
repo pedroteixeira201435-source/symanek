@@ -384,9 +384,9 @@ export async function markApplicationPaid({ appId, amount, method = 'EFT' }) {
   return mock({ ok: true, reference: null })
 }
 
-export async function rejectApplication(appId) {
+export async function rejectApplication(appId, reason = null) {
   if (useHttp()) {
-    const { error } = await supabase.from('applications').update({ stage: 'rejected' }).eq('id', appId)
+    const { error } = await supabase.rpc('reject_application', { p_app: appId, p_reason: reason })
     if (error) throw error
     return { ok: true }
   }
@@ -1181,55 +1181,48 @@ export const getWorkQueue       = () => one('dashboard_work_queue')
 // ---- Students / Holds ----
 export async function studentUpsert(s) {
   if (!useHttp()) return { ok: true, id: s.id ?? null }
-  const row = {
-    student_no: s.studentNo ?? s.student_no ?? null,
-    reference: s.reference ?? s.studentNo ?? s.student_no ?? null,
-    full_name: s.name,
-    email: s.email,
-    phone: s.phone ?? null,
-    next_of_kin: s.nextOfKin ?? s.next_of_kin ?? null,
-    programme_id: s.programmeId ?? null,
-    status: s.status ?? 'admitted',
-    year: s.year ? Number(s.year) : null,
-    intake: s.intake ?? null,
-    id_number: s.idNumber ?? s.id_number ?? null,
-    campus: s.campus ?? null,
-  }
-  const q = s.id
-    ? supabase.from('students').update(row).eq('id', s.id).select('id').single()
-    : supabase.from('students').insert(row).select('id').single()
-  const { data, error } = await q
+  const { data, error } = await supabase.rpc('student_upsert', {
+    p_id: s.id ?? null,
+    p_student_no: s.studentNo ?? s.student_no ?? null,
+    p_reference: s.reference ?? s.studentNo ?? s.student_no ?? null,
+    p_full_name: s.name,
+    p_email: s.email,
+    p_phone: s.phone ?? null,
+    p_next_of_kin: s.nextOfKin ?? s.next_of_kin ?? null,
+    p_programme: s.programmeId ?? null,
+    p_status: s.status ?? 'admitted',
+    p_year: s.year ? Number(s.year) : null,
+    p_intake: s.intake ?? null,
+    p_id_number: s.idNumber ?? s.id_number ?? null,
+    p_campus: s.campus ?? null,
+  })
   if (error) throw error
-  return { ok: true, id: data.id }
+  return { ok: true, id: data }
 }
 
 export async function studentDelete(id) {
   if (!useHttp()) return { ok: true }
-  const { error } = await supabase.from('students').delete().eq('id', id)
+  const { error } = await supabase.rpc('student_archive', { p_student: id, p_status: 'inactive' })
   if (error) throw error
   return { ok: true }
 }
 
 export async function holdUpsert(h) {
   if (!useHttp()) return { ok: true, id: h.id ?? null }
-  const row = {
-    student_id: h.studentId,
-    type: h.type,
-    reason: h.reason ?? null,
-    blocks: h.blocks ?? [],
-    active: h.active ?? true,
-  }
-  const q = h.id
-    ? supabase.from('holds').update(row).eq('id', h.id).select('id').single()
-    : supabase.from('holds').insert(row).select('id').single()
-  const { data, error } = await q
+  if (h.id) throw new Error('Hold updates are not supported. Clear the hold and create a new one.')
+  const { data, error } = await supabase.rpc('hold_place', {
+    p_student: h.studentId,
+    p_type: h.type,
+    p_reason: h.reason ?? null,
+    p_blocks: h.blocks ?? [],
+  })
   if (error) throw error
-  return { ok: true, id: data.id }
+  return { ok: true, id: data }
 }
 
 export async function holdClear(id) {
   if (!useHttp()) return { ok: true }
-  const { error } = await supabase.from('holds').update({ active: false }).eq('id', id)
+  const { error } = await supabase.rpc('hold_clear', { p_hold: id })
   if (error) throw error
   return { ok: true }
 }

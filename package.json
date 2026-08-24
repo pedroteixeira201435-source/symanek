@@ -6,7 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "validate:supabase": "node scripts/validate-supabase.mjs",
+    "validate:public-site": "node scripts/validate-public-site.mjs",
+    "validate:uat-core": "node scripts/validate-uat-core.mjs",
+    "apply:course-capacities": "node scripts/apply-course-capacities.mjs",
+    "apply:migration": "node scripts/apply-supabase-migration.mjs",
+    "cleanup:codex-test-data": "node scripts/cleanup-codex-test-data.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.5",

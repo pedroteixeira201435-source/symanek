@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { SCHOOL, ACTIVITY_FEED, INSTITUTION_HIDE, getInstType } from './lib/institution.js'
+import React, { useEffect, useState } from 'react'
+import { SCHOOL, INSTITUTION_HIDE, getInstType } from './lib/institution.js'
 import { Avatar, Badge, Icon } from './ui.jsx'
 import Dashboard from './modules/Dashboard.jsx'
 import Students from './modules/Students.jsx'
@@ -23,6 +23,7 @@ import Accommodation from './modules/Accommodation.jsx'
 import Compliance from './modules/Compliance.jsx'
 import ApplyOnline from './modules/ApplyOnline.jsx'
 import { API_MODE, PRODUCTION_CORE_MODULES } from './config.js'
+import { getActivityFeed, listCourses, listInvoices, listProgrammes, listStaff, listStudents } from './api.js'
 
 // module registry: id -> { label, icon, group, component, subtitle }
 const MODULES = {
@@ -69,10 +70,6 @@ const TODAY = new Date('2026-07-03').toLocaleDateString('en-NA', {
   weekday: 'short', day: 'numeric', month: 'short', year: 'numeric',
 })
 
-// global search index: [label, sublabel, type, badge tone, target module]
-const SEARCH_INDEX = [
-]
-
 export default function Shell({ role, onLogout, initialMod }) {
   // institution type (multi-tenant) hides modules the tenant doesn't use
   const hidden = INSTITUTION_HIDE[getInstType()] || []
@@ -94,13 +91,44 @@ export default function Shell({ role, onLogout, initialMod }) {
   const [q, setQ] = useState('')
   const [showNotif, setShowNotif] = useState(false)
   const [showMsg, setShowMsg] = useState(false)
+  const [searchIndex, setSearchIndex] = useState([])
+  const [activityFeed, setActivityFeed] = useState([])
   // deep-link payload for the target module (e.g. learner name -> opens Student 360)
   const [focus, setFocus] = useState(null)
+
+  useEffect(() => {
+    if (API_MODE !== 'http') return
+    let alive = true
+    Promise.all([
+      listStudents().catch(() => []),
+      listStaff().catch(() => []),
+      listInvoices().catch(() => []),
+      listProgrammes().catch(() => []),
+      listCourses().catch(() => []),
+      getActivityFeed().catch(() => []),
+    ]).then(([students, staff, invoices, programmes, courses, feed]) => {
+      if (!alive) return
+      setSearchIndex([
+        ...students.map((s) => [s.name, `${s.id || s.reference || 'student'} · ${s.programme || 'No programme'}`, 'Student', 'blue', 'students']),
+        ...staff.map((s) => [s.name, `${s.role || 'Staff'} · ${s.department || 'No department'}`, 'Staff', 'green', 'hr']),
+        ...invoices.map((i) => [i.student || i.student_name || i.reference || 'Invoice', `${i.status || 'open'} · N$${Number(i.balance ?? i.amount ?? 0).toLocaleString('en-NA')}`, 'Invoice', 'amber', 'finance']),
+        ...programmes.map((p) => [p.name, `${p.level || p.code || p.slug || 'Programme'}`, 'Programme', 'purple', 'programmes']),
+        ...courses.map((c) => [c.title || c.name || c.code, `${c.code || 'Course'} · capacity ${c.capacity ?? 0}`, 'Course', 'purple', 'programmes']),
+      ].filter(([label]) => Boolean(label)))
+      setActivityFeed((feed ?? []).map((f) => ({
+        icon: f.icon || '•',
+        text: f.text || f.event || f.action || 'Activity recorded',
+        time: f.time || f.at || '',
+        mod: nav.includes(f.mod) ? f.mod : 'dashboard',
+      })))
+    })
+    return () => { alive = false }
+  }, [nav.join('|')])
 
   // search only within modules this role can open
   const results =
     q.trim().length >= 2
-      ? SEARCH_INDEX.filter(
+      ? searchIndex.filter(
           ([label, sub, , , mod]) =>
             nav.includes(mod) && (label + ' ' + sub).toLowerCase().includes(q.trim().toLowerCase())
         ).slice(0, 8)
@@ -201,11 +229,8 @@ export default function Shell({ role, onLogout, initialMod }) {
             {showMsg && (
               <div className="drop">
                 <div className="dhead">Messages</div>
-                {(API_MODE === 'http' ? [] : [
-                  ['Meme Nakanyala (parent, Gr 10B)', 'Requesting a payment plan for Term 3 fees…', '25 min ago', 'finance'],
-                  ['Johannes Haufiku (HOD)', 'Humanities dept meeting moved to Friday 13:00', '2 h ago', 'scheduling'],
-                  ['NamRA eServices', 'June PAYE submission accepted — ref 2026/06/8841', 'Yesterday', 'hr'],
-                ]).map(([from, text, time, mod], i) => (
+                {[
+                ].map(([from, text, time, mod], i) => (
                   <button key={i} className="drop-item" onClick={() => goTo(mod)}>
                     <div>
                       <div style={{ fontWeight: 600 }}>{from}</div>
@@ -224,7 +249,7 @@ export default function Shell({ role, onLogout, initialMod }) {
             {showNotif && (
               <div className="drop">
                 <div className="dhead">Notifications</div>
-                {ACTIVITY_FEED.slice(0, 5).map((f, i) => (
+                {activityFeed.slice(0, 5).map((f, i) => (
                   <button key={i} className="drop-item" onClick={() => goTo(f.mod)}>
                     <span className="gs" style={{ fontSize: 15 }}><Icon glyph={f.icon} size={15} /></span>
                     <div>

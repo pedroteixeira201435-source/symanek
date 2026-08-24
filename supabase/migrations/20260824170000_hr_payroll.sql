@@ -94,7 +94,7 @@ language sql stable security definer set search_path = public as $$
   from public.staff s left join public.leave_balances b on b.staff_id = s.id order by s.name;
 $$;
 create or replace function public.hr_recruitment_list()
-returns table (id uuid, position text, candidate text, stage text, notes text)
+returns table (id uuid, "position" text, candidate text, stage text, notes text)
 language sql stable security definer set search_path = public as $$
   select id, position, candidate, stage, notes from public.recruitment order by created_at desc;
 $$;

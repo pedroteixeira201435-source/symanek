@@ -19,20 +19,3 @@ export function rateLimit(req: NextRequest, scope: string, limit: number, window
     status: 429, headers: { "Retry-After": String(Math.ceil((value.reset - now) / 1000)) },
   });
 }
-
-export async function verifyTurnstile(token: unknown, req: NextRequest) {
-  const secret = process.env.TURNSTILE_SECRET_KEY;
-  if (!secret) return { ok: true };
-  if (typeof token !== "string" || !token) return { ok: false, error: "Please complete the human verification." };
-  const body = new FormData();
-  body.set("secret", secret);
-  body.set("response", token);
-  body.set("remoteip", clientIp(req));
-  try {
-    const response = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", { method: "POST", body, cache: "no-store" });
-    const result = await response.json() as { success?: boolean };
-    return result.success ? { ok: true } : { ok: false, error: "Human verification failed. Please try again." };
-  } catch {
-    return { ok: false, error: "Human verification is temporarily unavailable." };
-  }
-}
