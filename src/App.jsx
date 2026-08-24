@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { ROLES, SCHOOL } from './data.js'
-import { authEnabled, currentRole, signIn, signOut } from './auth.js'
+import { ROLES, SCHOOL } from './lib/institution.js'
+import { authEnabled, currentRole, signIn, signOut, updatePassword } from './auth.js'
+import { clearPasswordReset, getBusinessSettings } from './api.js'
+import { setGradeBands } from './lib/academics.js'
 import Shell from './Shell.jsx'
 import POS from './modules/POS.jsx'
+import { API_MODE } from './config.js'
 
 export default function App() {
   // deep-link support (mock/demo only): #admin or #admin/accounting jumps to role
@@ -19,14 +22,29 @@ export default function App() {
     return () => { alive = false }
   }, [])
 
+  // http mode: load the college's editable grade bands so the client scale
+  // matches the backend's grade_letter(). Non-fatal — falls back to defaults.
+  useEffect(() => {
+    if (!role) return
+    let alive = true
+    getBusinessSettings()
+      .then((s) => { if (alive && s?.grade_bands) setGradeBands(s.grade_bands) })
+      .catch(() => { /* keep default bands */ })
+    return () => { alive = false }
+  }, [role])
+
   const logout = async () => { await signOut(); setRole(null) }
 
   if (booting) return <div className="login-wrap"><div className="login-card" style={{ placeItems: 'center', minHeight: 320 }}>Loading…</div></div>
   if (!role) return authEnabled() ? <EmailLogin onLogin={setRole} /> : <Login onPick={setRole} />
 
+  // Students provisioned with a temporary password must set their own before
+  // they reach the portal.
+  if (role.mustResetPassword) return <ForcePasswordChange onDone={() => setRole({ ...role, mustResetPassword: false })} onLogout={logout} />
+
   // Canteen seller is LOCKED to the POS — full screen, no sidebar,
   // no admin code paths. Everyone else gets the shell.
-  if (role.id === 'seller') return <POS attendant={role.user} onLogout={logout} />
+  if (role.id === 'seller' && API_MODE !== 'http') return <POS attendant={role.user} onLogout={logout} />
 
   return <Shell role={role} onLogout={logout} initialMod={authEnabled() ? undefined : modId} />
 }
@@ -60,13 +78,60 @@ function EmailLogin({ onLogin }) {
           <h1>Sign in</h1>
           <div className="sub">Use your Symanek account. Access is limited to your role.</div>
           <form onSubmit={submit} className="role-grid" style={{ gridTemplateColumns: '1fr' }}>
-            <div className="field"><label>Email</label><input name="email" type="email" required autoComplete="username" placeholder="you@symanek.local" /></div>
+            <div className="field"><label>Email</label><input name="email" type="email" required autoComplete="username" placeholder="you@example.com" /></div>
             <div className="field"><label>Password</label><input name="password" type="password" required autoComplete="current-password" placeholder="••••••••" /></div>
             {error && <div className="di-sub" style={{ color: 'var(--red)' }}>{error}</div>}
             <button className="btn primary" type="submit" disabled={pending}>{pending ? 'Signing in…' : 'Sign in'}</button>
           </form>
           <div className="login-foot">
             <span>Role-based access control</span><span className="dot" /><span>Server-enforced (RLS)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Forced first-login password change (students granted a temporary password).
+function ForcePasswordChange({ onDone, onLogout }) {
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState(null)
+
+  const submit = async (e) => {
+    e.preventDefault()
+    const fd = new FormData(e.currentTarget)
+    const pw = String(fd.get('pw')); const pw2 = String(fd.get('pw2'))
+    if (pw.length < 8) return setError('Use at least 8 characters')
+    if (pw !== pw2) return setError('Passwords do not match')
+    setPending(true); setError(null)
+    const res = await updatePassword(pw)
+    if (!res.ok) { setPending(false); return setError(res.error || 'Could not update password') }
+    await clearPasswordReset()
+    onDone()
+  }
+
+  return (
+    <div className="login-wrap">
+      <div className="login-card">
+        <div className="login-photo">
+          <div className="lp-brand"><div className="lp-mark">S</div><span>SYMANEK&nbsp;SUITE</span></div>
+          <div className="lp-overlay">
+            <div className="lp-name">{SCHOOL.name}</div>
+            <div className="lp-tag">Set a new password to finish activating your student portal.</div>
+          </div>
+        </div>
+        <div className="login-form">
+          <div className="login-eyebrow">First sign-in</div>
+          <h1>Choose your password</h1>
+          <div className="sub">For your security, replace the temporary password you were given.</div>
+          <form onSubmit={submit} className="role-grid" style={{ gridTemplateColumns: '1fr' }}>
+            <div className="field"><label>New password</label><input name="pw" type="password" required autoComplete="new-password" placeholder="At least 8 characters" /></div>
+            <div className="field"><label>Confirm password</label><input name="pw2" type="password" required autoComplete="new-password" placeholder="Repeat password" /></div>
+            {error && <div className="di-sub" style={{ color: 'var(--red)' }}>{error}</div>}
+            <button className="btn primary" type="submit" disabled={pending}>{pending ? 'Saving…' : 'Save and continue'}</button>
+          </form>
+          <div className="login-foot">
+            <button className="btn ghost sm" onClick={onLogout}>Sign out</button>
           </div>
         </div>
       </div>

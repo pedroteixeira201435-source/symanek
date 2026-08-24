@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { SCHOOL, ACTIVITY_FEED, STAFF, INVOICES, CATALOGUE, LEARNERS, APPLICANTS, PROGRAMMES, COURSES, INSTITUTION_HIDE, getInstType } from './data.js'
+import { SCHOOL, ACTIVITY_FEED, INSTITUTION_HIDE, getInstType } from './lib/institution.js'
 import { Avatar, Badge, Icon } from './ui.jsx'
 import Dashboard from './modules/Dashboard.jsx'
 import Students from './modules/Students.jsx'
@@ -22,6 +22,7 @@ import Graduation from './modules/Graduation.jsx'
 import Accommodation from './modules/Accommodation.jsx'
 import Compliance from './modules/Compliance.jsx'
 import ApplyOnline from './modules/ApplyOnline.jsx'
+import { API_MODE, PRODUCTION_CORE_MODULES } from './config.js'
 
 // module registry: id -> { label, icon, group, component, subtitle }
 const MODULES = {
@@ -70,20 +71,22 @@ const TODAY = new Date('2026-07-03').toLocaleDateString('en-NA', {
 
 // global search index: [label, sublabel, type, badge tone, target module]
 const SEARCH_INDEX = [
-  ...LEARNERS.map((l) => [l.name, `${l.id} · ${l.grade}`, 'Student', 'green', 'students']),
-  ...STAFF.map((s) => [s.name, s.role, 'Staff', 'purple', 'hr']),
-  ...INVOICES.map((i) => [`${i.id} — ${i.learner}`, `${i.grade} · ${i.status}`, 'Invoice', 'teal', 'finance']),
-  ...CATALOGUE.map((b) => [b.title, b.author, 'Book', 'blue', 'library']),
-  ...APPLICANTS.map((a) => [a.name, `${a.id} · ${a.prog} · ${a.stage}`, 'Applicant', 'orange', 'admissions']),
-  ...PROGRAMMES.map((p) => [p.name, `${p.code} · NQF ${p.nqf}`, 'Programme', 'blue', 'programmes']),
-  ...COURSES.map((c) => [`${c.code} — ${c.title}`, `${c.prog} · ${c.credits} credits`, 'Course', 'teal', 'programmes']),
 ]
 
 export default function Shell({ role, onLogout, initialMod }) {
   // institution type (multi-tenant) hides modules the tenant doesn't use
   const hidden = INSTITUTION_HIDE[getInstType()] || []
-  const nav = (ROLE_NAV[role.id] || []).filter((m) => !hidden.includes(m))
+  const nav = (ROLE_NAV[role.id] || []).filter((m) =>
+    !hidden.includes(m) && (API_MODE !== 'http' || PRODUCTION_CORE_MODULES.has(m))
+  )
   const isStudent = role.id === 'student' || role.id === 'applicant'
+  if (nav.length === 0) return (
+    <div className="login-wrap"><div className="login-card" style={{ placeItems: 'center', minHeight: 320, padding: 36, textAlign: 'center' }}>
+      <h1>Workspace not available</h1>
+      <p className="sub">This workspace is outside the current production release scope. Contact the system administrator if you need access.</p>
+      <button className="btn primary" onClick={onLogout}>Sign out</button>
+    </div></div>
+  )
   // deep-link: #admin/accounting opens that module (if the role may see it)
   const [active, setActive] = useState(nav.includes(initialMod) ? initialMod : nav[0])
   const [showUser, setShowUser] = useState(false)
@@ -198,11 +201,11 @@ export default function Shell({ role, onLogout, initialMod }) {
             {showMsg && (
               <div className="drop">
                 <div className="dhead">Messages</div>
-                {[
+                {(API_MODE === 'http' ? [] : [
                   ['Meme Nakanyala (parent, Gr 10B)', 'Requesting a payment plan for Term 3 fees…', '25 min ago', 'finance'],
                   ['Johannes Haufiku (HOD)', 'Humanities dept meeting moved to Friday 13:00', '2 h ago', 'scheduling'],
                   ['NamRA eServices', 'June PAYE submission accepted — ref 2026/06/8841', 'Yesterday', 'hr'],
-                ].map(([from, text, time, mod], i) => (
+                ]).map(([from, text, time, mod], i) => (
                   <button key={i} className="drop-item" onClick={() => goTo(mod)}>
                     <div>
                       <div style={{ fontWeight: 600 }}>{from}</div>

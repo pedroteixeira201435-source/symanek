@@ -1,36 +1,31 @@
-import React, { useState, useEffect } from 'react'
-import { StatCard, Tabs, Panel, Badge, Progress, Modal, Toast, useToast, Icon } from '../ui.jsx'
-import { COURSES, EXAM_BOARD, gradeOf, fmtN } from '../data.js'
-import { evaluateResult, WEIGHTS } from '../lib/academics.js'
-import { ANNOUNCEMENTS, STUDENT_DOCUMENTS, ATTENDANCE_MIN, isWindowOpen } from '../lib/controls.js'
-import * as api from '../api.js'
+import React, { useCallback, useEffect, useState } from 'react'
+import { StatCard, Tabs, Panel, Badge, Modal, Toast, useToast, Icon } from '../ui.jsx'
+import { fmtN } from '../lib/format.js'
+import { gradeOf, evaluateResult } from '../lib/academics.js'
+import { ATTENDANCE_MIN } from '../lib/controls.js'
+import {
+  getDegreeAudit, listProgrammes, getResultsForStudent, getInvoicesForStudent, getSponsorsForStudent,
+  getHoldsForStudent, getAttendanceForStudent, listCourses, registerCourse, listTimetable,
+  listAnnouncements, listQueries, createQuery, submitInvoiceProof, listDocumentsForStudent,
+} from '../api.js'
 import { TimetableGrid } from './Scheduling.jsx'
 
-const CA_PCT = Math.round(WEIGHTS.ca * 100) // 60
-const EXAM_PCT = Math.round(WEIGHTS.exam * 100) // 40
-
-const CREDIT_RATE = 1150 // N$ per credit — charge assessed on registration (demo)
+const CREDIT_RATE = 1150
 const SEM_CREDIT_CAP = 72
 
-// The student sees ONLY their own record — never institution-wide finance/HR.
-// `role.user` is the logged-in student's name. The record is loaded through the
-// api seam (mock in-memory, or Supabase when API_MODE='http') — the backend joins
-// by student_id, killing the legacy name-join. The `ctx` shape is unchanged, so
-// every tab component below is untouched.
 export default function StudentPortal({ role }) {
   const me = role.user
   const [tab, setTab] = useState('My Studies')
-  const [registered, setRegistered] = useState([]) // course codes registered this session — shared across tabs
+  const [registered, setRegistered] = useState([])
   const [rec, setRec] = useState(null)
-  const [reloadN, setReloadN] = useState(0) // bump to re-fetch the record after a write (e.g. payment)
+  const [reloadN, setReloadN] = useState(0)
 
   useEffect(() => {
     let alive = true
     ;(async () => {
       const [audit, programmes, myResults, myInvoices, mySponsors, myHolds, attendance] = await Promise.all([
-        api.getDegreeAudit(me), api.listProgrammes(), api.getResultsForStudent(me),
-        api.getInvoicesForStudent(me), api.getSponsorsForStudent(me), api.getHoldsForStudent(me),
-        api.getAttendanceForStudent(me),
+        getDegreeAudit(me), listProgrammes(), getResultsForStudent(me), getInvoicesForStudent(me),
+        getSponsorsForStudent(me), getHoldsForStudent(me), getAttendanceForStudent(me),
       ])
       if (!alive) return
       const prog = programmes.find((p) => p.code === audit?.prog)
@@ -39,593 +34,192 @@ export default function StudentPortal({ role }) {
     return () => { alive = false }
   }, [me, reloadN])
 
-  if (!rec) return <Panel title="My portal"><div className="di-sub">Loading your record…</div></Panel>
-  if (rec.error) return <Panel title="My portal"><div className="di-sub">Couldn’t load your record — {rec.error}</div></Panel>
+  if (!rec) return <Panel title="My portal"><Empty>Loading your record...</Empty></Panel>
+  if (rec.error) return <Panel title="My portal"><Empty>Could not load your record: {rec.error}</Empty></Panel>
 
-  const { audit, prog, myResults, myInvoices, mySponsors, myHolds, attendance } = rec
-  const passedCodes = myResults
-    .filter((r) => evaluateResult({ ca: r.ca, exam: r.exam }).outcome === 'pass')
-    .map((r) => r.code)
-  const balance = myInvoices.reduce((s, i) => s + i.balance, 0)
-
+  const balance = rec.myInvoices.reduce((s, i) => s + Number(i.balance || 0), 0)
+  const passedCodes = rec.myResults.filter((r) => evaluateResult({ ca: r.ca, exam: r.exam }).outcome === 'pass').map((r) => r.code)
   const reload = () => setReloadN((n) => n + 1)
-  const ctx = { me, audit, prog, myResults, passedCodes, myInvoices, balance, mySponsors, myHolds, attendance, registered, setRegistered, reload }
+  const ctx = { me, ...rec, balance, passedCodes, registered, setRegistered, reload }
 
   return (
     <>
-      <Tabs
-        tabs={['My Studies', 'Registration', 'Grades & Transcript', 'My Timetable', 'My Finance', 'Announcements', 'Ask Lecturer', 'Holds & Documents']}
-        active={tab}
-        onChange={setTab}
-      />
+      <Tabs tabs={['My Studies', 'Registration', 'Grades & Transcript', 'My Timetable', 'My Finance', 'Announcements', 'Ask Lecturer', 'Holds & Documents']} active={tab} onChange={setTab} />
       {tab === 'My Studies' && <MyStudies {...ctx} />}
       {tab === 'Registration' && <Registration {...ctx} />}
       {tab === 'Grades & Transcript' && <Transcript {...ctx} />}
       {tab === 'My Timetable' && <MyTimetable {...ctx} />}
       {tab === 'My Finance' && <MyFinance {...ctx} />}
-      {tab === 'Announcements' && <Announcements {...ctx} />}
+      {tab === 'Announcements' && <Announcements />}
       {tab === 'Ask Lecturer' && <AskLecturer {...ctx} />}
       {tab === 'Holds & Documents' && <HoldsDocs {...ctx} />}
     </>
   )
 }
 
-// ---------- My Studies: programme header + degree audit ----------
 function MyStudies({ audit, prog, attendance }) {
-  if (!audit) return <Panel title="My studies"><div className="di-sub">No academic record on file yet.</div></Panel>
-  const total = audit.reqs.find((r) => /total credits/i.test(r.req)) || audit.reqs[audit.reqs.length - 1]
-  const yearOf = prog ? Math.min(prog.years, Math.max(1, prog.years - 1)) : 1
+  if (!audit) return <Panel title="My studies"><Empty>No academic record on file yet.</Empty></Panel>
   const att = attendance || { percent: 0, hoursAttended: 0, hoursTotal: 0 }
   const attOk = att.percent >= ATTENDANCE_MIN
-
   return (
     <>
       <div className="stat-row c4">
-        <StatCard icon="🎓" label="Programme" value={audit.prog} delta={prog?.name} deltaTone="neutral" />
-        <StatCard icon="📅" label="Year of study" value={`Year ${yearOf}`} delta={`Catalog ${audit.catalog} · Semester 2, 2026`} deltaTone="neutral" />
-        <StatCard icon="📈" label="Cumulative GPA" value={audit.gpa.toFixed(2)} delta="of 4.00" deltaTone={audit.gpa >= 2 ? 'up' : 'down'} />
-        <StatCard icon="⏰" label="Class attendance" value={`${att.percent}%`} delta={`${att.hoursAttended}/${att.hoursTotal} hrs · min ${ATTENDANCE_MIN}%`} deltaTone={attOk ? 'up' : 'down'} />
+        <StatCard icon="🎓" label="Programme" value={audit.prog || '-'} delta={prog?.name || ''} deltaTone="neutral" />
+        <StatCard icon="📈" label="Cumulative GPA" value={Number(audit.gpa || 0).toFixed(2)} delta="of 4.00" deltaTone={audit.gpa >= 2 ? 'up' : 'down'} />
+        <StatCard icon="⏰" label="Attendance" value={`${att.percent || 0}%`} delta={`${att.hoursAttended || 0}/${att.hoursTotal || 0} hrs`} deltaTone={attOk ? 'up' : 'down'} />
+        <StatCard icon="📚" label="Requirements" value={String((audit.reqs || []).length)} delta="degree audit" deltaTone="neutral" />
       </div>
-
-      <div className="note-banner" style={attOk ? { background: 'var(--green-soft)', borderColor: '#cfe6d4' } : { background: 'var(--red-soft)', borderColor: '#eccfc9' }}>
-        <Icon name={attOk ? 'check' : 'ban'} size={16} />
-        <div>
-          {attOk ? (
-            <>Your attendance is <strong>{att.percent}%</strong> — above the {ATTENDANCE_MIN}% minimum, so you are <strong>eligible for the final examination</strong> and your examination permit.</>
-          ) : (
-            <><strong style={{ color: 'var(--red)' }}>Attendance {att.percent}%</strong> is below the {ATTENDANCE_MIN}% minimum required to be admitted to the final examination. Speak to your lecturer — no examination permit is issued below {ATTENDANCE_MIN}%.</>
-          )}
-        </div>
-      </div>
-
-      <Panel title="Degree audit" subtitle={`${prog?.name || audit.prog} · NQF ${prog?.nqf ?? '—'} · progress to graduation, requirement by requirement`}>
-        {audit.reqs.map((r) => {
-          const pct = Math.min(100, Math.round((r.done / r.need) * 100))
-          const tone = r.status === 'Satisfied' ? 'green' : r.status === 'Not satisfied' ? 'red' : 'amber'
-          return (
-            <div key={r.req} style={{ padding: '10px 0', borderBottom: '1px solid var(--line)' }}>
-              <div className="cf-row" style={{ marginBottom: 8 }}>
-                <span style={{ fontSize: 13, fontWeight: 600 }}>{r.req} <Badge tone={tone}>{r.status}</Badge></span>
-                <span className="mono" style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>{r.done} / {r.need} cr</span>
-              </div>
-              <Progress pct={pct} tone={r.status === 'Not satisfied' ? 'red' : ''} />
-            </div>
-          )
-        })}
+      <Panel title="Degree audit" subtitle={`${prog?.name || audit.prog} · progress to graduation`}>
+        {(audit.reqs || []).length === 0 ? <Empty>No requirements loaded yet.</Empty> : (audit.reqs || []).map((r) => (
+          <div key={r.req} className="cf-row" style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
+            <span>{r.req}</span><span><Badge tone={r.status === 'Satisfied' ? 'green' : 'amber'}>{r.status}</Badge> {r.done}/{r.need} cr</span>
+          </div>
+        ))}
       </Panel>
     </>
   )
 }
 
-// ---------- Registration: the self-service rules engine ----------
-function Registration({ audit, passedCodes, myHolds, registered, setRegistered }) {
-  const blockingHold = myHolds.find((h) => h.impact.some((i) => /registration/i.test(i)))
+function Registration({ audit, passedCodes, myHolds, registered, setRegistered, reload }) {
   const [toast, showToast] = useToast()
-  const [busy, setBusy] = useState(null)
-
-  // the student's own programme catalogue (mock or Supabase per api mode)
   const [catalogue, setCatalogue] = useState([])
-  useEffect(() => {
-    let alive = true
-    api.listCourses(audit?.prog).then((rows) => { if (alive) setCatalogue(rows) }).catch(() => {})
-    return () => { alive = false }
-  }, [audit?.prog])
-
-  const registeredCredits = registered.reduce((s, code) => {
-    const c = catalogue.find((x) => x.code === code)
-    return s + (c ? c.credits : 0)
-  }, 0)
-
-  // The rules engine is server-authoritative in http mode (RPC register_course).
-  // Client-side pre-checks stay for instant feedback / mock mode.
+  const [busy, setBusy] = useState(null)
+  const blockingHold = myHolds.find((h) => (h.impact || []).some((i) => /registration/i.test(i)))
+  useEffect(() => { listCourses(audit?.prog).then(setCatalogue).catch(() => setCatalogue([])) }, [audit?.prog])
+  const registeredCredits = registered.reduce((s, code) => s + (catalogue.find((x) => x.code === code)?.credits || 0), 0)
   const register = async (c) => {
-    if (blockingHold) return showToast(`Blocked — ${blockingHold.type.toLowerCase()} hold must be cleared first`)
-    if (registeredCredits + c.credits > SEM_CREDIT_CAP)
-      return showToast(`Over the ${SEM_CREDIT_CAP}-credit semester limit — drop a course first`)
+    if (blockingHold) return showToast(`Blocked: ${blockingHold.reason}`)
+    if (registeredCredits + Number(c.credits || 0) > SEM_CREDIT_CAP) return showToast(`Over the ${SEM_CREDIT_CAP}-credit semester limit`)
     setBusy(c.code)
     try {
-      const res = await api.registerCourse({ courseId: c.id, courseCode: c.code })
-      if (res && res.ok === false) return showToast(res.message || 'Registration was declined')
+      const res = await registerCourse({ courseId: c.id, courseCode: c.code })
+      if (res && res.ok === false) return showToast(res.message || 'Registration declined')
       setRegistered((r) => [...r, c.code])
-      showToast((res && res.message) || `Registered in ${c.code} — ${fmtN(c.credits * CREDIT_RATE)} assessed to your account`)
-    } catch (e) {
-      showToast(e?.message || 'Registration failed')
-    } finally {
-      setBusy(null)
+      reload && reload()
+      showToast((res && res.message) || `Registered in ${c.code}`)
     }
+    catch (err) { showToast('Registration failed: ' + (err?.message || err)) }
+    finally { setBusy(null) }
   }
-
-  // evaluate the rules engine for a course, in the documented order:
-  // holds → already passed → capacity → prerequisite → eligible
-  const evaluate = (c) => {
-    if (registered.includes(c.code)) return { state: 'registered', label: 'Registered', tone: 'green' }
-    if (passedCodes.includes(c.code)) return { state: 'passed', label: 'Already passed', tone: 'blue' }
-    if (c.enrolled >= c.cap) return { state: 'full', label: 'Full — join waitlist', tone: 'amber' }
-    if (c.prereq !== '—' && !passedCodes.includes(c.prereq)) return { state: 'prereq', label: `Prerequisite ${c.prereq} not met`, tone: 'red' }
-    return { state: 'ok', label: 'Eligible', tone: 'green' }
-  }
-
   return (
     <>
-      <div className={`note-banner`} style={blockingHold ? { background: 'var(--red-soft)', borderColor: '#eccfc9' } : undefined}>
-        <Icon name={blockingHold ? 'ban' : 'info'} size={16} />
-        <div>
-          {blockingHold ? (
-            <><strong style={{ color: 'var(--red)' }}>{blockingHold.type} hold</strong> — {blockingHold.reason}. Registration is blocked until it clears.</>
-          ) : (
-            <>Semester 2, 2026 registration is <strong>open</strong> — no holds on your record. Each course you add
-            validates <strong>holds → prerequisites → capacity → credit limit</strong> and assesses the charge live
-            (N$ {CREDIT_RATE.toLocaleString()}/credit).</>
-          )}
-        </div>
-      </div>
-
-      <Panel
-        title="Course registration"
-        subtitle={`${registered.length} registered · ${registeredCredits}/${SEM_CREDIT_CAP} credits this semester`}
-        flush
-      >
-        <table className="data">
-          <thead>
-            <tr>
-              <th>Course</th><th>Programme</th><th className="num">Credits</th><th className="num">Seats</th>
-              <th>Prerequisite</th><th style={{ width: 190 }}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {catalogue.map((c) => {
-              const ev = evaluate(c)
-              return (
-                <tr key={c.code}>
-                  <td>
-                    <div style={{ fontWeight: 600 }}>{c.code}</div>
-                    <div className="di-sub">{c.title}</div>
-                  </td>
-                  <td>{c.prog}</td>
-                  <td className="num">{c.credits}</td>
-                  <td className="num" style={{ color: c.enrolled >= c.cap ? 'var(--red)' : 'var(--ink)' }}>{c.enrolled}/{c.cap}</td>
-                  <td className="mono" style={{ fontSize: 12.5 }}>{c.prereq}</td>
-                  <td>
-                    {ev.state === 'ok' ? (
-                      <button className="btn primary sm" disabled={busy === c.code} onClick={() => register(c)}>{busy === c.code ? '…' : 'Register'}</button>
-                    ) : ev.state === 'full' ? (
-                      <button className="btn ghost sm" onClick={() => showToast(`Added to the ${c.code} waitlist — you'll be notified if a seat frees up`)}>Join waitlist</button>
-                    ) : (
-                      <Badge tone={ev.tone}>{ev.label}</Badge>
-                    )}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </Panel>
-      <Toast msg={toast} />
-    </>
-  )
-}
-
-// ---------- Grades & Transcript ----------
-function Transcript({ audit, myResults }) {
-  const publishedOf = (code) => EXAM_BOARD.find((e) => e.code === code)?.status === 'Published'
-  const released = isWindowOpen('marks_release')
-  const secondOpp = myResults.filter((r) => evaluateResult({ ca: r.ca, exam: r.exam }).outcome === 'second_opportunity')
-
-  return (
-    <>
-      {!released && myResults.some((r) => !r.published) && (
-        <div className="note-banner" style={{ background: 'var(--amber-soft, #fff6e6)', borderColor: '#ecdcc0' }}>
-          <Icon name="lock" size={16} />
-          <div>Some marks are still <strong>provisional</strong> — your lecturer has entered them but the exam board has not yet published the final grade.</div>
-        </div>
-      )}
-
-      {secondOpp.length > 0 && (
-        <div className="note-banner" style={{ background: '#fff6e6', borderColor: '#ecdcc0' }}>
-          <Icon name="edit" size={16} />
-          <div>
-            You qualify for a <strong>second-opportunity examination</strong> in {secondOpp.map((r) => r.code).join(', ')}
-            {' '}(final mark 45–49%, or exam paper below 40%).
-            {isWindowOpen('second_opportunity') ? ' Registration for the second opportunity is open.' : ' Watch for the second-opportunity window to open.'}
-          </div>
-        </div>
-      )}
-
-      <Panel title="Results" subtitle={`Continuous assessment (${CA_PCT}%) + exam (${EXAM_PCT}%) → final mark. Exam paper pass 40%; module pass 50%; 45–49% earns a second opportunity.`}>
-        {myResults.length === 0 ? (
-          <div className="di-sub">No results released yet — held by your lecturers until the exam board sits.</div>
-        ) : (
-          <table className="data">
-            <thead>
-              <tr>
-                <th>Course</th><th className="num">CA ({CA_PCT}%)</th><th className="num">Exam ({EXAM_PCT}%)</th>
-                <th className="num">Final</th><th>Grade</th><th className="num">GPA</th><th>Result</th><th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {myResults.map((r) => {
-                const res = evaluateResult({ ca: r.ca, exam: r.exam })
-                const g = gradeOf(res.final)
-                const pub = r.published === true || (publishedOf(r.code) && released)
-                const title = COURSES.find((c) => c.code === r.code)?.title
-                return (
-                  <tr key={r.code}>
-                    <td><div style={{ fontWeight: 600 }}>{r.code}</div><div className="di-sub">{title}</div></td>
-                    <td className="num">{r.ca}</td>
-                    <td className="num">{r.exam}</td>
-                    <td className="num" style={{ fontWeight: 700, color: res.final < 50 ? 'var(--red)' : 'var(--ink)' }}>{res.final}%</td>
-                    <td className="mono" style={{ fontWeight: 600 }}>{g.letter}</td>
-                    <td className="num mono">{g.gpa.toFixed(1)}</td>
-                    <td><Badge tone={res.tone} title={res.reasons.join(' · ')}>{res.label}</Badge></td>
-                    <td><Badge tone={pub ? 'green' : 'amber'}>{pub ? 'Published' : 'Provisional'}</Badge></td>
-                  </tr>
-                )
-              })}
-            </tbody>
+      <Panel title="Course registration" subtitle={`${registered.length} registered · ${registeredCredits}/${SEM_CREDIT_CAP} credits`} flush>
+        {catalogue.length === 0 ? <Empty>No courses are available for registration.</Empty> : (
+          <table className="data"><thead><tr><th>Course</th><th>Programme</th><th className="num">Credits</th><th>Action</th></tr></thead>
+            <tbody>{catalogue.map((c) => {
+              const blocked = passedCodes.includes(c.code) || registered.includes(c.code)
+              return <tr key={c.id || c.code}><td><strong>{c.code}</strong><div className="di-sub">{c.title}</div></td><td>{c.prog || '-'}</td><td className="num">{c.credits || 0}</td><td>{blocked ? <Badge tone="green">{registered.includes(c.code) ? 'Registered' : 'Passed'}</Badge> : <button className="btn primary sm" disabled={busy === c.code} onClick={() => register(c)}>{busy === c.code ? '...' : 'Register'}</button>}</td></tr>
+            })}</tbody>
           </table>
         )}
       </Panel>
-
-      {audit && (
-        <Panel title="Academic transcript" subtitle={`${audit.prog} · catalog ${audit.catalog} · official cumulative standing`}>
-          <div className="cf-row" style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
-            <span>Cumulative GPA</span><span className="mono" style={{ fontWeight: 700 }}>{audit.gpa.toFixed(2)} / 4.00</span>
-          </div>
-          <div className="cf-row" style={{ padding: '8px 0' }}>
-            <span>Academic standing</span>
-            <Badge tone={audit.gpa >= 2 ? 'green' : 'red'}>{audit.gpa >= 2 ? 'Good standing' : 'Academic probation'}</Badge>
-          </div>
-        </Panel>
-      )}
+      <Toast msg={toast} />
     </>
   )
 }
 
-// ---------- My Timetable (university-framed stand-in grid) ----------
-const MY_TT = {
-  P1: [{ s: 'VTW210', r: 'Workshop A' }, null, { s: 'VTW210', r: 'Workshop A' }, null, { s: 'TRT120', r: 'Lecture Hall 2' }],
-  P2: [{ s: 'TRT120', r: 'Lecture Hall 2' }, { s: 'VTW210', r: 'Workshop A' }, null, { s: 'ENT100', r: 'Rm 9' }, null],
-  P3: [null, { s: 'ENT100', r: 'Rm 9' }, { s: 'TRT120', r: 'Lecture Hall 2' }, { s: 'VTW210', r: 'Workshop A' }, { s: 'IND199', r: 'Industry site' }],
-  P4: [{ s: 'ENT100', r: 'Rm 9' }, null, { s: 'VTW210', r: 'Workshop A' }, { s: 'TRT120', r: 'Lecture Hall 2' }, { s: 'IND199', r: 'Industry site' }],
-  P5: [{ s: 'VTW210', r: 'Workshop A' }, { s: 'TRT120', r: 'Lecture Hall 2' }, null, null, { s: 'IND199', r: 'Industry site' }],
-  P6: [null, { s: 'IND199', r: 'Industry site' }, { s: 'ENT100', r: 'Rm 9' }, null, null],
-}
-
-function MyTimetable({ audit, prog }) {
-  const [toast, showToast] = useToast()
-
-  const downloadExamTimetable = async () => {
-    const rows = await api.listExamSchedule()
-    const header = 'Course,Title,Date,Time,Venue,Seats,Invigilator'
-    const lines = rows.map((e) => [e.code, e.title, e.date, e.time, e.venue, `${e.sat}/${e.seats}`, e.invigilator]
-      .map((v) => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
-    const csv = [header, ...lines].join('\n')
-    const blob = new Blob([csv], { type: 'text/csv' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = 'Symanek-exam-timetable-Nov2026.csv'; a.click()
-    URL.revokeObjectURL(url)
-    showToast('Examination timetable downloaded')
-  }
-
+function Transcript({ audit, myResults }) {
   return (
     <>
-      <Panel
-        title="My weekly timetable"
-        subtitle={`${audit?.prog || ''} ${prog?.name ? '· ' + prog.name : ''} · Semester 2, 2026`}
-        actions={<button className="btn ghost sm" onClick={downloadExamTimetable}><Icon name="download" size={14} /> Download exam timetable</button>}
-      >
-        <TimetableGrid data={MY_TT} />
+      <Panel title="Results" subtitle="Continuous assessment + exam -> final mark">
+        {myResults.length === 0 ? <Empty>No results released yet.</Empty> : (
+          <table className="data"><thead><tr><th>Course</th><th className="num">CA</th><th className="num">Exam</th><th className="num">Final</th><th>Grade</th><th>Status</th></tr></thead>
+            <tbody>{myResults.map((r) => {
+              const res = evaluateResult({ ca: r.ca, exam: r.exam })
+              const g = gradeOf(res.final)
+              return <tr key={r.code}><td>{r.code}</td><td className="num">{r.ca}</td><td className="num">{r.exam}</td><td className="num">{res.final}%</td><td>{g.letter}</td><td><Badge tone={r.published ? 'green' : 'amber'}>{r.published ? 'Published' : 'Provisional'}</Badge></td></tr>
+            })}</tbody>
+          </table>
+        )}
       </Panel>
-      <Toast msg={toast} />
+      {audit && <Panel title="Academic transcript"><div className="cf-row"><span>Cumulative GPA</span><span className="mono">{Number(audit.gpa || 0).toFixed(2)} / 4.00</span></div></Panel>}
     </>
   )
 }
 
-// ---------- Ask Lecturer (student side of the two-way query channel) ----------
-function AskLecturer({ me, myResults }) {
+function MyTimetable() {
   const [rows, setRows] = useState([])
-  const [busy, setBusy] = useState(false)
-  const [toast, showToast] = useToast()
-  const myCourses = myResults
-    .map((r) => { const c = COURSES.find((x) => x.code === r.code); return { code: r.code, title: c?.title, lecturer: c?.lecturer } })
-    .filter((c) => c.lecturer)
-
-  const load = () => api.listQueries({ student: me }).then((r) => setRows(Array.isArray(r) ? r : [])).catch(() => {})
-  useEffect(() => { load() }, [me])
-
-  const submit = async (e) => {
-    e.preventDefault()
-    const f = e.target
-    const subject = f.subject.value.trim()
-    const body = f.body.value.trim()
-    if (!subject || !body) { showToast('Add a subject and your question'); return }
-    const c = myCourses.find((x) => x.code === f.course.value)
-    setBusy(true)
-    try {
-      await api.createQuery({ course: f.course.value, student: me, lecturer: c?.lecturer, subject, body })
-      showToast('Sent to your lecturer')
-      f.reset(); await load()
-    } finally { setBusy(false) }
-  }
-
-  return (
-    <>
-      <div className="grid2">
-        <Panel title="Ask your lecturer" subtitle="A question about one of your courses">
-          {myCourses.length === 0 ? (
-            <div className="di-sub">You have no active courses to ask about yet.</div>
-          ) : (
-            <form onSubmit={submit}>
-              <div className="field">
-                <label>Course</label>
-                <select name="course">{myCourses.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.title}</option>)}</select>
-              </div>
-              <div className="field"><label>Subject</label><input name="subject" maxLength={90} placeholder="e.g. CA mark query" /></div>
-              <div className="field"><label>Your question</label><textarea name="body" rows={4} placeholder="Write your question…" /></div>
-              <button className="btn primary" type="submit" disabled={busy}>{busy ? 'Sending…' : 'Send to lecturer'}</button>
-            </form>
-          )}
-        </Panel>
-
-        <Panel title="My questions" subtitle="Replies from your lecturers" flush>
-          <div style={{ padding: 4 }}>
-            {rows.length === 0 && <div className="di-sub" style={{ padding: 12 }}>No questions yet.</div>}
-            {rows.map((q) => (
-              <div key={q.id} className="note-banner" style={{ marginBottom: 10, alignItems: 'flex-start' }}>
-                <Icon name={q.status === 'answered' ? 'check' : 'send'} size={16} />
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                    <strong>{q.subject}</strong><span className="di-sub">{q.course} · {q.createdAt}</span>
-                  </div>
-                  <div className="di-sub" style={{ marginTop: 2 }}>{q.body}</div>
-                  {q.status === 'answered' ? (
-                    <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--line)' }}>
-                      <Badge tone="green"><Icon name="tick" size={12} /> Reply</Badge> {q.reply}
-                      <div className="di-sub" style={{ marginTop: 4, fontStyle: 'italic' }}>— {q.lecturer}</div>
-                    </div>
-                  ) : <div style={{ marginTop: 6 }}><Badge tone="amber">Awaiting reply</Badge></div>}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Panel>
-      </div>
-      <Toast msg={toast} />
-    </>
-  )
+  useEffect(() => { listTimetable().then(setRows).catch(() => setRows([])) }, [])
+  const grid = rows.reduce((out, r) => {
+    const period = r.period || 'P1'
+    if (!out[period]) out[period] = [null, null, null, null, null]
+    out[period][Math.max(0, Math.min(4, Number(r.day || 1) - 1))] = { s: r.subject, r: r.venue }
+    return out
+  }, {})
+  return <Panel title="My weekly timetable"><TimetableGrid data={grid} /></Panel>
 }
 
-// ---------- Announcements ----------
-function Announcements() {
-  const [items, setItems] = useState(ANNOUNCEMENTS)
-  useEffect(() => {
-    let alive = true
-    api.listAnnouncements('students')
-      .then((rows) => {
-        if (!alive || !Array.isArray(rows) || !rows.length) return
-        setItems(rows.map((a) => ({ id: a.id, title: a.title, body: a.body, date: a.date || a.created_at || '' })))
-      })
-      .catch(() => {})
-    return () => { alive = false }
-  }, [])
-  return (
-    <Panel title="Announcements" subtitle="Notices from the registrar and your lecturers" flush>
-      <div style={{ padding: 4 }}>
-        {items.map((a) => (
-          <div key={a.id} className="note-banner" style={{ marginBottom: 10 }}>
-            <Icon name="send" size={16} />
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
-                <strong>{a.title}</strong>
-                <span className="di-sub">{a.date}</span>
-              </div>
-              <div className="di-sub" style={{ marginTop: 2 }}>{a.body}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </Panel>
-  )
-}
-
-// ---------- My Finance ----------
-function MyFinance({ myInvoices, balance, mySponsors, registered = [], reload }) {
+function MyFinance({ myInvoices, balance, mySponsors, registered, reload }) {
   const [toast, showToast] = useToast()
-  const [payFor, setPayFor] = useState(null)  // the invoice being paid
+  const [payFor, setPayFor] = useState(null)
   const [paying, setPaying] = useState(false)
-
-  // charges assessed by this session's course registration flow into the balance
-  const regCharges = registered.map((code) => COURSES.find((c) => c.code === code)).filter(Boolean)
-  const pending = regCharges.reduce((s, c) => s + c.credits * CREDIT_RATE, 0)
-  const totalDue = balance + pending
-
-  // Manual EFT — no gateway. The student uploads their proof of payment (file +
-  // amount); it sits pending until the bursar confirms it (confirm_invoice_payment),
-  // which then reduces the balance and releases any financial hold.
+  const pending = registered.length * CREDIT_RATE
   const submitProof = async (e) => {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-    const amount = Number(fd.get('amt'))
-    const file = fd.get('proof')
-    if (!file || !file.size) { showToast('Attach your proof of payment'); return }
-    if (!amount || amount <= 0) { showToast('Enter the amount you paid'); return }
+    e.preventDefault(); const fd = new FormData(e.currentTarget)
     setPaying(true)
-    try {
-      const res = await api.submitInvoiceProof({ invoiceId: payFor?.id, amount, file })
-      if (res && res.ok === false) { showToast(res.message || 'Could not submit proof'); return }
-      showToast((res && res.message) || 'Proof of payment submitted — the bursar will confirm it shortly.')
-      setPayFor(null)
-      reload && reload()
-    } catch (err) {
-      showToast(err?.message || 'Upload failed')
-    } finally {
-      setPaying(false)
-    }
+    try { await submitInvoiceProof({ invoiceId: payFor?.id, amount: Number(fd.get('amt')), file: fd.get('proof') }); setPayFor(null); reload(); showToast('Proof submitted') }
+    catch (err) { showToast('Upload failed: ' + (err?.message || err)) }
+    finally { setPaying(false) }
   }
-
   return (
     <>
       <div className="stat-row c4">
-        <StatCard icon="💳" label="Account balance" value={fmtN(totalDue)} delta={pending > 0 ? `incl. ${fmtN(pending)} new registration` : totalDue > 0 ? 'Due this semester' : 'Settled'} deltaTone={totalDue > 0 ? 'down' : 'up'} />
-        <StatCard icon="🧾" label="Invoices" value={String(myInvoices.length)} delta="This academic year" deltaTone="neutral" />
-        <StatCard icon="🎓" label="Sponsorships" value={String(mySponsors.length)} delta={mySponsors.map((s) => s.sponsor).join(', ') || '—'} deltaTone="neutral" />
+        <StatCard icon="💳" label="Account balance" value={fmtN(balance + pending)} delta={pending ? `incl. ${fmtN(pending)} new registration` : 'current'} deltaTone={balance > 0 ? 'down' : 'up'} />
+        <StatCard icon="🧾" label="Invoices" value={String(myInvoices.length)} delta="this year" />
+        <StatCard icon="🎓" label="Sponsorships" value={String(mySponsors.length)} delta="funding records" />
       </div>
-
-      {regCharges.length > 0 && (
-        <Panel title="Registration charges — Semester 2, 2026" subtitle="Assessed when you registered courses in the Registration tab" flush>
-          <table className="data">
-            <thead><tr><th>Course</th><th className="num">Credits</th><th className="num">Charge</th></tr></thead>
-            <tbody>
-              {regCharges.map((c) => (
-                <tr key={c.code}><td><span style={{ fontWeight: 600 }}>{c.code}</span> <span className="di-sub">{c.title}</span></td><td className="num">{c.credits}</td><td className="num">{fmtN(c.credits * CREDIT_RATE)}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </Panel>
-      )}
-
-      <Panel
-        title="My invoices"
-        subtitle="Tuition is VAT-exempt (VAT Act 10 of 2000)"
-        actions={myInvoices.some((i) => i.balance > 0 && !i.proofPending) && <button className="btn primary sm" onClick={() => setPayFor(myInvoices.find((i) => i.balance > 0 && !i.proofPending))}>Upload proof of payment</button>}
-        flush
-      >
-        <table className="data">
-          <thead>
-            <tr><th>Invoice</th><th>Due</th><th className="num">Amount</th><th className="num">Balance</th><th>Status</th><th></th></tr>
-          </thead>
-          <tbody>
-            {myInvoices.map((i) => (
-              <tr key={i.id}>
-                <td className="mono" style={{ fontSize: 12.5 }}>{i.id}</td>
-                <td>{i.due}</td>
-                <td className="num">{fmtN(i.amount)}</td>
-                <td className="num" style={{ color: i.balance > 0 ? 'var(--red)' : 'var(--green)', fontWeight: 600 }}>
-                  {i.balance > 0 ? fmtN(i.balance) : 'Paid'}
-                </td>
-                <td><Badge tone={i.status === 'Paid' ? 'green' : i.status === 'Overdue' ? 'red' : 'amber'}>{i.status}</Badge></td>
-                <td>{i.proofPending ? <Badge tone="amber">Proof pending</Badge> : i.balance > 0 ? <button className="btn ghost sm" onClick={() => setPayFor(i)}>Upload proof</button> : null}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <Panel title="My invoices" flush>
+        {myInvoices.length === 0 ? <Empty>No invoices yet.</Empty> : <table className="data"><thead><tr><th>Invoice</th><th>Due</th><th className="num">Amount</th><th className="num">Balance</th><th>Status</th><th></th></tr></thead>
+          <tbody>{myInvoices.map((i) => <tr key={i.id}><td>{i.id}</td><td>{i.due || '-'}</td><td className="num">{fmtN(i.amount)}</td><td className="num">{fmtN(i.balance)}</td><td><Badge tone={i.status === 'Paid' ? 'green' : 'amber'}>{i.status}</Badge></td><td>{i.balance > 0 && <button className="btn ghost sm" onClick={() => setPayFor(i)}>Upload proof</button>}</td></tr>)}</tbody>
+        </table>}
       </Panel>
-
-      {mySponsors.length > 0 && (
-        <Panel title="Funding & sponsorships" subtitle="Applied to your account — claims tracked to the funder" flush>
-          <table className="data">
-            <thead>
-              <tr><th>Sponsor</th><th>Type</th><th className="num">Coverage</th><th className="num">Billed</th><th>Status</th></tr>
-            </thead>
-            <tbody>
-              {mySponsors.map((s) => (
-                <tr key={s.id}>
-                  <td style={{ fontWeight: 600 }}>{s.sponsor}</td>
-                  <td>{s.type}</td>
-                  <td className="num">{s.coverage}%</td>
-                  <td className="num">{fmtN(s.billed)}</td>
-                  <td><Badge tone={s.status === 'Paid' ? 'green' : 'amber'}>{s.status}</Badge></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Panel>
-      )}
-
-      {payFor != null && (
-        <Modal title="Upload proof of payment" onClose={() => setPayFor(null)} width={440}>
-          <form onSubmit={submitProof}>
-            <p className="di-sub" style={{ marginBottom: 10 }}>
-              Pay by EFT using the reference on your invoice, then upload the bank confirmation and the
-              amount paid. The bursar will confirm it and update your balance.
-            </p>
-            <div className="field"><label>Amount paid (N$)</label><input name="amt" type="number" defaultValue={payFor.balance} min="1" max={payFor.balance} required /></div>
-            <div className="field"><label>Proof of payment</label><input name="proof" type="file" accept="image/*,application/pdf" required /></div>
-            <button className="btn primary" type="submit" disabled={paying}>{paying ? 'Uploading…' : 'Submit proof of payment'}</button>
-          </form>
-        </Modal>
-      )}
+      {mySponsors.length > 0 && <Panel title="Funding & sponsorships" flush><table className="data"><thead><tr><th>Sponsor</th><th>Type</th><th className="num">Coverage</th><th>Status</th></tr></thead><tbody>{mySponsors.map((s) => <tr key={s.id}><td>{s.sponsor}</td><td>{s.type}</td><td className="num">{s.coverage}%</td><td>{s.status}</td></tr>)}</tbody></table></Panel>}
+      {payFor && <Modal title="Upload proof of payment" onClose={() => setPayFor(null)}>
+        <form onSubmit={submitProof}><div className="field"><label>Amount paid (N$)</label><input name="amt" type="number" defaultValue={payFor.balance} min="1" required /></div><div className="field"><label>Proof</label><input name="proof" type="file" accept="image/*,application/pdf" required /></div><button className="btn primary" disabled={paying}>{paying ? 'Uploading...' : 'Submit proof'}</button></form>
+      </Modal>}
       <Toast msg={toast} />
     </>
   )
 }
 
-// ---------- Holds & Documents ----------
-function HoldsDocs({ myHolds, attendance }) {
+function Announcements() {
+  const [items, setItems] = useState([])
+  useEffect(() => { listAnnouncements('students').then(setItems).catch(() => setItems([])) }, [])
+  return <Panel title="Announcements" flush>{items.length === 0 ? <Empty>No announcements yet.</Empty> : items.map((a) => <div key={a.id} className="note-banner"><Icon name="send" size={16} /><div><strong>{a.title}</strong><div className="di-sub">{a.body}</div></div></div>)}</Panel>
+}
+
+function AskLecturer({ me, myResults }) {
+  const [rows, setRows] = useState([])
   const [toast, showToast] = useToast()
-  const hasHold = myHolds.length > 0
-  const att = attendance?.percent ?? 0
-  const attOk = att >= ATTENDANCE_MIN
-  // students never issue rejection letters (staffOnly)
-  const docs = STUDENT_DOCUMENTS.filter((d) => !d.staffOnly)
-
-  const reason = (d) => {
-    if (d.needsClearance && hasHold) return 'Clear your holds first'
-    if (d.needsAttendance && !attOk) return `Attendance ${att}% — needs ${ATTENDANCE_MIN}%`
-    return null
+  useEffect(() => { listQueries({ student: me }).then(setRows).catch(() => setRows([])) }, [me])
+  const submit = async (e) => {
+    e.preventDefault(); const f = e.target
+    try { await createQuery({ course: f.course.value, student: me, subject: f.subject.value, body: f.body.value }); f.reset(); setRows(await listQueries({ student: me })); showToast('Question sent') }
+    catch (err) { showToast('Could not send: ' + (err?.message || err)) }
   }
-
   return (
     <>
-      {!hasHold ? (
-        <div className="note-banner" style={{ background: 'var(--green-soft)', borderColor: '#cfe6d4' }}>
-          <Icon name="check" size={16} />
-          <div>No active holds on your record — you are <strong>cleared to register</strong> and to request documents.</div>
-        </div>
-      ) : (
-        myHolds.map((h, i) => (
-          <div key={i} className="note-banner" style={{ background: 'var(--red-soft)', borderColor: '#eccfc9' }}>
-            <Icon name="ban" size={16} />
-            <div>
-              <strong style={{ color: 'var(--red)' }}>{h.type} hold since {h.since}</strong> — {h.reason}.{' '}
-              {h.impact.map((im) => <Badge key={im} tone="red">{im}</Badge>)}{' '}
-              <span className="di-sub">Auto-releases when the condition clears.</span>
-            </div>
-          </div>
-        ))
-      )}
-
-      <Panel title="Request documents" subtitle="Official documents are released only when your record is clear — the examination permit also requires 80% attendance">
-        <div className="grid2">
-          {docs.map((d) => {
-            const blocked = reason(d)
-            return (
-              <button
-                key={d.key}
-                className="btn ghost"
-                style={{ justifyContent: 'flex-start', opacity: blocked ? 0.5 : 1 }}
-                disabled={!!blocked}
-                title={blocked || ''}
-                onClick={() => showToast(`${d.label} requested — ready to download within 24h (demo)`)}
-              >
-                <Icon name="download" size={14} /> {d.label}{blocked ? ` — ${blocked}` : ''}
-              </button>
-            )
-          })}
-        </div>
-      </Panel>
+      <div className="grid2"><Panel title="Ask your lecturer"><form onSubmit={submit}><div className="field"><label>Course</label><select name="course">{myResults.map((r) => <option key={r.code}>{r.code}</option>)}</select></div><div className="field"><label>Subject</label><input name="subject" required /></div><div className="field"><label>Your question</label><textarea name="body" rows={4} required /></div><button className="btn primary">Send</button></form></Panel>
+        <Panel title="My questions" flush>{rows.length === 0 ? <Empty>No questions yet.</Empty> : rows.map((q) => <div key={q.id} className="note-banner"><Icon name={q.status === 'answered' ? 'check' : 'send'} size={16} /><div><strong>{q.subject}</strong><div className="di-sub">{q.body}</div>{q.reply && <div>{q.reply}</div>}</div></div>)}</Panel></div>
       <Toast msg={toast} />
     </>
   )
+}
+
+function HoldsDocs({ myHolds, attendance }) {
+  const [docs, setDocs] = useState([])
+  useEffect(() => { listDocumentsForStudent().then(setDocs).catch(() => setDocs([])) }, [])
+  const att = attendance?.percent ?? 0
+  return (
+    <>
+      {myHolds.length === 0 ? <div className="note-banner" style={{ background: 'var(--green-soft)', borderColor: '#cfe6d4' }}><Icon name="check" size={16} /><div>No active holds on your record.</div></div> : myHolds.map((h, i) => <div key={i} className="note-banner" style={{ background: 'var(--red-soft)', borderColor: '#eccfc9' }}><Icon name="ban" size={16} /><div><strong>{h.type} hold</strong> - {h.reason}</div></div>)}
+      <Panel title="Documents" subtitle={`Attendance ${att}% · minimum ${ATTENDANCE_MIN}% for exam permits`} flush>
+        {docs.length === 0 ? <Empty>No official documents have been issued yet.</Empty> : <table className="data"><thead><tr><th>Type</th><th>Issued</th><th>Path</th></tr></thead><tbody>{docs.map((d) => <tr key={d.id}><td>{d.type}</td><td>{d.issued_at || '-'}</td><td>{d.path || '-'}</td></tr>)}</tbody></table>}
+      </Panel>
+    </>
+  )
+}
+
+function Empty({ children }) {
+  return <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-faint)' }}>{children}</div>
 }

@@ -1,294 +1,144 @@
-import React, { useState, useEffect } from 'react'
-import { StatCard, Tabs, Panel, Badge, Progress, Modal, Avatar, Toast, useToast, Icon } from '../ui.jsx'
-import { APPLICANTS, ADMISSION_STAGES, INTAKES, PROGRAMMES } from '../data.js'
-import { listApplicants } from '../api.js'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { StatCard, Tabs, Panel, Badge, Modal, Avatar, Toast, useToast } from '../ui.jsx'
+import { approveApplication, listApplicants, listProgrammes, markApplicationPaid, rejectApplication } from '../api.js'
 
-// Admissions — the tertiary front door: applications move Applied →
-// Under Review → Offer Sent → Enrolled; enrolment hands over to Students.
-const STAGE_TONE = { Applied: 'gray', 'Under Review': 'blue', 'Offer Sent': 'amber', Enrolled: 'green' }
-const NEXT = { Applied: 'Under Review', 'Under Review': 'Offer Sent', 'Offer Sent': 'Enrolled' }
-const NEXT_LABEL = { Applied: 'Start review', 'Under Review': 'Send offer', 'Offer Sent': 'Enrol' }
-
-const progName = (code) => PROGRAMMES.find((p) => p.code === code)?.name || code
+const ADMISSION_STAGES = ['Applied', 'Under Review', 'Approved', 'Paid', 'Enrolled', 'Rejected']
+const STAGE_TONE = { Applied: 'gray', 'Under Review': 'blue', 'Offer Sent': 'amber', Enrolled: 'green', Rejected: 'red', Approved: 'green', Paid: 'teal' }
 
 export default function Admissions({ go }) {
   const [tab, setTab] = useState('Pipeline')
-  const [apps, setApps] = useState(APPLICANTS)
+  const [apps, setApps] = useState([])
+  const [programmes, setProgrammes] = useState([])
+  const [loading, setLoading] = useState(true)
+  const reload = useCallback(() => Promise.all([
+    listApplicants().then(setApps).catch(() => setApps([])),
+    listProgrammes().then(setProgrammes).catch(() => setProgrammes([])),
+  ]), [])
+  useEffect(() => { reload().finally(() => setLoading(false)) }, [reload])
 
-  // Load the applications pipeline through the seam (backend in http mode).
-  useEffect(() => {
-    let alive = true
-    listApplicants()
-      .then((rows) => { if (alive && Array.isArray(rows) && rows.length) setApps(rows) })
-      .catch(() => {})
-    return () => { alive = false }
-  }, [])
-
+  const progName = (code) => programmes.find((p) => p.code === code || p.slug === String(code).toLowerCase())?.name || code || '-'
+  const ctx = { apps, programmes, progName, loading, go, reload }
   return (
     <>
       <Tabs tabs={['Pipeline', 'Manual Admission', '2027 Intake']} active={tab} onChange={setTab} />
-      {tab === 'Pipeline' && <Pipeline apps={apps} setApps={setApps} go={go} />}
-      {tab === 'Manual Admission' && <ManualAdmission apps={apps} setApps={setApps} go={go} />}
-      {tab === '2027 Intake' && <Intake />}
+      {tab === 'Pipeline' && <Pipeline {...ctx} />}
+      {tab === 'Manual Admission' && <ManualAdmission {...ctx} />}
+      {tab === '2027 Intake' && <Intake apps={apps} programmes={programmes} progName={progName} />}
     </>
   )
 }
 
-// Manual Admission — flat list of all applicants with their status and a single
-// Action button to process (advance) each application, or reject it.
-function ManualAdmission({ apps, setApps, go }) {
+function ManualAdmission({ apps, progName, loading, go, reload }) {
   const [toast, showToast] = useToast()
   const [sel, setSel] = useState(null)
-
-  const process = (app) => {
-    const next = NEXT[app.stage]
-    if (!next) return
-    setApps((as) => as.map((a) => (a.id === app.id ? { ...a, stage: next } : a)))
-    setSel(null)
-    showToast(next === 'Enrolled' ? `${app.name} enrolled in ${app.prog} — student file created` : `${app.name} → ${next}`)
+  const [payFor, setPayFor] = useState(null)
+  const approve = async (app) => {
+    try { const res = await approveApplication(app._uuid); await reload(); setSel(null); showToast(`Approved${res.reference ? ` - ${res.reference}` : ''}`) }
+    catch (err) { showToast('Could not approve: ' + (err?.message || err)) }
   }
-  const reject = (app) => {
-    setApps((as) => as.map((a) => (a.id === app.id ? { ...a, stage: 'Rejected' } : a)))
-    setSel(null)
-    showToast(`${app.name}'s application rejected — rejection letter available in Students · Documents`)
+  const reject = async (app) => {
+    try { await rejectApplication(app._uuid); await reload(); setSel(null); showToast(`${app.name} rejected`) }
+    catch (err) { showToast('Could not reject: ' + (err?.message || err)) }
   }
-  const docsMissing = (app) => Object.values(app.docs).filter((v) => !v).length
-
+  const pay = async (e) => {
+    e.preventDefault(); const f = e.target
+    try { const res = await markApplicationPaid({ appId: payFor._uuid, amount: Number(f.amount.value), method: f.method.value }); await reload(); setPayFor(null); setSel(null); showToast(`Payment recorded${res.reference ? ` - ${res.reference}` : ''}`) }
+    catch (err) { showToast('Could not mark paid: ' + (err?.message || err)) }
+  }
+  if (loading) return <Panel title="All applications" flush><Empty>Loading...</Empty></Panel>
   return (
     <>
-      <div className="note-banner">
-        <span>ℹ️</span>
-        <div>Process applications manually — advance a candidate to the next stage or reject. Application fee N$200 · registration fee N$500 (Caregiving N$1650).</div>
-      </div>
-      <Panel title="All applications" subtitle={`${apps.length} applications · click Process to action`} flush>
-        <table className="data">
-          <thead>
-            <tr><th>Applicant</th><th>ID</th><th>Programme</th><th className="num">Points</th><th>Docs</th><th>Status</th><th style={{ width: 160 }}>Action</th></tr>
-          </thead>
-          <tbody>
-            {apps.map((a) => (
-              <tr key={a.id}>
-                <td>
-                  <div className="emp-cell"><Avatar name={a.name} size={26} /><span className="en">{a.name}</span></div>
-                </td>
-                <td className="mono" style={{ fontSize: 12 }}>{a.id}</td>
-                <td>{progName(a.prog)}</td>
-                <td className="num">{a.points}</td>
-                <td>{docsMissing(a) > 0 ? <Badge tone="red">{docsMissing(a)} missing</Badge> : <Badge tone="green"><Icon name="tick" size={12} /></Badge>}</td>
-                <td><Badge tone={a.stage === 'Rejected' ? 'red' : STAGE_TONE[a.stage]}>{a.stage}</Badge></td>
-                <td>
-                  {NEXT[a.stage] ? (
-                    <button className="btn primary sm" onClick={() => setSel(a)}>Process</button>
-                  ) : a.stage === 'Enrolled' ? (
-                    <button className="btn ghost sm" onClick={() => go && go('students', a.name)}>View student</button>
-                  ) : (
-                    <span style={{ color: 'var(--ink-faint)', fontSize: 12 }}>—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <Panel title="All applications" subtitle={`${apps.length} applications`} flush>
+        {apps.length === 0 ? <Empty>No applications yet.</Empty> : (
+          <table className="data"><thead><tr><th>Applicant</th><th>ID</th><th>Programme</th><th className="num">Points</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody>{apps.map((a) => <tr key={a.id}>
+              <td><div className="emp-cell"><Avatar name={a.name} size={26} /><span className="en">{a.name}</span></div></td>
+              <td className="mono">{a.id}</td><td>{progName(a.prog)}</td><td className="num">{a.points || '-'}</td>
+              <td><Badge tone={STAGE_TONE[a.stage] || 'gray'}>{a.stage}</Badge></td>
+              <td>{a.stage === 'Enrolled' ? <button className="btn ghost sm" onClick={() => go && go('students', a.name)}>View student</button> : <button className="btn primary sm" onClick={() => setSel(a)}>Process</button>}</td>
+            </tr>)}</tbody>
+          </table>
+        )}
       </Panel>
-
-      {sel && (
-        <Modal title={`Process — ${sel.name}`} onClose={() => setSel(null)} width={420}>
-          <div className="cf-row"><span>Programme</span><span style={{ fontWeight: 600 }}>{progName(sel.prog)}</span></div>
-          <div className="cf-row"><span>Current stage</span><Badge tone={STAGE_TONE[sel.stage]}>{sel.stage}</Badge></div>
-          <div className="cf-row"><span>Next stage</span><Badge tone={STAGE_TONE[NEXT[sel.stage]] || 'green'}>{NEXT[sel.stage]}</Badge></div>
-          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-            <button className="btn primary" onClick={() => process(sel)}>{NEXT_LABEL[sel.stage]} →</button>
-            <button className="btn red-ghost" onClick={() => reject(sel)}>Reject</button>
-          </div>
-        </Modal>
-      )}
+      {sel && <Modal title={`Process - ${sel.name}`} onClose={() => setSel(null)}>
+        <div className="cf-row"><span>Programme</span><span>{progName(sel.prog)}</span></div>
+        <div className="cf-row"><span>Current stage</span><Badge tone={STAGE_TONE[sel.stage] || 'gray'}>{sel.stage}</Badge></div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
+          {(sel.stage === 'Applied' || sel.stage === 'Under Review') && <button className="btn primary" onClick={() => approve(sel)}>Approve</button>}
+          {(sel.stage === 'Approved' || sel.stage === 'Paid') && <button className="btn primary" onClick={() => setPayFor(sel)}>Record EFT</button>}
+          {sel.stage !== 'Rejected' && sel.stage !== 'Enrolled' && <button className="btn red-ghost" onClick={() => reject(sel)}>Reject</button>}
+          {sel.stage === 'Enrolled' && <button className="btn ghost" onClick={() => go && go('students', sel.name)}>View student</button>}
+        </div>
+      </Modal>}
+      {payFor && <Modal title={`Record EFT - ${payFor.name}`} onClose={() => setPayFor(null)}>
+        <form onSubmit={pay}>
+          <div className="field"><label>Amount paid</label><input name="amount" type="number" min="1" defaultValue={payFor.amountDue || ''} required /></div>
+          <div className="field"><label>Method</label><select name="method"><option>EFT</option><option>Cash</option><option>Card</option></select></div>
+          <button className="btn primary">Record payment</button>
+        </form>
+      </Modal>}
       <Toast msg={toast} />
     </>
   )
 }
 
-function Pipeline({ apps, setApps, go }) {
+function Pipeline({ apps, progName, loading, reload }) {
   const [sel, setSel] = useState(null)
-  const [showNew, setShowNew] = useState(false)
   const [toast, showToast] = useToast()
-
-  const createApp = (e) => {
-    e.preventDefault()
-    const f = e.target
-    const a = {
-      id: `APP-${2710 + apps.length}`, name: f.name.value, prog: f.prog.value,
-      points: Number(f.points.value) || 0, stage: 'Applied', applied: '04 Jul 2026',
-      docs: { 'Grade 12 certificate': false, 'ID copy': false, 'Proof of payment (N$ 150)': false },
-    }
-    setApps((as) => [a, ...as])
-    setShowNew(false)
-    showToast(`${a.name} — application ${a.id} captured, checklist opened`)
+  const counts = useMemo(() => Object.fromEntries(ADMISSION_STAGES.map((s) => [s, apps.filter((a) => a.stage === s).length])), [apps])
+  const approve = async (app) => {
+    try { await approveApplication(app._uuid); await reload(); setSel(null); showToast(`${app.name} approved`) }
+    catch (err) { showToast('Could not approve: ' + (err?.message || err)) }
   }
-
-  const advance = (app) => {
-    const next = NEXT[app.stage]
-    if (!next) return
-    setApps((as) => as.map((a) => (a.id === app.id ? { ...a, stage: next } : a)))
-    setSel(null)
-    showToast(
-      next === 'Enrolled'
-        ? `${app.name} enrolled in ${app.prog} — student file created in the register`
-        : next === 'Offer Sent'
-        ? `Offer letter sent to ${app.name} (${app.prog})`
-        : `${app.name} moved to review — committee notified`
-    )
-  }
-
-  const docsMissing = (app) => Object.values(app.docs).filter((v) => !v).length
-
+  if (loading) return <Panel title="Admissions pipeline" flush><Empty>Loading...</Empty></Panel>
   return (
     <>
       <div className="stat-row c4">
-        <StatCard icon="📨" label="Applications" value="200" delta="+34 this week" />
-        <StatCard icon="✉️" label="Offers sent" value="99" delta="acceptance 62%" deltaTone="neutral" />
-        <StatCard icon="🎓" label="Enrolled (2027)" value="47" delta="of 228 seats" deltaTone="neutral" />
-        <StatCard icon="⏱️" label="Avg time to offer" value="6 days" delta="target 5 days" deltaTone="down" />
+        <StatCard icon="📨" label="Applications" value={String(apps.length)} delta="from backend" />
+        <StatCard icon="✉️" label="Offers sent" value={String(counts['Offer Sent'] || 0)} delta="awaiting response" />
+        <StatCard icon="🎓" label="Enrolled" value={String(counts.Enrolled || 0)} delta="converted applications" />
+        <StatCard icon="⏱️" label="In review" value={String(counts['Under Review'] || 0)} delta="manual processing" />
       </div>
-
-      <div className="note-banner">
-        <span>ℹ️</span>
-        <div style={{ flex: 1 }}>
-          Sample of {apps.length} live applications — an <strong>enrolled applicant</strong> automatically
-          gets a student number, a Term/Semester invoice and a Student 360° file.
-        </div>
-        <button className="btn primary sm" style={{ flexShrink: 0 }} onClick={() => setShowNew(true)}>+ New application</button>
-      </div>
-
       <div className="pipe-board">
         {ADMISSION_STAGES.map((stage) => {
           const col = apps.filter((a) => a.stage === stage)
-          return (
-            <div key={stage} className="pipe-col">
-              <div className="pipe-col-head">
-                <Badge tone={STAGE_TONE[stage]}>{stage}</Badge>
-                <span className="mono" style={{ fontSize: 12, color: 'var(--ink-faint)' }}>{col.length}</span>
-              </div>
-              {col.length === 0 && <div className="pipe-empty">No applicants</div>}
-              {col.map((a) => (
-                <div key={a.id} className="pipe-card" onClick={() => setSel(a)}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Avatar name={a.name} size={28} />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{a.name}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--ink-faint)' }}>{a.id} · {a.prog}</div>
-                    </div>
-                  </div>
-                  <div className="pipe-meta">
-                    <span>{a.points} pts</span>
-                    {docsMissing(a) > 0 ? (
-                      <Badge tone="red">{docsMissing(a)} doc missing</Badge>
-                    ) : (
-                      <Badge tone="green">Docs <Icon name="tick" size={12} /></Badge>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
+          return <div key={stage} className="pipe-col">
+            <div className="pipe-col-head"><Badge tone={STAGE_TONE[stage]}>{stage}</Badge><span className="mono">{col.length}</span></div>
+            {col.length === 0 && <div className="pipe-empty">No applicants</div>}
+            {col.map((a) => <div key={a.id} className="pipe-card" onClick={() => setSel(a)}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Avatar name={a.name} size={28} /><div><div style={{ fontWeight: 600, fontSize: 13 }}>{a.name}</div><div className="di-sub">{a.id} · {progName(a.prog)}</div></div></div>
+            </div>)}
+          </div>
         })}
       </div>
-
-      {sel && (
-        <Modal title={`${sel.id} — ${sel.name}`} onClose={() => setSel(null)} width={440}>
-          <div className="cf-row"><span>Programme</span><span style={{ fontWeight: 600 }}>{progName(sel.prog)}</span></div>
-          <div className="cf-row"><span>NSSCO points</span><span className="mono" style={{ fontWeight: 600 }}>{sel.points}</span></div>
-          <div className="cf-row"><span>Applied</span><span>{sel.applied}</span></div>
-          <div className="cf-row"><span>Stage</span><Badge tone={STAGE_TONE[sel.stage]}>{sel.stage}</Badge></div>
-
-          <div style={{ margin: '16px 0 6px', fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)' }}>
-            DOCUMENT CHECKLIST
-          </div>
-          {Object.entries(sel.docs).map(([doc, ok]) => (
-            <div key={doc} className="cf-row" style={{ padding: '5px 0', fontSize: 12.5 }}>
-              <span>{doc}</span>
-              <Badge tone={ok ? 'green' : 'red'}>{ok ? 'Received' : 'Missing'}</Badge>
-            </div>
-          ))}
-
-          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-            {NEXT[sel.stage] && (
-              <button className="btn primary" onClick={() => advance(sel)}>
-                {NEXT_LABEL[sel.stage]} →
-              </button>
-            )}
-            {sel.stage === 'Enrolled' && (
-              <button className="btn ghost" onClick={() => go && go('students')}>View student register →</button>
-            )}
-          </div>
-        </Modal>
-      )}
-
-      {showNew && (
-        <Modal title="New application — walk-in / online" onClose={() => setShowNew(false)} width={440}>
-          <form onSubmit={createApp}>
-            <div className="field"><label>Applicant full name</label><input name="name" placeholder="e.g. Taleni Iyambo" required /></div>
-            <div className="grid2" style={{ gap: 12 }}>
-              <div className="field">
-                <label>Programme</label>
-                <select name="prog">{PROGRAMMES.map((p) => <option key={p.code} value={p.code}>{p.code} — {p.name}</option>)}</select>
-              </div>
-              <div className="field"><label>NSSCO points</label><input name="points" type="number" min="0" max="45" defaultValue="28" /></div>
-            </div>
-            <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
-              Application fee N$ 150 · document checklist opens automatically on the card
-            </div>
-            <button className="btn primary" type="submit">Capture application</button>
-          </form>
-        </Modal>
-      )}
+      {sel && <Modal title={`${sel.id} - ${sel.name}`} onClose={() => setSel(null)}>
+        <div className="cf-row"><span>Programme</span><span>{progName(sel.prog)}</span></div>
+        <div className="cf-row"><span>Applied</span><span>{sel.applied || '-'}</span></div>
+        <div className="cf-row"><span>Stage</span><Badge tone={STAGE_TONE[sel.stage] || 'gray'}>{sel.stage}</Badge></div>
+        {(sel.stage === 'Applied' || sel.stage === 'Under Review') && <button className="btn primary" style={{ marginTop: 16 }} onClick={() => approve(sel)}>Approve</button>}
+      </Modal>}
       <Toast msg={toast} />
     </>
   )
 }
 
-function Intake() {
-  const [toast, showToast] = useToast()
+function Intake({ apps, programmes, progName }) {
+  const byProg = programmes.map((p) => {
+    const code = p.code || p.slug?.toUpperCase()
+    const rows = apps.filter((a) => a.prog === code)
+    return { code, name: progName(code), applications: rows.length, enrolled: rows.filter((a) => a.stage === 'Enrolled').length }
+  })
   return (
-    <>
-      <Panel
-        title="2027 intake — seats vs applications"
-        subtitle="Applications close 30 Sep 2026 · offers per programme committee"
-        actions={<button className="btn ghost sm" onClick={() => showToast('Intake report exported for NCHE return')}><Icon name="download" size={14} /> Export</button>}
-        flush
-      >
-        <table className="data">
-          <thead>
-            <tr>
-              <th>Programme</th><th className="num">Seats</th><th className="num">Applications</th>
-              <th className="num">Offers</th><th className="num">Enrolled</th><th style={{ width: '26%' }}>Seats filled</th>
-            </tr>
-          </thead>
-          <tbody>
-            {INTAKES.map((i) => {
-              const pct = Math.round((i.enrolled / i.capacity) * 100)
-              return (
-                <tr key={i.prog}>
-                  <td>
-                    <div style={{ fontWeight: 600 }}>{progName(i.prog)}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--ink-faint)' }}>{i.prog}</div>
-                  </td>
-                  <td className="num">{i.capacity}</td>
-                  <td className="num" style={{ color: i.applications > i.capacity ? 'var(--green)' : 'var(--ink)' }}>{i.applications}</td>
-                  <td className="num">{i.offers}</td>
-                  <td className="num" style={{ fontWeight: 600 }}>{i.enrolled}</td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Progress pct={pct} tone={pct < 25 ? 'amber' : ''} />
-                      <span className="mono" style={{ fontSize: 12 }}>{pct}%</span>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
+    <Panel title="2027 intake" subtitle="Applications by programme" flush>
+      {byProg.length === 0 ? <Empty>No programme intake data yet.</Empty> : (
+        <table className="data"><thead><tr><th>Programme</th><th className="num">Applications</th><th className="num">Enrolled</th></tr></thead>
+          <tbody>{byProg.map((i) => <tr key={i.code}><td><div style={{ fontWeight: 600 }}>{i.name}</div><div className="mono">{i.code}</div></td><td className="num">{i.applications}</td><td className="num">{i.enrolled}</td></tr>)}</tbody>
         </table>
-      </Panel>
-      <Toast msg={toast} />
-    </>
+      )}
+    </Panel>
   )
+}
+
+function Empty({ children }) {
+  return <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-faint)' }}>{children}</div>
 }

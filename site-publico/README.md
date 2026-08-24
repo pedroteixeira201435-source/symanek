@@ -33,7 +33,8 @@ Apply (`/apply` → `applications`) → admin approves in the Symanek Suite → 
 downloads the letter, and pays fees by **EFT using the reference** → admin marks paid → the
 Student Portal unlocks. No payment gateway — EFT is reconciled manually by reference.
 
-Demo portal references (mock mode): `SYM-2026-0042` (approved), `SYM-2026-0043` (enrolled).
+Mock mode is for local development only. Production defaults to the Supabase
+backend and requires the environment variables listed in `.env.example`.
 
 ## Assets
 

@@ -1,32 +1,33 @@
-import React, { useState } from 'react'
-import { Panel, Badge, Toast, useToast, MockDataNotice } from '../ui.jsx'
-import { isHttpMode } from '../api.js'
-import { PROGRAMMES, ADMISSION_STAGES } from '../data.js'
+import React, { useCallback, useEffect, useState } from 'react'
+import { Panel, Badge, Toast, useToast } from '../ui.jsx'
+import { isHttpMode, listProgrammes } from '../api.js'
 
-// Public applicant self-service — submit an application and track its stage.
+const ADMISSION_STAGES = ['Applied', 'Under Review', 'Offer Sent', 'Enrolled']
+
 export default function ApplyOnline({ role }) {
   const [toast, showToast] = useToast()
-  const [app, setApp] = useState(null) // submitted application
+  const [programmes, setProgrammes] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [app, setApp] = useState(null)
+
+  const reload = useCallback(() => listProgrammes().then(setProgrammes).catch(() => setProgrammes([])), [])
+  useEffect(() => { reload().finally(() => setLoading(false)) }, [reload])
 
   const submit = (e) => {
     e.preventDefault()
     const f = e.target
     setApp({ prog: f.prog.value, points: f.points.value, stage: 'Applied' })
-    showToast('Application submitted — you will be notified as it progresses')
+    showToast('Application captured locally. Use the public site for production submission.')
   }
 
-  // In a real (http) deployment, applications are submitted on the public
-  // website (the authoritative channel: submit → reference → EFT → portal), not
-  // through this Suite form. Direct applicants there instead of faking a submit.
   if (isHttpMode()) {
     const site = 'https://symanekacademy.com'
     return (
       <>
-        <Panel title="Apply to Symanek" subtitle="Applications are handled on our public website">
+        <Panel title="Apply to Symanek" subtitle="Applications are handled on the public website">
           <div className="di-sub" style={{ maxWidth: 560, lineHeight: 1.6 }}>
-            To apply, use the college website. You&apos;ll submit your programme choice and
-            documents, receive a unique reference and approval letter, pay your fees by EFT
-            using that reference, then track your status and enrol from the Student Portal.
+            Use the public college website to submit the authoritative application, receive the reference,
+            upload EFT proof and track the process.
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
             <a className="btn primary" href={`${site}/apply`} target="_blank" rel="noopener noreferrer">Start an application</a>
@@ -38,26 +39,26 @@ export default function ApplyOnline({ role }) {
     )
   }
 
+  if (loading) return <Panel title="Apply online" flush><Empty>Loading...</Empty></Panel>
+
   return (
     <>
-      <MockDataNotice show={isHttpMode()} />
       {!app ? (
-        <Panel title="Apply online — 2027 intake" subtitle={`Welcome ${role.user} · complete your application below`}>
-          <form onSubmit={submit} style={{ maxWidth: 460 }}>
-            <div className="field"><label>Programme of interest</label>
-              <select name="prog">{PROGRAMMES.map((p) => <option key={p.code} value={p.code}>{p.name} (NQF {p.nqf})</option>)}</select>
-            </div>
-            <div className="field"><label>Grade 12 points (NSSCO)</label><input name="points" type="number" min="0" defaultValue="30" required /></div>
-            <div className="field"><label>Upload documents</label>
-              <div className="di-sub">Grade 12 certificate · ID copy · proof of application fee (N$ 150)</div>
-            </div>
-            <button className="btn primary" type="submit">Submit application</button>
-          </form>
+        <Panel title="Apply online" subtitle={`Welcome ${role.user} · development preview only`}>
+          {programmes.length === 0 ? <Empty>No programmes are available yet.</Empty> : (
+            <form onSubmit={submit} style={{ maxWidth: 460 }}>
+              <div className="field"><label>Programme of interest</label>
+                <select name="prog">{programmes.map((p) => <option key={p.code} value={p.code}>{p.name} (NQF {p.nqf})</option>)}</select>
+              </div>
+              <div className="field"><label>Grade 12 points (NSSCO)</label><input name="points" type="number" min="0" defaultValue="30" required /></div>
+              <button className="btn primary" type="submit">Submit application</button>
+            </form>
+          )}
         </Panel>
       ) : (
         <Panel title="My application" subtitle="Track your admission status">
           <div className="cf-row" style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
-            <span>Programme</span><span style={{ fontWeight: 600 }}>{PROGRAMMES.find((p) => p.code === app.prog)?.name}</span>
+            <span>Programme</span><span style={{ fontWeight: 600 }}>{programmes.find((p) => p.code === app.prog)?.name || app.prog}</span>
           </div>
           <div className="cf-row" style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
             <span>Grade 12 points</span><span className="mono">{app.points}</span>
@@ -69,11 +70,13 @@ export default function ApplyOnline({ role }) {
               </div>
             ))}
           </div>
-          <div className="di-sub" style={{ marginTop: 12 }}>Your application is at <strong>{app.stage}</strong>. The admissions office will review your documents next.</div>
-          <button className="btn ghost sm" style={{ marginTop: 14 }} onClick={() => showToast('Application withdrawn')}>Withdraw application</button>
         </Panel>
       )}
       <Toast msg={toast} />
     </>
   )
+}
+
+function Empty({ children }) {
+  return <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-faint)' }}>{children}</div>
 }

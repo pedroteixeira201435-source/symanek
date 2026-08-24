@@ -1,16 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { Field, Input, Select, Textarea, SubmitButton } from "@/components/form";
 import { submitApplication } from "@/lib/api";
 import { categories } from "@/lib/content";
 import { CheckIcon, ArrowRight } from "@/components/icons";
+import { Turnstile } from "@/components/turnstile";
 
 export function ApplyForm({ className = "" }: { className?: string }) {
   const [pending, setPending] = useState(false);
   const [appId, setAppId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const onTurnstileToken = useCallback((token: string) => setTurnstileToken(token), []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -25,6 +28,7 @@ export function ApplyForm({ className = "" }: { className?: string }) {
         programmeSlug: String(fd.get("programme")),
         mode: String(fd.get("mode")),
         message: String(fd.get("message") ?? ""),
+        turnstileToken,
       });
       setAppId(res.applicationId);
     } catch {
@@ -85,6 +89,7 @@ export function ApplyForm({ className = "" }: { className?: string }) {
       <Field label="Anything you'd like us to know?" hint="Optional">
         <Textarea name="message" rows={3} placeholder="Previous qualifications, questions, etc." />
       </Field>
+      <Turnstile onToken={onTurnstileToken} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <SubmitButton pending={pending}>Submit application</SubmitButton>
       <p className="text-center text-xs text-petrol-400">

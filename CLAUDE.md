@@ -19,6 +19,29 @@ A **monorepo for Symanek Specialized College** (private Namibian higher-ed) with
 > "not yet built" — that is stale. Auth, RLS, and the write RPCs exist and are deployed. When you see
 > "mock only / no backend" in a comment, verify against the current code before trusting it.
 
+> **Mock-elimination / "empty-by-default" pass (in progress, 2026-08-24).** The goal is that production
+> carries ZERO mock data and every module reads/writes the real backend, starting empty and populated by
+> the user through CRUD forms. What this changed:
+> - **Every domain now has a backend + CRUD RPCs** (migrations `20260824130000`…`20260824230000`):
+>   library, HR/payroll, finance, accounting (assets/VAT), canteen/POS, scheduling, accommodation,
+>   compliance, dashboard aggregates, programmes/courses/courseware. Writes are `SECURITY DEFINER` +
+>   RLS-gated by `suite_role`, following `gl_backend.sql`/`canteen_backend.sql`.
+> - **`business_settings`** (`20260824140000`) holds editable business rules (grade bands, assessment
+>   weights, PAYE/SSC/VET, VAT, currency) with `get_business_settings()` / `set_business_setting()`.
+>   `grade_letter()` and `publish_exam_results` read the bands from here; the client mirrors them via
+>   `setGradeBands()` (called at boot in `App.jsx`). Edit bands in Settings → Business rules.
+> - **`20260824130000_purge_demo_slice.sql`** deletes the Gabriel !Naruseb / `suite-demo` slice from the
+>   cloud (idempotent, demo-key-scoped). `supabase/seed_golive_enrolments.sql` enrols the 24 real Aux-Nursing students.
+> - **`src/api.js`** gained one function per dataset. In **http they hit the RPC; in mock/dev they return
+>   `[]`/`null`** (no mock fallback) — so no fabricated data can reach production. Helpers `rows()/one()/call()`
+>   wrap the CRUD RPCs. `listProgrammes` now reads the REAL catalogue (was filtered to `suite-demo`).
+> - **Modules** are being rewritten to load via `useEffect`+`api`, show **loading / empty-states**, and
+>   offer Add/Edit/Delete `Modal` forms. Done: Library, Dashboard, Accommodation, Compliance, CanteenAdmin,
+>   Accounting, Scheduling, TeacherPortal (+ StudentPortal in progress). `Graduation.jsx` was already clean.
+> - **`src/lib/format.js`** now holds `fmtN`/`staffEmail` (were in `data.js`). Import formatting/logic from
+>   `src/lib/*`, never from `data.js`. **`src/data.js` is being retired** — do not add new imports of it;
+>   the end state deletes it. School-era terms (learner/grade/guardian, "8A/9C") are being removed on cutover.
+
 ## Commands
 
 ```bash
@@ -59,10 +82,12 @@ so UI components never change when flipping backends:
 
 When migrating a Suite module from mock to backend: convert its top-level **synchronous `data.js`
 reads into an async `useEffect` load via `api.js`**, keep the same prop/`ctx` shape so child components
-are untouched, and add loading/error state. Migrated reference examples: `StudentPortal.jsx`,
-`Academics.jsx` (ExamBoard tab), `Graduation.jsx`, `Finance.jsx` (PendingProofs panel); the other ~16
-modules still read `data.js`. **For UAT the Suite runs in mock** (demo) — the http path is wired + verified
-but student data is RLS-gated, so it only fully works once signed in (`B3`).
+are untouched, and add loading/error state. **As of the 2026-08-24 mock-elimination pass this is being
+applied to every module** (see the callout above): a module loses its `../data` import, loads through
+`api.js`, renders empty-states, and gains Add/Edit/Delete forms. Reference examples of the finished
+pattern: `Graduation.jsx`, `Library.jsx`, `Accounting.jsx`, `Accommodation.jsx`, `Dashboard.jsx`. **For
+demo/UAT the Suite still runs in mock**, but in mock the seam returns empty (not `data.js`), so exercise
+new work in **http** against a Supabase (local or cloud).
 
 ## Backend (`supabase/`)
 

@@ -1,63 +1,51 @@
-# Symanek — Guia de teste humano (UAT)
+# Symanek — Production UAT and release gate
 
-Dois produtos, um repositório:
+**Approver:** Pedro Teixeira (`pedroteixeira201435@gmail.com`). No production
+release is approved until Pedro records an outcome for every applicable check.
 
-- **Website público** (`site-publico/`, Next.js) — para candidatos. Backend **real** no Supabase cloud.
-- **Sistema de gestão / Suite** (raiz, Vite) — para o staff/alunos internos. Corre em **modo demo (mock)**:
-  tudo funciona visualmente mas **não persiste** e **não está ligado** às candidaturas reais do site.
+## Release 1 — public site
 
-Contas de teste (todas password **`symanek123`**):
-`admin@`, `bursar@`, `hr@`, `teacher@`, `librarian@`, `registrar@`, `seller@`, `applicant@`,
-`student@` — todas `…@symanek.local`. (`student@` = Gabriel !Naruseb.)
+Run against the production Vercel URL with a real staff account and dedicated
+test applicant. Record the reference, timestamp and result for each step.
 
----
+| Scenario | Expected result | Pass |
+|---|---|---|
+| Application | `/apply` completes Turnstile; a new application persists in Supabase. | [ ] |
+| Admissions review | Real staff account can view and approve the application. | [ ] |
+| Portal status | Reference lookup shows only permitted status; email lookup enables the letter. | [ ] |
+| Approval letter | Signed PDF URL opens the correct letter and expires after its configured period. | [ ] |
+| EFT proof | Valid image/PDF under 10 MB uploads; invalid type/oversize is rejected. | [ ] |
+| Payment confirmation | Staff reviews the proof and records EFT; enrolment/status updates once. | [ ] |
+| Abuse controls | Missing/invalid Turnstile and repeated requests are rejected with a clear message. | [ ] |
+| Recovery | A failed request does not create duplicate applications or payments. | [ ] |
 
-## A) Website público — cenários (backend real)
+**Release 1 decision:** [ ] approved  [ ] rejected
+**Pedro signature/date:** ______________________________
 
-> Estas ações **persistem** no cloud. Usa dados de teste; o pagamento é por EFT manual — **não faças
-> transferências reais** a menos que os dados bancários na carta sejam confirmados como reais.
+## Release 2 — Suite core academic scope
 
-1. **Candidatar** — `/apply`: preencher e submeter → ecrã de sucesso com código de acompanhamento.
-2. **Aprovar** — `/admin` (login `admin@symanek.local`): na candidatura, **Approve** → é gerada a
-   referência `SYM-2026-xxxx`. **Copy email** copia o email de aprovação para enviares à mão.
-3. **Acompanhar + carta** — `/portal`: procurar pela referência ou email → estado "approved" +
-   **Download approval letter** (PDF).
-4. **Comprovativo** — `/portal`: "Already paid? Upload your proof of payment" → anexar ficheiro
-   (imagem/PDF) + valor → "Proof of payment received".
-5. **Confirmar pagamento** — `/admin`: na candidatura vê-se "📎 Proof uploaded"; **View proof** abre o
-   ficheiro; **Record EFT** (valor pré-preenchido) → estado passa a "enrolled".
-6. **Rejeitar** — `/admin`: numa candidatura em "submitted", **Reject**.
-7. **Contacto** — `/contact`: enviar mensagem (chega à base de dados; a vista de admin de mensagens é
-   um follow-up planeado).
+Release only the modules: Dashboard, Students, Admissions, Programmes,
+Academics, Examinations, Graduation, Finance, Lecturer Portal and Student
+Portal. POS, canteen, library, HR, accounting, accommodation, compliance,
+courseware, Apply Online and settings remain out of production scope.
 
-**Esperado:** cada passo reflete-se no `/admin` e no `/portal`; a carta e o comprovativo abrem;
-nenhum ecrã "parte" (há um ecrã de recuperação se algo falhar).
+| Scenario | Expected result | Pass |
+|---|---|---|
+| Authentication | Real role account signs in; demo accounts cannot sign in. | [ ] |
+| Access control | Each role can see only the released modules and authorized records. | [ ] |
+| Admissions to enrolment | Approved and paid applicant becomes the correct student record. | [ ] |
+| Academic record | Registrar can enter/publish results; student sees only their own record. | [ ] |
+| Official results | Grade bands have written college approval before any Statement of Result is issued. | [ ] |
+| Finance | Bursar records a manual EFT once and audit trail is present. | [ ] |
+| Documents | Official document uses confirmed data, bank details and stamp. | [ ] |
 
-## B) Sistema de gestão (Suite) — demo (mock)
+**Release 2 decision:** [ ] approved  [ ] rejected
+**Pedro signature/date:** ______________________________
 
-1. Abrir a Suite → **escolher um workspace** (role picker) — ex.: `Admin`, `Registrar`, `Student`,
-   `Bursar`, `Canteen (seller)`.
-2. **Student** → percorrer: My Studies, Registration, Grades, Timetable, My Finance, Holds. Registar
-   uma cadeira, "Upload proof of payment" (demo).
-3. **Registrar** → Academics (Exam Board), Graduation (emitir certificado a um aluno "cleared").
-4. **Bursar** → Finance → Payments (painel de comprovativos pendentes — vazio em mock).
-5. **Canteen (seller)** → abre em ecrã cheio (POS), sem barra lateral.
-6. Navegar por todos os módulos e confirmar que **nada faz white-screen** (aparece um ecrã "Reload" se
-   houver erro).
+## Preconditions and evidence
 
-> A Suite em UAT é uma **demonstração de fluxos e UI**, não o sistema com dados reais. O backend real
-> (auth, RLS, motor de matrícula, pagamentos) existe e está testado, mas só é exercido pelo website
-> público neste UAT (decisão: manter a Suite em mock para coerência).
-
----
-
-## Notas para o staff (runbook curto)
-- **Aprovar candidatura:** `/admin` → Approve. Copia o email gerado (**Copy email**) e envia-o
-  manualmente ao candidato (o envio automático não está ativo — demanda baixa).
-- **Registar pagamento:** quando o candidato anexa o comprovativo, abre-o (**View proof**), confere o
-  valor e clica **Record EFT** (podes ajustar o valor). Ao cobrir o total, o aluno fica "enrolled".
-- **Rejeitar:** **Reject** na candidatura.
-
-## Antes de produção (fora do âmbito do UAT)
-Endurecer RLS por role (hoje qualquer `staff` = admin), rodar os tokens partilhados, dados bancários
-reais na carta, e migrar os restantes módulos da Suite para dados reais.
+- Attach successful CI run, both production build logs, backup/PITR evidence and
+  a restore-test record.
+- Attach proof that demo accounts were retired, secrets rotated and production
+  data contains only approved roster records.
+- Any failed critical scenario blocks release until it is fixed and retested.

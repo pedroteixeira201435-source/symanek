@@ -1,314 +1,301 @@
-import React, { useState, useEffect } from 'react'
-import { Tabs, Panel, Badge, Modal, Toast, useToast, Icon } from '../ui.jsx'
-import { isHttpMode, getTimetables, timetableSet } from '../api.js'
-import { PERIODS, TIMETABLES, DUTY_ROSTER, RELIEF_TODAY, SUBJECT_STYLES } from '../data.js'
+import React, { useState, useEffect, useCallback } from 'react'
+import { Tabs, Panel, Badge, Modal, Toast, useToast } from '../ui.jsx'
+import {
+  listTimetable, timetableSet, timetableClear, listPeriods, periodSet, periodDelete,
+  listDutyRoster, dutySet, dutyDelete, listRelief, reliefSet, reliefDelete, listStaffOptions,
+} from '../api.js'
 
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+const DAYS = ['—', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+
+// Shared read-only timetable used by the student portal. The operational
+// timetable below is a staff editor; keeping this small renderer exported lets
+// the portal render its own timetable without importing staff controls.
+export function TimetableGrid({ data = {} }) {
+  const periods = Object.keys(data)
+  if (!periods.length) return <Empty>No timetable published yet.</Empty>
+  return (
+    <div className="tt-grid">
+      <div />
+      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((day) => <div key={day} className="tt-head">{day}</div>)}
+      {periods.map((period) => (
+        <React.Fragment key={period}>
+          <div className="tt-period">{period}</div>
+          {(data[period] || []).slice(0, 5).map((slot, index) => (
+            <div key={index} className={`tt-slot ${slot ? 'subj-sci' : 'empty'}`}>
+              {slot && <>{slot.s}<span className="room">{slot.r}</span></>}
+            </div>
+          ))}
+        </React.Fragment>
+      ))}
+    </div>
+  )
+}
 
 export default function Scheduling() {
-  const [tab, setTab] = useState('Relief — Today')
-
+  const [tab, setTab] = useState('Academic Timetable')
   return (
     <>
-      <Tabs tabs={['Relief — Today', 'Academic Timetable', 'Staff Duty Roster']} active={tab} onChange={setTab} />
-      {tab === 'Relief — Today' && <ReliefBoard />}
+      <Tabs tabs={['Academic Timetable', 'Periods', 'Staff Duty Roster', 'Relief / Cover']} active={tab} onChange={setTab} />
       {tab === 'Academic Timetable' && <Timetable />}
+      {tab === 'Periods' && <Periods />}
       {tab === 'Staff Duty Roster' && <DutyRoster />}
+      {tab === 'Relief / Cover' && <Relief />}
     </>
   )
 }
 
-// the 06:30 problem: a teacher is out — who covers each period?
-function ReliefBoard() {
-  const [board, setBoard] = useState(RELIEF_TODAY)
+function Empty({ children }) { return <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-faint)' }}>{children}</div> }
+
+function Timetable() {
+  const [slots, setSlots] = useState([])
+  const [periods, setPeriods] = useState([])
+  const [staff, setStaff] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showNew, setShowNew] = useState(false)
+  const [filter, setFilter] = useState('')
   const [toast, showToast] = useToast()
-  const uncovered = board.flatMap((t) => t.periods).filter((p) => !p.cover).length
 
-  const assign = (ti, pi, name) => {
-    setBoard((b) =>
-      b.map((t, i) =>
-        i === ti ? { ...t, periods: t.periods.map((p, j) => (j === pi ? { ...p, cover: name } : p)) } : t
-      )
-    )
-    const p = board[ti].periods[pi]
-    showToast(`${name} covers ${p.cls} ${p.subject} (${p.p}) — notified`)
+  const reload = useCallback(() => Promise.all([
+    listTimetable().then(setSlots).catch(() => setSlots([])),
+    listPeriods().then(setPeriods).catch(() => setPeriods([])),
+    listStaffOptions().then(setStaff).catch(() => setStaff([])),
+  ]), [])
+  useEffect(() => { reload().finally(() => setLoading(false)) }, [reload])
+
+  const classes = [...new Set(slots.map((s) => s.classGroup))].sort()
+  const shown = filter ? slots.filter((s) => s.classGroup === filter) : slots
+
+  const add = async (e) => {
+    e.preventDefault(); const f = e.target
+    try {
+      const res = await timetableSet({
+        classGroup: f.cls.value.trim(), day: Number(f.day.value), period: f.period.value,
+        subject: f.subject.value.trim(), venue: f.venue.value.trim() || null,
+        lecturerStaffNo: f.lecturer.value || null,
+      })
+      if (res.ok === false) throw new Error(res.error)
+    } catch (err) { showToast('Could not save slot' + (err?.message ? `: ${err.message}` : '')); return }
+    setShowNew(false); await reload(); showToast('Slot scheduled')
   }
+  const clear = async (s) => { try { await timetableClear(s.id); await reload(); showToast('Slot cleared') } catch (err) { showToast('Could not clear' + (err?.message ? `: ${err.message}` : '')) } }
 
+  if (loading) return <Panel title="Timetable" flush><Empty>Loading…</Empty></Panel>
   return (
     <>
-      {uncovered > 0 ? (
-        <div className="banner">
-          <Icon name="alert" size={18} />
-          <div><strong>{uncovered} period{uncovered > 1 ? 's' : ''} still uncovered today</strong> — assign relief before P1 starts at 07:30.</div>
-        </div>
-      ) : (
-        <div className="note-banner">
-          <Icon name="check" size={16} />
-          <div><strong>All periods covered.</strong> Relief staff have been notified of their assignments.</div>
-        </div>
-      )}
+      <Panel
+        title="Academic timetable"
+        subtitle="One row per scheduled class period"
+        actions={
+          <span style={{ display: 'flex', gap: 8 }}>
+            <select className="inline" value={filter} onChange={(e) => setFilter(e.target.value)}>
+              <option value="">All classes</option>{classes.map((c) => <option key={c}>{c}</option>)}
+            </select>
+            <button className="btn primary sm" onClick={() => setShowNew(true)} disabled={periods.length === 0}>+ New slot</button>
+          </span>
+        }
+        flush
+      >
+        {periods.length === 0 ? <Empty>Define periods first (Periods tab), then add timetable slots.</Empty>
+          : shown.length === 0 ? <Empty>No timetable slots yet.</Empty> : (
+            <table className="data">
+              <thead><tr><th>Class</th><th>Day</th><th>Period</th><th>Subject</th><th>Venue</th><th>Lecturer</th><th></th></tr></thead>
+              <tbody>
+                {shown.map((s) => (
+                  <tr key={s.id}>
+                    <td style={{ fontWeight: 600 }}>{s.classGroup}</td><td>{DAYS[s.day]}</td><td className="mono">{s.period}</td>
+                    <td>{s.subject}</td><td>{s.venue || '—'}</td><td>{s.lecturer || '—'}</td>
+                    <td><button className="btn ghost sm" onClick={() => clear(s)}>Clear</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+      </Panel>
 
-      {board.map((t, ti) => (
-        <Panel
-          key={t.teacher}
-          title={`${t.teacher} — absent`}
-          subtitle={`Reason: ${t.reason} · ${t.periods.length} period${t.periods.length > 1 ? 's' : ''} to cover`}
-          flush
-        >
-          <table className="data">
-            <thead>
-              <tr><th>Period</th><th>Class</th><th>Subject</th><th>Room</th><th>Cover</th></tr>
-            </thead>
-            <tbody>
-              {t.periods.map((p, pi) => (
-                <tr key={p.p}>
-                  <td className="mono" style={{ fontWeight: 600 }}>{p.p}</td>
-                  <td>{p.cls}</td>
-                  <td>{p.subject}</td>
-                  <td>{p.room}</td>
-                  <td>
-                    {p.cover ? (
-                      <Badge tone="green"><Icon name="tick" size={12} /> {p.cover}</Badge>
-                    ) : (
-                      <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {p.options.map((o) => (
-                          <button key={o} className="btn ghost sm" onClick={() => assign(ti, pi, o)}>
-                            {o} <span style={{ color: 'var(--ink-faint)' }}>(free)</span>
-                          </button>
-                        ))}
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Panel>
-      ))}
+      {showNew && (
+        <Modal title="New timetable slot" onClose={() => setShowNew(false)}>
+          <form onSubmit={add}>
+            <div className="grid2" style={{ gap: 12 }}>
+              <div className="field"><label>Class group</label><input name="cls" placeholder="e.g. Aux Nursing Y1" required /></div>
+              <div className="field"><label>Day</label><select name="day">{[1, 2, 3, 4, 5].map((d) => <option key={d} value={d}>{DAYS[d]}</option>)}</select></div>
+            </div>
+            <div className="grid2" style={{ gap: 12 }}>
+              <div className="field"><label>Period</label><select name="period">{periods.map((p) => <option key={p.id} value={p.id}>{p.id} — {p.label}</option>)}</select></div>
+              <div className="field"><label>Venue</label><input name="venue" placeholder="e.g. Lab 1" /></div>
+            </div>
+            <div className="field"><label>Subject</label><input name="subject" required /></div>
+            <div className="field"><label>Lecturer</label><select name="lecturer"><option value="">—</option>{staff.map((s) => <option key={s.uuid} value={s.staffNo}>{s.name}</option>)}</select></div>
+            <button className="btn primary" type="submit">Add slot</button>
+          </form>
+        </Modal>
+      )}
       <Toast msg={toast} />
     </>
   )
 }
 
-export function TimetableGrid({ data }) {
-  return (
-    <div className="tt-grid">
-      <div />
-      {DAYS.map((d) => (
-        <div key={d} className="tt-head">{d}</div>
-      ))}
-      {PERIODS.map((p) =>
-        p.id === 'BRK' ? (
-          <React.Fragment key={p.id}>
-            <div className="tt-period">
-              Break<span className="ptime">{p.time}</span>
-            </div>
-            {DAYS.map((d) => (
-              <div key={d} className="tt-slot break">BREAK</div>
-            ))}
-          </React.Fragment>
-        ) : (
-          <React.Fragment key={p.id}>
-            <div className="tt-period">
-              {p.id}<span className="ptime">{p.time}</span>
-            </div>
-            {data[p.id].map((slot, i) =>
-              slot ? (
-                <div key={i} className={`tt-slot ${SUBJECT_STYLES[slot.s] || 'subj-sci'}`}>
-                  {slot.s}
-                  <span className="room">{slot.r}</span>
-                </div>
-              ) : (
-                <div key={i} className="tt-slot empty" />
-              )
-            )}
-          </React.Fragment>
-        )
-      )}
-    </div>
-  )
-}
-
-const ROOMS = ['Rm 4', 'Rm 7', 'Rm 9', 'Rm 12', 'Lab 1', 'Lab 2', 'Wksp 1']
-
-function Timetable() {
-  const [cls, setCls] = useState('DBA-6 Y1')
-  const [tts, setTts] = useState(TIMETABLES)
+function Periods() {
+  const [periods, setPeriods] = useState([])
+  const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
-  const [slotSel, setSlotSel] = useState({ day: 0, period: 'P1' })
   const [toast, showToast] = useToast()
+  const reload = useCallback(() => listPeriods().then(setPeriods).catch(() => setPeriods([])), [])
+  useEffect(() => { reload().finally(() => setLoading(false)) }, [reload])
 
-  // Load the real timetable in http mode (mock keeps the demo grids).
-  const load = () => getTimetables().then((t) => {
-    if (t && Object.keys(t).length) { setTts(t); setCls((c) => (t[c] ? c : Object.keys(t)[0])) }
-  }).catch(() => {})
-  useEffect(() => { load() }, [])
-
-  const occupied = tts[cls]?.[slotSel.period]?.[slotSel.day]
-
-  const addSlot = async (e) => {
-    e.preventDefault()
-    const f = e.target
-    const slot = { s: f.subject.value, r: f.room.value }
-    if (isHttpMode()) {
-      try {
-        const res = await timetableSet({ classGroup: cls, day: slotSel.day + 1, period: slotSel.period, subject: slot.s, venue: slot.r })
-        if (res.ok === false) throw new Error(res.error)
-      } catch (err) { showToast('Could not save slot' + (err?.message ? `: ${err.message}` : '')); return }
-      setShowNew(false)
-      await load()
-    } else {
-      setTts((t) => ({
-        ...t,
-        [cls]: {
-          ...t[cls],
-          [slotSel.period]: t[cls][slotSel.period].map((s, i) => (i === slotSel.day ? slot : s)),
-        },
-      }))
-      setShowNew(false)
-    }
-    showToast(`${slot.s} scheduled — ${cls}, ${DAYS[slotSel.day]} ${slotSel.period}`)
+  const add = async (e) => {
+    e.preventDefault(); const f = e.target
+    try { await periodSet({ id: f.id.value.trim(), label: f.label.value.trim(), start: f.start.value, end: f.end.value, ord: Number(f.ord.value) }) }
+    catch (err) { showToast('Could not save' + (err?.message ? `: ${err.message}` : '')); return }
+    setShowNew(false); await reload(); showToast('Period saved')
   }
+  const remove = async (p) => { try { await periodDelete(p.id); await reload(); showToast(`${p.id} removed`) } catch (err) { showToast('Could not delete' + (err?.message ? `: ${err.message}` : '')) } }
 
+  if (loading) return <Panel title="Periods" flush><Empty>Loading…</Empty></Panel>
   return (
     <>
-    <Panel
-      title="Weekly timetable"
-      subtitle={`${cls} · Semester 2, 2026`}
-      actions={
-        <>
-          <select className="inline"><option>Semester 2, 2026</option><option>Semester 1, 2026</option></select>
-          <select className="inline" value={cls} onChange={(e) => setCls(e.target.value)}>
-            {Object.keys(tts).map((c) => <option key={c}>{c}</option>)}
-          </select>
-          <button className="btn primary sm" onClick={() => setShowNew(true)}>+ New slot</button>
-        </>
-      }
-    >
-      <TimetableGrid data={tts[cls]} />
-      <div className="legend">
-        {Object.entries(SUBJECT_STYLES).map(([s, c]) => (
-          <div key={s} className="li">
-            <span className={`sw ${c}`} style={{ display: 'inline-block' }} /> {s}
-          </div>
-        ))}
-        <div className="li"><span className="sw" style={{ border: '1px dashed var(--line)', background: '#f6f9fb' }} /> Free period</div>
-      </div>
-    </Panel>
-
-    {showNew && (
-      <Modal title={`New slot — ${cls}`} onClose={() => setShowNew(false)}>
-        <form onSubmit={addSlot}>
-          <div className="grid2" style={{ gap: 12 }}>
-            <div className="field">
-              <label>Day</label>
-              <select value={slotSel.day} onChange={(e) => setSlotSel((s) => ({ ...s, day: Number(e.target.value) }))}>
-                {DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}
-              </select>
+      <Panel title="Timetable periods" subtitle="The daily period grid used by the timetable"
+        actions={<button className="btn primary sm" onClick={() => setShowNew(true)}>+ Add period</button>} flush>
+        {periods.length === 0 ? <Empty>No periods yet — add P1, P2, … to build the day.</Empty> : (
+          <table className="data">
+            <thead><tr><th>ID</th><th>Label</th><th>Start</th><th>End</th><th className="num">Order</th><th></th></tr></thead>
+            <tbody>
+              {periods.map((p) => (
+                <tr key={p.id}><td className="mono" style={{ fontWeight: 600 }}>{p.id}</td><td>{p.label}</td><td>{p.start_time || '—'}</td><td>{p.end_time || '—'}</td><td className="num">{p.ord}</td>
+                  <td><button className="btn ghost sm" onClick={() => remove(p)}>Delete</button></td></tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Panel>
+      {showNew && (
+        <Modal title="Add period" onClose={() => setShowNew(false)}>
+          <form onSubmit={add}>
+            <div className="grid2" style={{ gap: 12 }}>
+              <div className="field"><label>ID</label><input name="id" placeholder="P1" required /></div>
+              <div className="field"><label>Label</label><input name="label" placeholder="Period 1" required /></div>
             </div>
-            <div className="field">
-              <label>Period</label>
-              <select value={slotSel.period} onChange={(e) => setSlotSel((s) => ({ ...s, period: e.target.value }))}>
-                {PERIODS.filter((p) => p.id !== 'BRK').map((p) => <option key={p.id}>{p.id}</option>)}
-              </select>
+            <div className="grid2" style={{ gap: 12 }}>
+              <div className="field"><label>Start</label><input name="start" placeholder="07:30" /></div>
+              <div className="field"><label>End</label><input name="end" placeholder="08:20" /></div>
             </div>
-          </div>
-          <div className="grid2" style={{ gap: 12 }}>
-            <div className="field">
-              <label>Subject</label>
-              <select name="subject">{Object.keys(SUBJECT_STYLES).map((s) => <option key={s}>{s}</option>)}</select>
-            </div>
-            <div className="field">
-              <label>Room</label>
-              <select name="room">{ROOMS.map((r) => <option key={r}>{r}</option>)}</select>
-            </div>
-          </div>
-          {occupied && (
-            <div className="note-banner" style={{ background: 'var(--orange-soft)', borderColor: '#eeddbc', color: 'var(--orange)' }}>
-              <Icon name="alert" size={16} />
-              <div>Conflict: {occupied.s} ({occupied.r}) already occupies this slot — it will be replaced.</div>
-            </div>
-          )}
-          <button className="btn primary" type="submit">{occupied ? 'Replace slot' : 'Add slot'}</button>
-        </form>
-      </Modal>
-    )}
-    <Toast msg={toast} />
+            <div className="field"><label>Order</label><input name="ord" type="number" defaultValue="0" /></div>
+            <button className="btn primary" type="submit">Save</button>
+          </form>
+        </Modal>
+      )}
+      <Toast msg={toast} />
     </>
   )
 }
 
-const DUTY_TONE = { 'Exam invigilation': 'purple', 'Lab supervision': 'teal', 'Workshop supervision': 'amber', 'Student advising': 'blue', 'Front desk': 'green', 'Open day desk': 'orange', 'Library support': 'blue' }
-const DUTY_TYPES = ['Exam invigilation', 'Lab supervision', 'Workshop supervision', 'Student advising', 'Front desk', 'Library support', '—']
-
 function DutyRoster() {
-  const [roster, setRoster] = useState(DUTY_ROSTER)
-  const [showAssign, setShowAssign] = useState(false)
+  const [roster, setRoster] = useState([])
+  const [staff, setStaff] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showNew, setShowNew] = useState(false)
   const [toast, showToast] = useToast()
+  const reload = useCallback(() => Promise.all([
+    listDutyRoster().then(setRoster).catch(() => setRoster([])),
+    listStaffOptions().then(setStaff).catch(() => setStaff([])),
+  ]), [])
+  useEffect(() => { reload().finally(() => setLoading(false)) }, [reload])
 
-  const assign = (e) => {
-    e.preventDefault()
-    const f = e.target
-    const staff = f.staff.value
-    const day = Number(f.day.value)
-    const duty = f.duty.value
-    setRoster((rs) => rs.map((r) => (r.staff === staff ? { ...r, duties: r.duties.map((d, i) => (i === day ? duty : d)) } : r)))
-    setShowAssign(false)
-    showToast(duty === '—' ? `Duty cleared — ${staff}, ${DAYS[day]}` : `${duty} assigned to ${staff} on ${DAYS[day]}`)
+  const add = async (e) => {
+    e.preventDefault(); const f = e.target
+    try { await dutySet({ day: Number(f.day.value), area: f.area.value.trim(), staffId: f.staff.value || null }) }
+    catch (err) { showToast('Could not save' + (err?.message ? `: ${err.message}` : '')); return }
+    setShowNew(false); await reload(); showToast('Duty assigned')
   }
+  const remove = async (d) => { try { await dutyDelete(d.id); await reload(); showToast('Duty removed') } catch (err) { showToast('Could not delete' + (err?.message ? `: ${err.message}` : '')) } }
 
+  if (loading) return <Panel title="Duty roster" flush><Empty>Loading…</Empty></Panel>
   return (
     <>
-    <Panel
-      title="Staff duty roster"
-      subtitle="Gate, break yard, assembly & transport supervision — this week"
-      actions={<button className="btn primary sm" onClick={() => setShowAssign(true)}>+ Assign duty</button>}
-      flush
-    >
-      <table className="data">
-        <thead>
-          <tr>
-            <th>Staff member</th>
-            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri'].map((d) => <th key={d}>{d}</th>)}
-          </tr>
-        </thead>
-        <tbody>
-          {roster.map((r) => (
-            <tr key={r.staff}>
-              <td style={{ fontWeight: 600 }}>{r.staff}</td>
-              {r.duties.map((d, i) => (
-                <td key={i}>
-                  {d === '—' ? <span style={{ color: 'var(--ink-faint)' }}>—</span> : <Badge tone={DUTY_TONE[d] || 'gray'}>{d}</Badge>}
-                </td>
+      <Panel title="Staff duty roster" actions={<button className="btn primary sm" onClick={() => setShowNew(true)}>+ Assign duty</button>} flush>
+        {roster.length === 0 ? <Empty>No duties assigned yet.</Empty> : (
+          <table className="data">
+            <thead><tr><th>Day</th><th>Area</th><th>Staff</th><th></th></tr></thead>
+            <tbody>
+              {roster.map((d) => (
+                <tr key={d.id}><td>{DAYS[d.day_of_week]}</td><td style={{ fontWeight: 600 }}>{d.area}</td><td>{d.staff || <span style={{ color: 'var(--ink-faint)' }}>unassigned</span>}</td>
+                  <td><button className="btn ghost sm" onClick={() => remove(d)}>Delete</button></td></tr>
               ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Panel>
+            </tbody>
+          </table>
+        )}
+      </Panel>
+      {showNew && (
+        <Modal title="Assign duty" onClose={() => setShowNew(false)}>
+          <form onSubmit={add}>
+            <div className="grid2" style={{ gap: 12 }}>
+              <div className="field"><label>Day</label><select name="day">{[1, 2, 3, 4, 5, 6, 7].map((d) => <option key={d} value={d}>{DAYS[d]}</option>)}</select></div>
+              <div className="field"><label>Area</label><input name="area" placeholder="e.g. Front desk" required /></div>
+            </div>
+            <div className="field"><label>Staff</label><select name="staff"><option value="">— unassigned</option>{staff.map((s) => <option key={s.uuid} value={s.uuid}>{s.name}</option>)}</select></div>
+            <button className="btn primary" type="submit">Assign</button>
+          </form>
+        </Modal>
+      )}
+      <Toast msg={toast} />
+    </>
+  )
+}
 
-    {showAssign && (
-      <Modal title="Assign duty" onClose={() => setShowAssign(false)}>
-        <form onSubmit={assign}>
-          <div className="field">
-            <label>Staff member</label>
-            <select name="staff">{roster.map((r) => <option key={r.staff}>{r.staff}</option>)}</select>
-          </div>
-          <div className="grid2" style={{ gap: 12 }}>
-            <div className="field">
-              <label>Day</label>
-              <select name="day">{DAYS.map((d, i) => <option key={d} value={i}>{d}</option>)}</select>
+function Relief() {
+  const [board, setBoard] = useState([])
+  const [staff, setStaff] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showNew, setShowNew] = useState(false)
+  const [toast, showToast] = useToast()
+  const reload = useCallback(() => Promise.all([
+    listRelief().then(setBoard).catch(() => setBoard([])),
+    listStaffOptions().then(setStaff).catch(() => setStaff([])),
+  ]), [])
+  useEffect(() => { reload().finally(() => setLoading(false)) }, [reload])
+
+  const add = async (e) => {
+    e.preventDefault(); const f = e.target
+    try { await reliefSet({ date: f.date.value || null, absentId: f.absent.value || null, coverId: f.cover.value || null, classGroup: f.cls.value.trim(), periodId: f.period.value.trim(), note: f.note.value.trim() }) }
+    catch (err) { showToast('Could not save' + (err?.message ? `: ${err.message}` : '')); return }
+    setShowNew(false); await reload(); showToast('Cover recorded')
+  }
+  const remove = async (r) => { try { await reliefDelete(r.id); await reload(); showToast('Removed') } catch (err) { showToast('Could not delete' + (err?.message ? `: ${err.message}` : '')) } }
+
+  if (loading) return <Panel title="Relief" flush><Empty>Loading…</Empty></Panel>
+  return (
+    <>
+      <Panel title="Relief / cover — today" subtitle="Who covers for absent staff" actions={<button className="btn primary sm" onClick={() => setShowNew(true)}>+ Record cover</button>} flush>
+        {board.length === 0 ? <Empty>No cover recorded for today.</Empty> : (
+          <table className="data">
+            <thead><tr><th>Period</th><th>Class</th><th>Absent</th><th>Cover</th><th>Note</th><th></th></tr></thead>
+            <tbody>
+              {board.map((r) => (
+                <tr key={r.id}><td className="mono">{r.period_id || '—'}</td><td>{r.class_group || '—'}</td><td>{r.absent || '—'}</td>
+                  <td>{r.cover ? <Badge tone="green">{r.cover}</Badge> : <span style={{ color: 'var(--ink-faint)' }}>unassigned</span>}</td><td>{r.note || '—'}</td>
+                  <td><button className="btn ghost sm" onClick={() => remove(r)}>Delete</button></td></tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Panel>
+      {showNew && (
+        <Modal title="Record cover" onClose={() => setShowNew(false)}>
+          <form onSubmit={add}>
+            <div className="grid2" style={{ gap: 12 }}>
+              <div className="field"><label>Date</label><input name="date" type="date" /></div>
+              <div className="field"><label>Period</label><input name="period" placeholder="P1" /></div>
             </div>
-            <div className="field">
-              <label>Duty</label>
-              <select name="duty">{DUTY_TYPES.map((d) => <option key={d} value={d}>{d === '—' ? '— (clear)' : d}</option>)}</select>
+            <div className="field"><label>Class</label><input name="cls" placeholder="e.g. Aux Nursing Y1" /></div>
+            <div className="grid2" style={{ gap: 12 }}>
+              <div className="field"><label>Absent staff</label><select name="absent"><option value="">—</option>{staff.map((s) => <option key={s.uuid} value={s.uuid}>{s.name}</option>)}</select></div>
+              <div className="field"><label>Cover staff</label><select name="cover"><option value="">—</option>{staff.map((s) => <option key={s.uuid} value={s.uuid}>{s.name}</option>)}</select></div>
             </div>
-          </div>
-          <button className="btn primary" type="submit">Assign</button>
-        </form>
-      </Modal>
-    )}
-    <Toast msg={toast} />
+            <div className="field"><label>Note</label><input name="note" /></div>
+            <button className="btn primary" type="submit">Record</button>
+          </form>
+        </Modal>
+      )}
+      <Toast msg={toast} />
     </>
   )
 }

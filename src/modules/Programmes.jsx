@@ -1,564 +1,234 @@
-import React, { useState, useEffect } from 'react'
-import { Tabs, Panel, Badge, Progress, Modal, Donut, Toast, useToast, Icon } from '../ui.jsx'
-import { PROGRAMMES, COURSES, HOLDS, DEGREE_AUDIT, STAFF, fmtN } from '../data.js'
-import { listProgrammes, listCourses } from '../api.js'
+import React, { useCallback, useEffect, useState } from 'react'
+import { Tabs, Panel, Badge, Modal, Toast, useToast } from '../ui.jsx'
+import { fmtN } from '../lib/format.js'
+import {
+  listProgrammes, listCourses, listStaff, listStudents, getHoldsForStudent, getDegreeAudit,
+  programmeUpsert, programmeSetActive, courseUpsert, courseDelete, holdUpsert, holdClear,
+} from '../api.js'
 
-// Programmes & curriculum — the tertiary academic structure:
-// NQF-levelled programmes, credit-bearing courses, semester enrolments.
-const ACCRED_TONE = { 'NQA Accredited': 'green', 'NTA Registered': 'teal', Provisional: 'amber' }
+const ACCRED_TONE = { active: 'green', inactive: 'gray', provisional: 'amber' }
 
 export default function Programmes() {
   const [tab, setTab] = useState('Programmes')
   return (
     <>
-      <Tabs tabs={['Programmes', 'Course Catalogue', 'Module Allocation', 'Student Blocks', 'Semester Enrolments', 'Degree Audit']} active={tab} onChange={setTab} />
+      <Tabs tabs={['Programmes', 'Course Catalogue', 'Module Allocation', 'Student Blocks', 'Degree Audit']} active={tab} onChange={setTab} />
       {tab === 'Programmes' && <ProgrammeList />}
       {tab === 'Course Catalogue' && <Catalogue />}
       {tab === 'Module Allocation' && <ModuleAllocation />}
       {tab === 'Student Blocks' && <StudentBlocks />}
-      {tab === 'Semester Enrolments' && <Enrolments />}
       {tab === 'Degree Audit' && <DegreeAudit />}
     </>
   )
 }
 
-// Module allocation — assign each course/module to a teaching staff member.
-function ModuleAllocation() {
-  const [alloc, setAlloc] = useState(Object.fromEntries(COURSES.map((c) => [c.code, c.lecturer])))
-  const [toast, showToast] = useToast()
-  const lecturers = [...new Set([...COURSES.map((c) => c.lecturer), ...STAFF.filter((s) => /lecturer|hod|teacher/i.test(s.role)).map((s) => s.name)])]
-
-  const assign = (code, lecturer) => {
-    setAlloc((a) => ({ ...a, [code]: lecturer }))
-    showToast(`${code} allocated to ${lecturer} — timetable & gradebook access granted`)
-  }
-
-  return (
-    <>
-      <div className="note-banner">
-        <span>ℹ️</span>
-        <div>Allocate modules to teaching staff. The allocated lecturer gets the module on their timetable and gradebook, and can enter marks for it.</div>
-      </div>
-      <Panel title="Module allocation — Semester 2, 2026" subtitle={`${COURSES.length} modules across ${PROGRAMMES.length} programmes`} flush>
-        <table className="data">
-          <thead>
-            <tr><th>Module</th><th>Programme</th><th className="num">Credits</th><th>Semester</th><th style={{ width: 240 }}>Allocated lecturer</th></tr>
-          </thead>
-          <tbody>
-            {COURSES.map((c) => (
-              <tr key={c.code}>
-                <td><div style={{ fontWeight: 600 }}>{c.title}</div><div className="mono" style={{ fontSize: 11.5, color: 'var(--ink-faint)' }}>{c.code}</div></td>
-                <td><Badge tone="blue">{c.prog}</Badge></td>
-                <td className="num">{c.credits}</td>
-                <td>{c.sem}</td>
-                <td>
-                  <select className="inline" style={{ width: 220 }} value={alloc[c.code]} onChange={(e) => assign(c.code, e.target.value)}>
-                    {lecturers.map((l) => <option key={l}>{l}</option>)}
-                  </select>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Panel>
-      <Toast msg={toast} />
-    </>
-  )
-}
-
-// Student blocks — place or release holds that block registration, results or
-// certificates (finance, library, disciplinary, academic).
-const BLOCK_TYPES = ['Finance', 'Library', 'Disciplinary', 'Academic']
-const BLOCK_IMPACT = { Finance: ['Blocks registration', 'Blocks results'], Library: ['Blocks certificate'], Disciplinary: ['Blocks registration'], Academic: ['Blocks graduation'] }
-
-function StudentBlocks() {
-  const [blocks, setBlocks] = useState(HOLDS)
-  const [showNew, setShowNew] = useState(false)
-  const [toast, showToast] = useToast()
-
-  const add = (e) => {
-    e.preventDefault()
-    const f = e.target
-    const type = f.type.value
-    const b = { student: f.student.value, type, reason: f.reason.value || '—', since: '04 Jul 2026', impact: BLOCK_IMPACT[type] || ['Blocks registration'] }
-    setBlocks((bs) => [b, ...bs])
-    setShowNew(false)
-    showToast(`${type} block placed on ${b.student}`)
-  }
-
-  const release = (i) => {
-    const b = blocks[i]
-    setBlocks((bs) => bs.filter((_, j) => j !== i))
-    showToast(`${b.type} block released for ${b.student} — access restored`)
-  }
-
-  return (
-    <>
-      <Panel
-        title="Student blocks / holds"
-        subtitle={`${blocks.length} active · blocks stop registration, results or certificate release`}
-        actions={<button className="btn primary sm" onClick={() => setShowNew(true)}>+ Place block</button>}
-        flush
-      >
-        <table className="data">
-          <thead>
-            <tr><th>Student</th><th>Type</th><th>Reason</th><th>Since</th><th>Impact</th><th>Action</th></tr>
-          </thead>
-          <tbody>
-            {blocks.map((b, i) => (
-              <tr key={i}>
-                <td style={{ fontWeight: 600 }}>{b.student}</td>
-                <td><Badge tone="red">{b.type}</Badge></td>
-                <td style={{ fontSize: 12.5 }}>{b.reason}</td>
-                <td>{b.since}</td>
-                <td><span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>{b.impact.map((im) => <Badge key={im} tone="amber">{im}</Badge>)}</span></td>
-                <td><button className="btn green sm" onClick={() => release(i)}>Release</button></td>
-              </tr>
-            ))}
-            {blocks.length === 0 && <tr><td colSpan={6} style={{ color: 'var(--ink-faint)', fontSize: 12.5 }}>No active blocks</td></tr>}
-          </tbody>
-        </table>
-      </Panel>
-
-      {showNew && (
-        <Modal title="Place student block" onClose={() => setShowNew(false)} width={420}>
-          <form onSubmit={add}>
-            <div className="field"><label>Student name</label><input name="student" placeholder="e.g. Ruusa Nghidinwa" required /></div>
-            <div className="field"><label>Block type</label><select name="type">{BLOCK_TYPES.map((t) => <option key={t}>{t}</option>)}</select></div>
-            <div className="field"><label>Reason</label><input name="reason" placeholder="e.g. Outstanding tuition N$ 6,550" /></div>
-            <button className="btn primary" type="submit">Place block</button>
-          </form>
-        </Modal>
-      )}
-      <Toast msg={toast} />
-    </>
-  )
-}
-
 function ProgrammeList() {
-  const [progs, setProgs] = useState(PROGRAMMES)
-  const [sel, setSel] = useState(null)
-  const [showNew, setShowNew] = useState(false)
   const [toast, showToast] = useToast()
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showNew, setShowNew] = useState(false)
+  const reload = useCallback(() => listProgrammes().then(setRows).catch(() => setRows([])), [])
+  useEffect(() => { reload().finally(() => setLoading(false)) }, [reload])
 
-  useEffect(() => {
-    let alive = true
-    listProgrammes()
-      .then((rows) => { if (alive && Array.isArray(rows) && rows.length) setProgs(rows) })
-      .catch(() => {})
-    return () => { alive = false }
-  }, [])
-
-  const create = (e) => {
-    e.preventDefault()
-    const f = e.target
-    const p = {
-      code: f.code.value.toUpperCase(), name: f.name.value, nqf: Number(f.nqf.value),
-      years: Number(f.years.value), coordinator: f.coordinator.value, enrolled: 0, accreditation: 'Provisional',
-    }
-    setProgs((ps) => [...ps, p])
-    setShowNew(false)
-    showToast(`${p.code} created — submitted to NQA for accreditation`)
+  const save = async (e) => {
+    e.preventDefault(); const f = e.target
+    try {
+      await programmeUpsert({ slug: f.code.value.trim().toLowerCase(), name: f.name.value.trim(), level: f.level.value, duration: f.duration.value, fee: Number(f.fee.value) || null })
+      setShowNew(false); await reload(); showToast('Programme saved')
+    } catch (err) { showToast('Could not save: ' + (err?.message || err)) }
+  }
+  const toggle = async (p) => {
+    try { await programmeSetActive(p.id, !p.active); await reload(); showToast('Programme updated') }
+    catch (err) { showToast('Could not update: ' + (err?.message || err)) }
   }
 
+  if (loading) return <Panel title="Registered programmes" flush><Empty>Loading...</Empty></Panel>
   return (
     <>
-      <Panel
-        title="Registered programmes"
-        subtitle="NQF-levelled · click a programme for its curriculum"
-        actions={<button className="btn primary sm" onClick={() => setShowNew(true)}>+ New programme</button>}
-        flush
-      >
-        <table className="data">
-          <thead>
-            <tr>
-              <th>Programme</th><th>NQF</th><th className="num">Duration</th>
-              <th>Coordinator</th><th className="num">Enrolled</th><th>Accreditation</th>
-            </tr>
-          </thead>
-          <tbody>
-            {progs.map((p) => (
-              <tr key={p.code} style={{ cursor: 'pointer' }} onClick={() => setSel(p)}>
-                <td>
-                  <div style={{ fontWeight: 600 }}>{p.name}</div>
-                  <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink-faint)' }}>{p.code}</div>
-                </td>
-                <td><Badge tone="blue">Level {p.nqf}</Badge></td>
-                <td className="num">{p.years} yr</td>
-                <td>{p.coordinator}</td>
-                <td className="num" style={{ fontWeight: 600 }}>{p.enrolled}</td>
-                <td><Badge tone={ACCRED_TONE[p.accreditation]}>{p.accreditation}</Badge></td>
+      <Panel title="Registered programmes" subtitle="NQF-levelled programmes" actions={<button className="btn primary sm" onClick={() => setShowNew(true)}>+ New programme</button>} flush>
+        {rows.length === 0 ? <Empty>No programmes yet.</Empty> : (
+          <table className="data">
+            <thead><tr><th>Programme</th><th>Level</th><th>Duration</th><th className="num">Fee</th><th>Status</th><th></th></tr></thead>
+            <tbody>{rows.map((p) => (
+              <tr key={p.id || p.code}>
+                <td><div style={{ fontWeight: 600 }}>{p.name}</div><div className="mono" style={{ fontSize: 11.5 }}>{p.code || p.slug}</div></td>
+                <td><Badge tone="blue">{p.nqf || p.level || '-'}</Badge></td>
+                <td>{p.duration || '-'}</td>
+                <td className="num">{p.fee ? fmtN(p.fee) : '-'}</td>
+                <td><Badge tone={ACCRED_TONE[p.active ? 'active' : 'inactive']}>{p.active ? 'Active' : 'Inactive'}</Badge></td>
+                <td>{p.id && <button className="btn ghost sm" onClick={() => toggle(p)}>{p.active ? 'Disable' : 'Enable'}</button>}</td>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            ))}</tbody>
+          </table>
+        )}
       </Panel>
-
-      {sel && (
-        <Modal title={`${sel.code} — ${sel.name}`} onClose={() => setSel(null)} width={560}>
-          <div className="cf-row"><span>NQF level</span><Badge tone="blue">Level {sel.nqf}</Badge></div>
-          <div className="cf-row"><span>Duration</span><span>{sel.years} years full-time</span></div>
-          <div className="cf-row"><span>Coordinator</span><span style={{ fontWeight: 600 }}>{sel.coordinator}</span></div>
-          <div className="cf-row"><span>Accreditation</span><Badge tone={ACCRED_TONE[sel.accreditation]}>{sel.accreditation}</Badge></div>
-
-          <div style={{ margin: '16px 0 6px', fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)' }}>
-            CURRICULUM · 2026
+      {showNew && <Modal title="New programme" onClose={() => setShowNew(false)}>
+        <form onSubmit={save}>
+          <div className="field"><label>Programme name</label><input name="name" required /></div>
+          <div className="grid2" style={{ gap: 12 }}>
+            <div className="field"><label>Code / slug</label><input name="code" required /></div>
+            <div className="field"><label>NQF level</label><input name="level" /></div>
           </div>
-          {COURSES.filter((c) => c.prog === sel.code).map((c) => (
-            <div key={c.code} className="cf-row" style={{ padding: '5px 0', fontSize: 12.5 }}>
-              <span><span className="mono">{c.code}</span> · {c.title}</span>
-              <span className="mono" style={{ fontWeight: 600 }}>{c.credits} cr · {c.sem}</span>
-            </div>
-          ))}
-          {COURSES.filter((c) => c.prog === sel.code).length === 0 && (
-            <div style={{ fontSize: 12.5, color: 'var(--ink-faint)' }}>Curriculum pending accreditation</div>
-          )}
-        </Modal>
-      )}
-
-      {showNew && (
-        <Modal title="New programme" onClose={() => setShowNew(false)} width={440}>
-          <form onSubmit={create}>
-            <div className="field"><label>Programme name</label><input name="name" placeholder="e.g. Diploma in Hospitality" required /></div>
-            <div className="grid2" style={{ gap: 12 }}>
-              <div className="field"><label>Code</label><input name="code" placeholder="DHM-6" required /></div>
-              <div className="field">
-                <label>NQF level</label>
-                <select name="nqf"><option>4</option><option>5</option><option>6</option><option>7</option></select>
-              </div>
-            </div>
-            <div className="grid2" style={{ gap: 12 }}>
-              <div className="field">
-                <label>Duration (years)</label>
-                <select name="years"><option>1</option><option>2</option><option>3</option><option>4</option></select>
-              </div>
-              <div className="field">
-                <label>Coordinator</label>
-                <select name="coordinator">
-                  {PROGRAMMES.map((p) => <option key={p.code}>{p.coordinator}</option>)}
-                </select>
-              </div>
-            </div>
-            <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
-              New programmes start as <strong>Provisional</strong> until the NQA accreditation file is approved
-            </div>
-            <button className="btn primary" type="submit">Create programme</button>
-          </form>
-        </Modal>
-      )}
+          <div className="grid2" style={{ gap: 12 }}>
+            <div className="field"><label>Duration</label><input name="duration" placeholder="e.g. 1 year" /></div>
+            <div className="field"><label>Fee</label><input name="fee" type="number" min="0" /></div>
+          </div>
+          <button className="btn primary" type="submit">Save</button>
+        </form>
+      </Modal>}
       <Toast msg={toast} />
     </>
   )
 }
 
 function Catalogue() {
-  const [q, setQ] = useState('')
-  const [courses, setCourses] = useState(COURSES)
+  const [toast, showToast] = useToast()
+  const [courses, setCourses] = useState([])
+  const [programmes, setProgrammes] = useState([])
+  const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
-  const [toast, showToast] = useToast()
+  const reload = useCallback(() => Promise.all([
+    listCourses().then(setCourses).catch(() => setCourses([])),
+    listProgrammes().then(setProgrammes).catch(() => setProgrammes([])),
+  ]), [])
+  useEffect(() => { reload().finally(() => setLoading(false)) }, [reload])
 
-  useEffect(() => {
-    let alive = true
-    listCourses()
-      .then((rows) => { if (alive && Array.isArray(rows) && rows.length) setCourses(rows) })
-      .catch(() => {})
-    return () => { alive = false }
-  }, [])
-
-  const addCourse = (e) => {
-    e.preventDefault()
-    const f = e.target
-    const c = {
-      code: f.code.value.toUpperCase(), title: f.title.value, prog: f.prog.value,
-      credits: Number(f.credits.value) || 8, sem: f.sem.value, lecturer: f.lecturer.value,
-      enrolled: 0, cap: 40, prereq: f.prereq.value || '—',
-    }
-    setCourses((cs) => [...cs, c])
-    setShowNew(false)
-    showToast(`${c.code} added to the ${c.prog} curriculum — registration opens next semester`)
+  const save = async (e) => {
+    e.preventDefault(); const f = e.target
+    try {
+      await courseUpsert({ code: f.code.value.trim().toUpperCase(), title: f.title.value.trim(), programmeId: f.programme.value || null, credits: Number(f.credits.value) || 0, semester: f.semester.value, capacity: Number(f.capacity.value) || 0 })
+      setShowNew(false); await reload(); showToast('Course saved')
+    } catch (err) { showToast('Could not save: ' + (err?.message || err)) }
+  }
+  const remove = async (c) => {
+    try { await courseDelete(c.id); await reload(); showToast('Course deleted') }
+    catch (err) { showToast('Could not delete: ' + (err?.message || err)) }
   }
 
-  const rows = courses.filter(
-    (c) =>
-      c.title.toLowerCase().includes(q.toLowerCase()) ||
-      c.code.toLowerCase().includes(q.toLowerCase()) ||
-      c.prog.toLowerCase().includes(q.toLowerCase())
-  )
+  if (loading) return <Panel title="Course catalogue" flush><Empty>Loading...</Empty></Panel>
   return (
     <>
-      <Panel
-        title="Course catalogue — 2026"
-        subtitle={`${courses.length} credit-bearing courses · prerequisites enforced at registration`}
-        actions={
-          <>
-            <input
-              className="inline"
-              style={{ width: 200 }}
-              placeholder="Search code, title or programme…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-            />
-            <button className="btn ghost sm" onClick={() => showToast('Catalogue exported to PDF prospectus')}><Icon name="download" size={14} /> Export</button>
-            <button className="btn primary sm" onClick={() => setShowNew(true)}>+ Add course</button>
-          </>
-        }
-        flush
-      >
-        <table className="data">
-          <thead>
-            <tr>
-              <th>Code</th><th>Course</th><th>Programme</th><th className="num">Credits</th>
-              <th>Semester</th><th>Lecturer</th><th>Prerequisite</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((c) => (
-              <tr key={c.code}>
-                <td className="mono" style={{ fontSize: 12.5, fontWeight: 600 }}>{c.code}</td>
-                <td style={{ fontWeight: 600 }}>{c.title}</td>
-                <td><Badge tone="blue">{c.prog}</Badge></td>
-                <td className="num">{c.credits}</td>
-                <td>{c.sem}</td>
-                <td>{c.lecturer}</td>
-                <td className="mono" style={{ fontSize: 12.5, color: c.prereq === '—' ? 'var(--ink-faint)' : 'var(--ink)' }}>{c.prereq}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <Panel title="Course catalogue" subtitle={`${courses.length} credit-bearing courses`} actions={<button className="btn primary sm" onClick={() => setShowNew(true)}>+ Add course</button>} flush>
+        {courses.length === 0 ? <Empty>No courses yet.</Empty> : (
+          <table className="data"><thead><tr><th>Code</th><th>Course</th><th>Programme</th><th className="num">Credits</th><th>Semester</th><th>Lecturer</th><th></th></tr></thead>
+            <tbody>{courses.map((c) => <tr key={c.id || c.code}>
+              <td className="mono">{c.code}</td><td style={{ fontWeight: 600 }}>{c.title}</td><td>{c.prog || '-'}</td><td className="num">{c.credits || 0}</td><td>{c.sem || c.semester || '-'}</td><td>{c.lecturer || '-'}</td>
+              <td>{c.id && <button className="btn ghost sm" onClick={() => remove(c)}>Delete</button>}</td>
+            </tr>)}</tbody>
+          </table>
+        )}
       </Panel>
-
-      {showNew && (
-        <Modal title="Add course" onClose={() => setShowNew(false)} width={460}>
-          <form onSubmit={addCourse}>
-            <div className="grid2" style={{ gap: 12 }}>
-              <div className="field"><label>Code</label><input name="code" placeholder="BBA210" required /></div>
-              <div className="field"><label>Credits</label><input name="credits" type="number" min="4" max="24" defaultValue="12" /></div>
-            </div>
-            <div className="field"><label>Course title</label><input name="title" placeholder="e.g. Entrepreneurship I" required /></div>
-            <div className="grid2" style={{ gap: 12 }}>
-              <div className="field">
-                <label>Programme</label>
-                <select name="prog">{PROGRAMMES.map((p) => <option key={p.code}>{p.code}</option>)}</select>
-              </div>
-              <div className="field">
-                <label>Semester</label>
-                <select name="sem"><option>S1</option><option>S2</option></select>
-              </div>
-            </div>
-            <div className="grid2" style={{ gap: 12 }}>
-              <div className="field">
-                <label>Lecturer</label>
-                <select name="lecturer">{[...new Set(COURSES.map((c) => c.lecturer))].map((l) => <option key={l}>{l}</option>)}</select>
-              </div>
-              <div className="field"><label>Prerequisite (optional)</label><input name="prereq" placeholder="e.g. BBA111" /></div>
-            </div>
-            <button className="btn primary" type="submit">Add to curriculum</button>
-          </form>
-        </Modal>
-      )}
-      <Toast msg={toast} />
-    </>
-  )
-}
-
-// the registration Business Process: eligibility → holds → prereqs →
-// capacity → charge assessment → enrol (rules visible, Workday-style)
-const REG_STUDENTS = ['Ruusa Nghidinwa', 'Gabriel !Naruseb', 'Justina Haikali', 'Tuhafeni Gaoseb', 'Rauna Nakale']
-const PASSED_PREREQ = ['Ruusa Nghidinwa', 'Gabriel !Naruseb'] // mock transcript check
-
-function Enrolments() {
-  const [toast, showToast] = useToast()
-  const [showReg, setShowReg] = useState(false)
-  const [student, setStudent] = useState(REG_STUDENTS[0])
-  const [courseCode, setCourseCode] = useState(COURSES[0].code)
-
-  const course = COURSES.find((c) => c.code === courseCode)
-  const hold = HOLDS.find((h) => h.student === student)
-  const prereqOk = course.prereq === '—' || PASSED_PREREQ.includes(student)
-  const seatOk = course.enrolled < course.cap
-  const checks = [
-    ['Student status active', true, 'no suspension on record'],
-    ['No registration holds', !hold, hold ? `${hold.type} hold — ${hold.reason}` : 'clear'],
-    [`Prerequisite (${course.prereq})`, prereqOk, prereqOk ? 'satisfied on transcript' : `${course.prereq} not completed with the minimum mark`],
-    ['Seat available', seatOk, seatOk ? `${course.cap - course.enrolled} of ${course.cap} left` : 'class full — waitlist open'],
-    ['Credit limit (max 32/semester)', true, `would be at ${18 + course.credits} / 32`],
-    ['No timetable clash', true, 'no overlap with current registrations'],
-  ]
-  const eligible = checks.every(([, ok]) => ok)
-  const charge = course.credits * 950 + 400
-
-  const confirm = () => {
-    setShowReg(false)
-    showToast(`${student} enrolled in ${course.code} — ${fmtN(charge)} posted to student account, seat reserved`)
-  }
-
-  return (
-    <>
-      <div className="note-banner">
-        <span>ℹ️</span>
-        <div style={{ flex: 1 }}>
-          <strong>Add/drop closes 17 Jul 2026</strong> — after that, class lists lock and any change
-          needs registrar approval (written to the audit log).
-        </div>
-        <button className="btn primary sm" style={{ flexShrink: 0 }} onClick={() => setShowReg(true)}>Register student</button>
-      </div>
-      <Panel
-        title="Semester 2 enrolments — class capacity"
-        subtitle="Registration per course · waitlist opens when a class is full"
-        actions={<button className="btn ghost sm" onClick={() => showToast('Add/drop period closed — class lists locked')}><Icon name="lock" size={14} /> Close add/drop</button>}
-        flush
-      >
-        <table className="data">
-          <thead>
-            <tr>
-              <th>Course</th><th>Lecturer</th><th className="num">Enrolled</th>
-              <th className="num">Capacity</th><th style={{ width: '28%' }}>Fill</th><th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {COURSES.map((c) => {
-              const pct = Math.round((c.enrolled / c.cap) * 100)
-              return (
-                <tr key={c.code}>
-                  <td>
-                    <div style={{ fontWeight: 600 }}>{c.title}</div>
-                    <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink-faint)' }}>{c.code}</div>
-                  </td>
-                  <td>{c.lecturer}</td>
-                  <td className="num" style={{ fontWeight: 600 }}>{c.enrolled}</td>
-                  <td className="num">{c.cap}</td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Progress pct={pct} tone={pct >= 100 ? 'amber' : ''} />
-                      <span className="mono" style={{ fontSize: 12 }}>{pct}%</span>
-                    </div>
-                  </td>
-                  <td>
-                    {pct >= 100 ? <Badge tone="red">Full · waitlist</Badge> : pct >= 90 ? <Badge tone="orange">Nearly full</Badge> : <Badge tone="green">Open</Badge>}
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </Panel>
-
-      {showReg && (
-        <Modal title="Course registration — business process" onClose={() => setShowReg(false)} width={520}>
+      {showNew && <Modal title="Add course" onClose={() => setShowNew(false)}>
+        <form onSubmit={save}>
+          <div className="grid2" style={{ gap: 12 }}><div className="field"><label>Code</label><input name="code" required /></div><div className="field"><label>Credits</label><input name="credits" type="number" min="0" /></div></div>
+          <div className="field"><label>Course title</label><input name="title" required /></div>
           <div className="grid2" style={{ gap: 12 }}>
-            <div className="field">
-              <label>Student</label>
-              <select value={student} onChange={(e) => setStudent(e.target.value)}>
-                {REG_STUDENTS.map((s) => <option key={s}>{s}</option>)}
-              </select>
-            </div>
-            <div className="field">
-              <label>Course section</label>
-              <select value={courseCode} onChange={(e) => setCourseCode(e.target.value)}>
-                {COURSES.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.title}</option>)}
-              </select>
-            </div>
+            <div className="field"><label>Programme</label><select name="programme"><option value="">Unassigned</option>{programmes.map((p) => <option key={p.id || p.code} value={p.id || ''}>{p.code || p.slug} - {p.name}</option>)}</select></div>
+            <div className="field"><label>Semester</label><input name="semester" placeholder="S1" /></div>
           </div>
-
-          <div style={{ margin: '4px 0 6px', fontSize: 12, fontWeight: 700, color: 'var(--petrol-800)' }}>
-            ELIGIBILITY RULES — EVALUATED LIVE
-          </div>
-          {checks.map(([label, ok, note]) => (
-            <div key={label} className="cf-row" style={{ padding: '5px 0', fontSize: 12.5 }}>
-              <span>
-                <span style={{ color: ok ? 'var(--green)' : 'var(--red)', marginRight: 8 }}><Icon name={ok ? 'tick' : 'x'} size={13} /></span>
-                {label}
-              </span>
-              <span style={{ color: ok ? 'var(--ink-faint)' : 'var(--red)', fontSize: 11.5, textAlign: 'right', maxWidth: 240 }}>{note}</span>
-            </div>
-          ))}
-
-          {eligible ? (
-            <>
-              <div style={{ margin: '14px 0 6px', fontSize: 12, fontWeight: 700, color: 'var(--petrol-800)' }}>
-                CHARGE ASSESSMENT — AUTO
-              </div>
-              <div className="cf-row" style={{ fontSize: 12.5 }}><span>{course.credits} credits × N$ 950</span><span className="mono">{fmtN(course.credits * 950)}</span></div>
-              <div className="cf-row" style={{ fontSize: 12.5 }}><span>Registration levy</span><span className="mono">{fmtN(400)}</span></div>
-              <div className="cf-row total"><span>Posts to student account</span><span className="amt">{fmtN(charge)}</span></div>
-              <button className="btn primary" style={{ marginTop: 14 }} onClick={confirm}>
-                Confirm enrolment — notify student & lecturer
-              </button>
-            </>
-          ) : !seatOk && !hold && prereqOk ? (
-            <button className="btn amber" style={{ marginTop: 14 }} onClick={() => { setShowReg(false); showToast(`${student} added to the ${course.code} waitlist — position 3, auto-enrols on a drop`) }}>
-              Class full — join waitlist
-            </button>
-          ) : (
-            <div className="note-banner" style={{ marginTop: 14, marginBottom: 0 }}>
-              <span><Icon name="ban" size={14} /></span>
-              <div>
-                <strong>Registration blocked by the rules engine.</strong>{' '}
-                {hold ? 'The hold must be resolved (payment or advising) — it then auto-releases and registration re-opens.' : 'The prerequisite must appear as completed on the transcript.'}
-              </div>
-            </div>
-          )}
-        </Modal>
-      )}
+          <div className="field"><label>Capacity</label><input name="capacity" type="number" min="0" /></div>
+          <button className="btn primary" type="submit">Save</button>
+        </form>
+      </Modal>}
       <Toast msg={toast} />
     </>
   )
 }
 
-// Academic Progress Report — requirements vs the student's catalog year
-const REQ_TONE = { Satisfied: 'green', 'In progress': 'amber', 'Not satisfied': 'red' }
+function ModuleAllocation() {
+  const [courses, setCourses] = useState([])
+  const [staff, setStaff] = useState([])
+  const [loading, setLoading] = useState(true)
+  useEffect(() => {
+    Promise.all([
+      listCourses().then(setCourses).catch(() => setCourses([])),
+      listStaff().then(setStaff).catch(() => setStaff([])),
+    ]).finally(() => setLoading(false))
+  }, [])
+  if (loading) return <Panel title="Module allocation" flush><Empty>Loading...</Empty></Panel>
+  return (
+    <Panel title="Module allocation" subtitle="Teaching assignments from backend course/staff rows" flush>
+      {courses.length === 0 ? <Empty>No modules available for allocation.</Empty> : (
+        <table className="data"><thead><tr><th>Module</th><th>Programme</th><th>Lecturer</th></tr></thead>
+          <tbody>{courses.map((c) => <tr key={c.id || c.code}><td>{c.code} - {c.title}</td><td>{c.prog || '-'}</td><td>{c.lecturer || staff[0]?.name || '-'}</td></tr>)}</tbody>
+        </table>
+      )}
+    </Panel>
+  )
+}
+
+function StudentBlocks() {
+  const [toast, showToast] = useToast()
+  const [students, setStudents] = useState([])
+  const [selected, setSelected] = useState('')
+  const [blocks, setBlocks] = useState([])
+  const [showNew, setShowNew] = useState(false)
+  const [loading, setLoading] = useState(true)
+  useEffect(() => { listStudents().then(setStudents).catch(() => setStudents([])).finally(() => setLoading(false)) }, [])
+  const reloadBlocks = useCallback(() => {
+    if (!selected) { setBlocks([]); return }
+    getHoldsForStudent(selected).then(setBlocks).catch(() => setBlocks([]))
+  }, [selected])
+  useEffect(() => { reloadBlocks() }, [reloadBlocks])
+  const add = async (e) => {
+    e.preventDefault(); const f = e.target
+    const blocksPicked = Array.from(f.elements.blocks).filter((x) => x.checked).map((x) => x.value)
+    try {
+      await holdUpsert({ studentId: selected, type: f.type.value, reason: f.reason.value.trim(), blocks: blocksPicked })
+      setShowNew(false); await reloadBlocks(); showToast('Hold placed')
+    } catch (err) { showToast('Could not place hold: ' + (err?.message || err)) }
+  }
+  const release = async (h) => {
+    try { await holdClear(h.id); await reloadBlocks(); showToast('Hold released') }
+    catch (err) { showToast('Could not release hold: ' + (err?.message || err)) }
+  }
+  if (loading) return <Panel title="Student blocks / holds" flush><Empty>Loading...</Empty></Panel>
+  return (
+    <>
+    <Panel title="Student blocks / holds" subtitle="Create and release active backend holds" actions={<button className="btn primary sm" disabled={!selected} onClick={() => setShowNew(true)}>+ Place hold</button>} flush>
+      <div className="field" style={{ maxWidth: 360 }}><label>Student</label><select value={selected} onChange={(e) => setSelected(e.target.value)}><option value="">Select student</option>{students.map((s) => <option key={s._uuid || s.id} value={s._uuid || s.id}>{s.name}</option>)}</select></div>
+      {!selected ? <Empty>Select a student to view active holds.</Empty> : blocks.length === 0 ? <Empty>No active holds for this student.</Empty> : (
+        <table className="data"><thead><tr><th>Type</th><th>Reason</th><th>Since</th><th>Impact</th><th></th></tr></thead>
+          <tbody>{blocks.map((b, i) => <tr key={b.id || i}><td><Badge tone="red">{b.type}</Badge></td><td>{b.reason}</td><td>{b.since}</td><td>{(b.impact || []).join(', ')}</td><td>{b.id && <button className="btn green sm" onClick={() => release(b)}>Release</button>}</td></tr>)}</tbody>
+        </table>
+      )}
+    </Panel>
+    {showNew && <Modal title="Place hold" onClose={() => setShowNew(false)}>
+      <form onSubmit={add}>
+        <div className="field"><label>Type</label><select name="type"><option value="financial">Financial</option><option value="advising">Advising</option><option value="conduct">Conduct</option><option value="library">Library</option></select></div>
+        <div className="field"><label>Reason</label><input name="reason" required /></div>
+        <div style={{ marginBottom: 12 }}>
+          {['registration', 'results', 'certificate', 'graduation'].map((b) => <label key={b} style={{ display: 'block', marginBottom: 6 }}><input type="checkbox" name="blocks" value={b} /> Blocks {b}</label>)}
+        </div>
+        <button className="btn primary">Place hold</button>
+      </form>
+    </Modal>}
+    <Toast msg={toast} />
+    </>
+  )
+}
 
 function DegreeAudit() {
-  const names = Object.keys(DEGREE_AUDIT)
-  const [who, setWho] = useState(names[0])
-  const a = DEGREE_AUDIT[who]
-  const total = a.reqs[a.reqs.length - 1]
-  const pct = Math.round((total.done / total.need) * 100)
-
+  const [students, setStudents] = useState([])
+  const [selected, setSelected] = useState('')
+  const [audit, setAudit] = useState(null)
+  useEffect(() => { listStudents().then(setStudents).catch(() => setStudents([])) }, [])
+  useEffect(() => {
+    if (!selected) { setAudit(null); return }
+    getDegreeAudit(selected).then(setAudit).catch(() => setAudit(null))
+  }, [selected])
   return (
-    <div className="grid2">
-      <Panel
-        title="Academic progress"
-        subtitle={`${a.prog} · catalog year ${a.catalog} — requirements evaluated against this cohort's rules`}
-        actions={
-          <select className="inline" value={who} onChange={(e) => setWho(e.target.value)}>
-            {names.map((n) => <option key={n}>{n}</option>)}
-          </select>
-        }
-      >
-        <Donut
-          center={`${pct}%`}
-          segs={[
-            ['Completed', Math.max(total.done, 0.01), 'var(--green)'],
-            ['In progress', Math.max(total.inprog, 0.01), 'var(--amber)'],
-            ['Remaining', Math.max(total.need - total.done - total.inprog, 0.01), '#dfe7ee'],
-          ]}
-        />
-        <div className="cf-row" style={{ paddingTop: 14, fontWeight: 700 }}>
-          <span>Programme GPA</span>
-          <span className="mono">{a.gpa.toFixed(2)} / 4.00</span>
-        </div>
-      </Panel>
-
-      <Panel title="Requirements" subtitle="Credits: completed · in progress · still needed" flush>
-        <table className="data">
-          <thead>
-            <tr><th>Requirement</th><th className="num">Need</th><th className="num">Done</th><th className="num">In prog.</th><th className="num">Left</th><th>Status</th></tr>
-          </thead>
-          <tbody>
-            {a.reqs.map((r) => (
-              <tr key={r.req}>
-                <td style={{ fontWeight: 600, fontSize: 12.5 }}>{r.req}</td>
-                <td className="num">{r.need}</td>
-                <td className="num" style={{ color: 'var(--green)' }}>{r.done}</td>
-                <td className="num" style={{ color: 'var(--orange)' }}>{r.inprog}</td>
-                <td className="num" style={{ fontWeight: 600 }}>{Math.max(r.need - r.done - r.inprog, 0)}</td>
-                <td><Badge tone={REQ_TONE[r.status]}>{r.status}</Badge></td>
-              </tr>
-            ))}
-          </tbody>
+    <Panel title="Degree audit" subtitle="Read-only audit from backend" flush>
+      <div className="field" style={{ maxWidth: 360 }}><label>Student</label><select value={selected} onChange={(e) => setSelected(e.target.value)}><option value="">Select student</option>{students.map((s) => <option key={s._uuid || s.id} value={s.name}>{s.name}</option>)}</select></div>
+      {!selected ? <Empty>Select a student to view the audit.</Empty> : !audit ? <Empty>No degree audit is available yet.</Empty> : (
+        <table className="data"><thead><tr><th>Requirement</th><th className="num">Done</th><th className="num">Need</th><th>Status</th></tr></thead>
+          <tbody>{(audit.reqs || []).map((r) => <tr key={r.req}><td>{r.req}</td><td className="num">{r.done}</td><td className="num">{r.need}</td><td><Badge tone={r.status === 'Satisfied' ? 'green' : 'amber'}>{r.status}</Badge></td></tr>)}</tbody>
         </table>
-      </Panel>
-    </div>
+      )}
+    </Panel>
   )
+}
+
+function Empty({ children }) {
+  return <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-faint)' }}>{children}</div>
 }

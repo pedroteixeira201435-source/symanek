@@ -32,7 +32,7 @@ const config: Config = {
         foreground: "var(--foreground)",
       },
       fontFamily: {
-        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        sans: ["system-ui", "sans-serif"],
       },
       transitionTimingFunction: {
         // Strong custom curves (emil-design-eng: built-in easings are too weak)

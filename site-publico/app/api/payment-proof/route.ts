@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { rateLimit, verifyTurnstile } from "@/lib/public-security";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,12 +14,15 @@ const OK_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "applica
 // validate the application is approved, store the file, record it. An admin then
 // reviews and marks the fees paid (mark_paid) — no payment gateway.
 export async function POST(req: NextRequest) {
+  const limited = rateLimit(req, "payment-proof", 5, 60 * 60 * 1000); if (limited) return limited;
   if (!supabaseAdmin) return NextResponse.json({ error: "Server not configured" }, { status: 500 });
 
   const form = await req.formData();
   const ref = String(form.get("ref") ?? "").trim();
   const amount = Number(form.get("amount") ?? 0);
   const file = form.get("file");
+  const human = await verifyTurnstile(form.get("turnstileToken"), req);
+  if (!human.ok) return NextResponse.json({ error: human.error }, { status: 400 });
 
   // Note: the `File` global is not available on Node 18 — duck-type on Blob.
   if (!ref) return NextResponse.json({ error: "Missing reference" }, { status: 400 });

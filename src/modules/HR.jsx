@@ -1,565 +1,164 @@
-import React, { useState, useEffect } from 'react'
-import { Tabs, Panel, Badge, Avatar, Progress, Toast, useToast, Modal, Icon } from '../ui.jsx'
-import { STAFF, LEAVE_REQUESTS, PAYROLL, LEAVE_BALANCES, CONTRACTS, QUALIFICATIONS, RECRUITS, RECRUIT_STAGES, WORKLOAD, PAYE_BRACKETS, payeMonthly, sscMonthly, VET_LEVY_RATE, staffEmail, fmtN } from '../data.js'
-import { listStaff, listLeaveRequests, decideLeave } from '../api.js'
+import React, { useCallback, useEffect, useState } from 'react'
+import { StatCard, Tabs, Panel, Badge, Modal, Toast, useToast } from '../ui.jsx'
+import { fmtN, staffEmail } from '../lib/format.js'
+import {
+  listStaff, listLeaveRequests, listPayroll, listLeaveBalances, listRecruitment, listWorkload,
+  getStaffDetail, staffUpsert, staffDelete, contractSet, qualificationAdd, leaveBalanceSet,
+  recruitUpsert, workloadSet, payrollRun, getBusinessSettings,
+} from '../api.js'
 
-// Map a backend leave_requests row to the shape this module renders.
-const LEAVE_STATUS = { pending: 'Pending', approved: 'Approved', rejected: 'Declined' }
-function toLeaveRow(r) {
-  const days = r.start && r.end
-    ? Math.max(1, Math.round((new Date(r.end) - new Date(r.start)) / 86400000) + 1) : null
-  return {
-    id: r.id, name: r.staff || '—', type: r.type || 'Annual', days,
-    period: [r.start, r.end].filter(Boolean).join(' – '),
-    status: LEAVE_STATUS[r.status] || r.status || 'Pending',
-  }
-}
-
-const CONTRACT_TONE = { Permanent: 'teal', Contract: 'blue', Casual: 'amber' }
-const LEAVE_TONE = { Sick: 'red', Annual: 'blue', Maternity: 'purple', Compassionate: 'orange' }
-
-export default function HR({ role }) {
-  const readOnly = role.id === 'bursar' // bursar sees payroll read-only
-  const [tab, setTab] = useState(readOnly ? 'Payroll' : 'Staff Directory')
-  const tabs = readOnly
-    ? ['Payroll']
-    : ['Staff Directory', 'Leave Requests', 'Recruitment', 'Contracts & Compliance', 'Workload', 'Payroll']
-
+export default function HR() {
+  const [tab, setTab] = useState('Staff')
   return (
     <>
-      <Tabs tabs={tabs} active={tab} onChange={setTab} />
-      {tab === 'Staff Directory' && <Directory openPayroll={() => setTab('Payroll')} />}
-      {tab === 'Leave Requests' && <Leave />}
+      <Tabs tabs={['Staff', 'Leave', 'Payroll', 'Contracts', 'Qualifications', 'Recruitment', 'Workload']} active={tab} onChange={setTab} />
+      {tab === 'Staff' && <Staff />}
+      {tab === 'Leave' && <Leave />}
+      {tab === 'Payroll' && <Payroll />}
+      {tab === 'Contracts' && <Contracts />}
+      {tab === 'Qualifications' && <Qualifications />}
       {tab === 'Recruitment' && <Recruitment />}
-      {tab === 'Contracts & Compliance' && <Contracts />}
       {tab === 'Workload' && <Workload />}
-      {tab === 'Payroll' && <Payroll readOnly={readOnly} />}
     </>
   )
 }
 
-// hiring pipeline — same board pattern as Admissions; Onboarding hands
-// over to "+ Add staff" in the directory
-const REC_TONE = { Applied: 'gray', Interview: 'blue', Offer: 'amber', Onboarding: 'green' }
-const REC_NEXT = { Applied: 'Interview', Interview: 'Offer', Offer: 'Onboarding' }
-const REC_LABEL = { Applied: 'Shortlist for interview', Interview: 'Make offer', Offer: 'Start onboarding' }
-
-function Recruitment() {
-  const [recs, setRecs] = useState(RECRUITS)
-  const [sel, setSel] = useState(null)
+function Staff() {
   const [toast, showToast] = useToast()
-
-  const advance = (r) => {
-    const next = REC_NEXT[r.stage]
-    if (!next) return
-    setRecs((rs) => rs.map((x) => (x.id === r.id ? { ...x, stage: next } : x)))
-    setSel(null)
-    showToast(
-      next === 'Onboarding'
-        ? `${r.name} accepted — onboarding checklist opened, contract drafted`
-        : next === 'Offer'
-        ? `Offer letter sent to ${r.name} (${r.post})`
-        : `${r.name} shortlisted — interview panel invited`
-    )
+  const [rows, setRows] = useState([])
+  const [showNew, setShowNew] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const reload = useCallback(() => listStaff().then(setRows).catch(() => setRows([])), [])
+  useEffect(() => { reload().finally(() => setLoading(false)) }, [reload])
+  const save = async (e) => {
+    e.preventDefault(); const f = e.target
+    try { await staffUpsert({ name: f.name.value, email: f.email.value || staffEmail(f.name.value), role: f.role.value, department: f.department.value }); setShowNew(false); await reload(); showToast('Staff saved') }
+    catch (err) { showToast('Could not save: ' + (err?.message || err)) }
   }
-
+  const remove = async (s) => {
+    try { await staffDelete(s.id); await reload(); showToast('Staff removed') }
+    catch (err) { showToast('Could not remove: ' + (err?.message || err)) }
+  }
+  if (loading) return <Panel title="Staff" flush><Empty>Loading...</Empty></Panel>
   return (
     <>
-      <div className="note-banner">
-        <span>ℹ️</span>
-        <div>
-          <strong>3 open posts</strong> — Lecturer (Accounting), Lecturer (Languages), IT Technician.
-          Onboarding completes into the Staff Directory with an employee ID and payroll record.
-        </div>
+      <div className="stat-row c4">
+        <StatCard icon="👥" label="Staff" value={String(rows.length)} delta="backend records" />
+        <StatCard icon="🎓" label="Teaching" value={String(rows.filter((s) => /lecturer|teacher|hod/i.test(s.role || '')).length)} delta="academic roles" />
+        <StatCard icon="🏢" label="Departments" value={String(new Set(rows.map((s) => s.dept || s.department).filter(Boolean)).size)} delta="loaded" />
+        <StatCard icon="📧" label="Emails" value={String(rows.filter((s) => s.email).length)} delta="with contact" />
       </div>
-      <div className="pipe-board">
-        {RECRUIT_STAGES.map((stage) => {
-          const col = recs.filter((r) => r.stage === stage)
-          return (
-            <div key={stage} className="pipe-col">
-              <div className="pipe-col-head">
-                <Badge tone={REC_TONE[stage]}>{stage}</Badge>
-                <span className="mono" style={{ fontSize: 12, color: 'var(--ink-faint)' }}>{col.length}</span>
-              </div>
-              {col.length === 0 && <div className="pipe-empty">No candidates</div>}
-              {col.map((r) => (
-                <div key={r.id} className="pipe-card" onClick={() => setSel(r)}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Avatar name={r.name} size={28} />
-                    <div>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>{r.name}</div>
-                      <div style={{ fontSize: 11.5, color: 'var(--ink-faint)' }}>{r.post}</div>
-                    </div>
-                  </div>
-                  <div className="pipe-meta">
-                    <span>applied {r.applied.slice(0, 6)}</span>
-                    {r.score && <Badge tone="teal"><Icon name="star" size={11} /> {r.score}</Badge>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-        })}
-      </div>
-
-      {sel && (
-        <Modal title={`${sel.id} — ${sel.name}`} onClose={() => setSel(null)} width={420}>
-          <div className="cf-row"><span>Post</span><span style={{ fontWeight: 600 }}>{sel.post}</span></div>
-          <div className="cf-row"><span>Applied</span><span>{sel.applied}</span></div>
-          <div className="cf-row"><span>Stage</span><Badge tone={REC_TONE[sel.stage]}>{sel.stage}</Badge></div>
-          {sel.score && <div className="cf-row"><span>Interview score</span><span className="mono" style={{ fontWeight: 700 }}>{sel.score}</span></div>}
-          {REC_NEXT[sel.stage] ? (
-            <button className="btn primary" style={{ marginTop: 16 }} onClick={() => advance(sel)}>
-              {REC_LABEL[sel.stage]} →
-            </button>
-          ) : (
-            <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginTop: 14 }}>
-              Onboarding in progress — contract, bank details & induction checklist with the candidate
-            </div>
-          )}
-        </Modal>
-      )}
-      <Toast msg={toast} />
-    </>
-  )
-}
-
-const QUAL_TONE = { Valid: 'green', Pending: 'amber', Expiring: 'orange' }
-
-function Contracts() {
-  const [contracts, setContracts] = useState(CONTRACTS)
-  const [toast, showToast] = useToast()
-
-  const renew = (staff) => {
-    setContracts((cs) => cs.map((c) => (c.staff === staff ? { ...c, end: '31 Aug 2027', daysLeft: 423 } : c)))
-    showToast(`${staff} — renewal drafted to 31 Aug 2027, sent for signature`)
-  }
-
-  return (
-    <>
-      <Panel title="Contracts — expiry watch" subtitle="Fixed-term contracts flag at 60 days · Labour Act notice periods" flush>
-        <table className="data">
-          <thead>
-            <tr><th>Employee</th><th>Contract</th><th>Start</th><th>End</th><th className="num">Days left</th><th>Action</th></tr>
-          </thead>
-          <tbody>
-            {contracts.map((c) => (
-              <tr key={c.staff}>
-                <td style={{ fontWeight: 600 }}>{c.staff}</td>
-                <td>{c.type}</td>
-                <td>{c.start}</td>
-                <td>{c.end}</td>
-                <td className="num" style={{ color: c.daysLeft !== null && c.daysLeft < 60 ? 'var(--red)' : 'var(--ink)', fontWeight: c.daysLeft !== null && c.daysLeft < 60 ? 700 : 400 }}>
-                  {c.daysLeft === null ? '—' : c.daysLeft}
-                </td>
-                <td>
-                  {c.daysLeft !== null && c.daysLeft < 60 ? (
-                    <button className="btn primary sm" onClick={() => renew(c.staff)}>Renew contract</button>
-                  ) : (
-                    <span style={{ color: 'var(--ink-faint)', fontSize: 12 }}>—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <Panel title="Staff register" actions={<button className="btn primary sm" onClick={() => setShowNew(true)}>+ Add staff</button>} flush>
+        {rows.length === 0 ? <Empty>No staff records yet.</Empty> : <table className="data"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Department</th><th></th></tr></thead><tbody>{rows.map((s) => <tr key={s.id || s.email}><td>{s.name}</td><td>{s.email || '-'}</td><td>{s.role || '-'}</td><td>{s.dept || s.department || '-'}</td><td>{s.id && <button className="btn ghost sm" onClick={() => remove(s)}>Delete</button>}</td></tr>)}</tbody></table>}
       </Panel>
-
-      <Panel title="Qualifications & registrations" subtitle="NQA / NTA compliance — accreditation audits check this list" flush>
-        <table className="data">
-          <thead>
-            <tr><th>Employee</th><th>Qualification</th><th>Verifying body</th><th>Expires</th><th>Status</th></tr>
-          </thead>
-          <tbody>
-            {QUALIFICATIONS.map((q, i) => (
-              <tr key={i}>
-                <td style={{ fontWeight: 600 }}>{q.staff}</td>
-                <td>{q.qual}</td>
-                <td>{q.body}</td>
-                <td>{q.expires}</td>
-                <td><Badge tone={QUAL_TONE[q.status]}>{q.status}</Badge></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Panel>
+      {showNew && <Modal title="Add staff" onClose={() => setShowNew(false)}><form onSubmit={save}><div className="field"><label>Name</label><input name="name" required /></div><div className="field"><label>Email</label><input name="email" type="email" /></div><div className="field"><label>Role</label><input name="role" /></div><div className="field"><label>Department</label><input name="department" /></div><button className="btn primary">Save</button></form></Modal>}
       <Toast msg={toast} />
-    </>
-  )
-}
-
-function Workload() {
-  return (
-    <Panel
-      title="Teaching workload — Term 3 / Semester 2"
-      subtitle="School periods + tertiary course credits per staff member · cap per contract"
-      flush
-    >
-      <table className="data">
-        <thead>
-          <tr>
-            <th>Staff</th><th className="num">Classes</th><th className="num">Courses</th>
-            <th className="num">Credits</th><th className="num">Hours / wk</th><th style={{ width: '26%' }}>Load</th><th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          {WORKLOAD.map((w) => {
-            const pct = Math.round((w.hours / w.cap) * 100)
-            return (
-              <tr key={w.staff}>
-                <td style={{ fontWeight: 600 }}>{w.staff}</td>
-                <td className="num">{w.classes}</td>
-                <td className="num">{w.courses}</td>
-                <td className="num">{w.credits}</td>
-                <td className="num">{w.hours} / {w.cap}</td>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Progress pct={pct} tone={pct > 100 ? 'amber' : ''} />
-                    <span className="mono" style={{ fontSize: 12 }}>{pct}%</span>
-                  </div>
-                </td>
-                <td>
-                  {pct > 100 ? <Badge tone="red">Overloaded</Badge> : pct >= 85 ? <Badge tone="orange">At capacity</Badge> : <Badge tone="green">OK</Badge>}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </Panel>
-  )
-}
-
-function Directory({ openPayroll }) {
-  const [staff, setStaff] = useState(STAFF)
-  const [showAdd, setShowAdd] = useState(false)
-  const [profile, setProfile] = useState(null)
-  const [toast, showToast] = useToast()
-
-  useEffect(() => {
-    let alive = true
-    listStaff()
-      .then((rows) => { if (alive && Array.isArray(rows) && rows.length) setStaff(rows) })
-      .catch(() => {})
-    return () => { alive = false }
-  }, [])
-
-  const addStaff = (e) => {
-    e.preventDefault()
-    const f = e.target
-    const s = {
-      id: `SYM-${String(staff.length + 1).padStart(3, '0')}`,
-      name: f.name.value || 'New employee',
-      role: f.role.value || 'Lecturer',
-      dept: f.dept.value,
-      contract: f.contract.value,
-      status: 'Active',
-    }
-    setStaff((list) => [...list, s])
-    setShowAdd(false)
-    showToast(`${s.name} onboarded — ${s.id}`)
-  }
-
-  return (
-    <>
-    <Panel
-      title="Staff directory"
-      subtitle={`${56 + staff.length} staff members · click a row for the profile`}
-      actions={<button className="btn primary sm" onClick={() => setShowAdd(true)}>+ Add staff</button>}
-      flush
-    >
-      <table className="data">
-        <thead>
-          <tr><th>Employee</th><th>ID</th><th>Role</th><th>Department</th><th>Contract</th><th>Status</th></tr>
-        </thead>
-        <tbody>
-          {staff.map((s) => (
-            <tr key={s.id} style={{ cursor: 'pointer' }} onClick={() => setProfile(s)}>
-              <td>
-                <div className="emp-cell">
-                  <Avatar name={s.name} />
-                  <span className="en">{s.name}</span>
-                </div>
-              </td>
-              <td className="mono" style={{ fontSize: 12.5 }}>{s.id}</td>
-              <td>{s.role}</td>
-              <td>{s.dept}</td>
-              <td><Badge tone={CONTRACT_TONE[s.contract]}>{s.contract}</Badge></td>
-              <td><Badge tone={s.status === 'Active' ? 'green' : 'orange'}>{s.status}</Badge></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Panel>
-
-    {profile && (
-      <Modal title="Staff profile" onClose={() => setProfile(null)} width={440}>
-        <div className="emp-cell" style={{ marginBottom: 16 }}>
-          <Avatar name={profile.name} size={48} />
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>{profile.name}</div>
-            <div style={{ fontSize: 12.5, color: 'var(--ink-soft)' }}>{profile.role}</div>
-          </div>
-        </div>
-        {[
-          ['Employee ID', profile.id],
-          ['Department', profile.dept],
-          ['Joined', profile.joined || 'Jul 2026'],
-          ['Phone', profile.phone || '+264 81 000 0000'],
-          ['Email', staffEmail(profile.name)],
-        ].map(([l, v]) => (
-          <div key={l} className="cf-row" style={{ padding: '7px 0', borderBottom: '1px solid #e9eef3' }}>
-            <span style={{ color: 'var(--ink-soft)' }}>{l}</span>
-            <span style={{ fontWeight: 600 }}>{v}</span>
-          </div>
-        ))}
-        <div className="cf-row" style={{ padding: '10px 0' }}>
-          <Badge tone={CONTRACT_TONE[profile.contract]}>{profile.contract}</Badge>
-          <Badge tone={profile.status === 'Active' ? 'green' : 'orange'}>{profile.status}</Badge>
-        </div>
-        <div style={{ margin: '8px 0 6px', fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)' }}>LEAVE BALANCES</div>
-        {LEAVE_BALANCES.map((b) => (
-          <div key={b.type} className="cf-row" style={{ padding: '4px 0' }}>
-            <span>{b.type}</span>
-            <span className="mono">{b.total - b.used} / {b.total} days</span>
-          </div>
-        ))}
-        <button className="btn ghost sm" style={{ marginTop: 12 }} onClick={() => { setProfile(null); openPayroll() }}>
-          View payslip →
-        </button>
-      </Modal>
-    )}
-
-    {showAdd && (
-      <Modal title="Add staff member" onClose={() => setShowAdd(false)}>
-        <form onSubmit={addStaff}>
-          <div className="field"><label>Full name</label><input name="name" placeholder="e.g. Maria Nakanyala" required /></div>
-          <div className="field"><label>Role</label><input name="role" placeholder="e.g. Lecturer — English" required /></div>
-          <div className="grid2" style={{ gap: 12 }}>
-            <div className="field">
-              <label>Department</label>
-              <select name="dept">
-                <option>Sciences</option><option>Mathematics</option><option>Humanities</option>
-                <option>Languages</option><option>Support</option><option>Administration</option>
-              </select>
-            </div>
-            <div className="field">
-              <label>Contract type</label>
-              <select name="contract"><option>Permanent</option><option>Contract</option><option>Casual</option></select>
-            </div>
-          </div>
-          <button className="btn primary" type="submit">Onboard staff</button>
-        </form>
-      </Modal>
-    )}
-    <Toast msg={toast} />
     </>
   )
 }
 
 function Leave() {
-  const [requests, setRequests] = useState(LEAVE_REQUESTS)
+  const [requests, setRequests] = useState([])
+  const [balances, setBalances] = useState([])
+  useEffect(() => { listLeaveRequests().then(setRequests).catch(() => setRequests([])); listLeaveBalances().then(setBalances).catch(() => setBalances([])) }, [])
+  return <><Panel title="Leave requests" flush>{requests.length === 0 ? <Empty>No leave requests yet.</Empty> : <SimpleTable rows={requests} />}</Panel><Panel title="Leave balances" flush>{balances.length === 0 ? <Empty>No leave balances yet.</Empty> : <SimpleTable rows={balances} />}</Panel></>
+}
+
+function Payroll() {
   const [toast, showToast] = useToast()
-  const pending = requests.filter((r) => r.status === 'Pending').length
-
-  useEffect(() => {
-    let alive = true
-    listLeaveRequests()
-      .then((rows) => { if (alive && Array.isArray(rows) && rows.length) setRequests(rows.map(toLeaveRow)) })
-      .catch(() => {})
-    return () => { alive = false }
-  }, [])
-
-  const decide = async (id, status) => {
-    setRequests((rs) => rs.map((r) => (r.id === id ? { ...r, status } : r)))
-    const r = requests.find((r) => r.id === id)
-    showToast(`${r.name} — ${r.type} leave ${status.toLowerCase()}`)
-    try { await decideLeave({ id, approve: status === 'Approved' }) } catch { /* mock/no-op */ }
+  const [rows, setRows] = useState([])
+  const [staff, setStaff] = useState([])
+  const [settings, setSettings] = useState(null)
+  const [showRun, setShowRun] = useState(false)
+  const reload = useCallback(() => Promise.all([
+    listPayroll().then(setRows).catch(() => setRows([])),
+    listStaff().then(setStaff).catch(() => setStaff([])),
+    getBusinessSettings().then(setSettings).catch(() => setSettings(null)),
+  ]), [])
+  useEffect(() => { reload() }, [reload])
+  const run = async (e) => {
+    e.preventDefault(); const f = e.target
+    try { await payrollRun({ staffId: f.staff.value, month: f.month.value, gross: Number(f.gross.value) }); setShowRun(false); await reload(); showToast('Payroll run recorded') }
+    catch (err) { showToast('Could not run payroll: ' + (err?.message || err)) }
   }
-
   return (
     <>
-      <Panel
-        title="Leave requests"
-        subtitle={`${pending} pending approval`}
-        flush
-      >
-        <table className="data">
-          <thead>
-            <tr><th>Employee</th><th>Type</th><th className="num">Days</th><th>Period</th><th>Status</th><th>Action</th></tr>
-          </thead>
-          <tbody>
-            {requests.map((r) => (
-              <tr key={r.id}>
-                <td style={{ fontWeight: 600 }}>{r.name}</td>
-                <td><Badge tone={LEAVE_TONE[r.type]}>{r.type}</Badge></td>
-                <td className="num">{r.days}</td>
-                <td>{r.period}</td>
-                <td>
-                  <Badge tone={r.status === 'Approved' ? 'green' : r.status === 'Declined' ? 'red' : 'amber'}>
-                    {r.status}
-                  </Badge>
-                </td>
-                <td>
-                  {r.status === 'Pending' ? (
-                    <span style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn green sm" onClick={() => decide(r.id, 'Approved')}>Approve</button>
-                      <button className="btn red-ghost sm" onClick={() => decide(r.id, 'Declined')}>Decline</button>
-                    </span>
-                  ) : (
-                    <span style={{ color: 'var(--ink-faint)', fontSize: 12 }}>—</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <Panel title="Payroll" subtitle="PAYE/SSC/VET rates come from business_settings/RPC, not frontend mock formulas" actions={<button className="btn primary sm" onClick={() => setShowRun(true)}>+ Run payroll</button>} flush>
+        {rows.length === 0 ? <Empty>No payroll rows yet.</Empty> : <SimpleTable rows={rows} />}
       </Panel>
+      <Panel title="Payroll settings" flush>{settings ? <pre style={{ whiteSpace: 'pre-wrap' }}>{JSON.stringify({ paye_brackets: settings.paye_brackets, ssc: settings.ssc, vet_levy: settings.vet_levy }, null, 2)}</pre> : <Empty>No payroll business settings loaded.</Empty>}</Panel>
+      {showRun && <Modal title="Run payroll" onClose={() => setShowRun(false)}><form onSubmit={run}><div className="field"><label>Staff</label><select name="staff">{staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div><div className="field"><label>Month</label><input name="month" type="month" required /></div><div className="field"><label>Gross</label><input name="gross" type="number" required /></div><button className="btn primary">Run</button></form></Modal>}
       <Toast msg={toast} />
     </>
   )
 }
 
-function Payroll({ readOnly }) {
+function Contracts() {
   const [toast, showToast] = useToast()
-  const [sel, setSel] = useState(null) // employee payslip modal
-  const [confirmRun, setConfirmRun] = useState(false)
-  const [runDone, setRunDone] = useState(false)
-  // NamRA engine — mirrors Genesis_HR_v4 workbook: PAYE from the bracket
-  // table, SSC 0.9% capped N$81, employer adds SSC 0.9% + VET levy 1%
-  const rows = PAYROLL.map((p) => {
-    const paye = payeMonthly(p.gross)
-    const ssc = sscMonthly(p.gross)
-    const vet = Math.round(p.gross * VET_LEVY_RATE)
-    return { ...p, paye, ssc, net: p.gross - paye - ssc, employer: ssc + vet }
-  })
-  const totalNet = rows.reduce((s, p) => s + p.net, 0)
-  const totalGross = rows.reduce((s, p) => s + p.gross, 0)
-  const totalEmployer = rows.reduce((s, p) => s + p.employer, 0)
-
-  const runPayroll = () => {
-    setConfirmRun(false)
-    setRunDone(true)
-    showToast('July 2026 payroll run completed — 64 employees paid, EMP return drafted for NamRA')
+  const [staff, setStaff] = useState([])
+  const [detail, setDetail] = useState(null)
+  const [selected, setSelected] = useState('')
+  useEffect(() => { listStaff().then(setStaff).catch(() => setStaff([])) }, [])
+  useEffect(() => { if (selected) getStaffDetail(selected).then(setDetail).catch(() => setDetail(null)); else setDetail(null) }, [selected])
+  const save = async (e) => {
+    e.preventDefault(); const f = e.target
+    try { await contractSet({ staffId: selected, type: f.type.value, start: f.start.value || null, end: f.end.value || null, fte: Number(f.fte.value) || 1 }); showToast('Contract saved') }
+    catch (err) { showToast('Could not save: ' + (err?.message || err)) }
   }
+  return <><Panel title="Contracts"><StaffSelect staff={staff} selected={selected} setSelected={setSelected} />{!selected ? <Empty>Select staff.</Empty> : <form onSubmit={save}><div className="field"><label>Type</label><input name="type" required /></div><div className="grid2" style={{ gap: 12 }}><div className="field"><label>Start</label><input name="start" type="date" /></div><div className="field"><label>End</label><input name="end" type="date" /></div></div><div className="field"><label>FTE</label><input name="fte" type="number" step="0.1" defaultValue="1" /></div><button className="btn primary">Save contract</button></form>}</Panel><Panel title="Current detail" flush>{detail?.contracts?.length ? <SimpleTable rows={detail.contracts} /> : <Empty>No contract detail yet.</Empty>}</Panel><Toast msg={toast} /></>
+}
 
-  return (
-    <>
-      <div className="note-banner">
-        <span>ℹ️</span>
-        <div>
-          Computed live from the <strong>NamRA 2024/25 PAYE tables</strong> (first N$ 100,000/yr tax-free) —
-          mirrors <code>Genesis_HR_v4_Hybrid_Payroll.xlsx</code>. SSC: 0.9% employee + 0.9% employer, ceiling
-          N$ 81/month · VET levy 1% (payroll &gt; N$ 1m/yr).
-          {readOnly && <em> · Read-only view for Finance/Bursar.</em>}
-        </div>
-      </div>
-      <Panel
-        title="Payroll run — July 2026"
-        subtitle="Sample of 6 employees (of 64) · click a row for the payslip"
-        actions={
-          <>
-            <a className="btn ghost sm" href="/assets/Genesis_HR_v4_Hybrid_Payroll.xlsx" download><Icon name="download" size={14} /> Workbook (.xlsx)</a>
-            {!readOnly &&
-              (runDone ? (
-                <Badge tone="green"><Icon name="tick" size={12} /> July run completed</Badge>
-              ) : (
-                <button className="btn amber sm" onClick={() => setConfirmRun(true)}>▶ Run payroll</button>
-              ))}
-          </>
-        }
-        flush
-      >
-        <table className="data">
-          <thead>
-            <tr>
-              <th>Employee</th><th className="num">Gross</th><th className="num">PAYE</th><th className="num">SSC</th>
-              <th className="num">Net pay</th><th className="num">Employer cost (SSC + VET)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p) => (
-              <tr key={p.name} style={{ cursor: 'pointer' }} onClick={() => setSel(p)}>
-                <td style={{ fontWeight: 600 }}>{p.name}</td>
-                <td className="num">{fmtN(p.gross)}</td>
-                <td className="num">{fmtN(p.paye)}</td>
-                <td className="num">{fmtN(p.ssc)}</td>
-                <td className="num" style={{ fontWeight: 700, color: 'var(--petrol-800)' }}>{fmtN(p.net)}</td>
-                <td className="num" style={{ color: 'var(--ink-soft)' }}>{fmtN(p.employer)}</td>
-              </tr>
-            ))}
-            <tr>
-              <td style={{ fontWeight: 700 }}>Totals</td>
-              <td className="num" style={{ fontWeight: 700 }}>{fmtN(totalGross)}</td>
-              <td colSpan={2} />
-              <td className="num" style={{ fontWeight: 700, color: 'var(--petrol-900)', fontSize: 14 }}>
-                {fmtN(totalNet)}
-              </td>
-              <td className="num" style={{ fontWeight: 700 }}>{fmtN(totalEmployer)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </Panel>
+function Qualifications() {
+  const [toast, showToast] = useToast()
+  const [staff, setStaff] = useState([])
+  const [selected, setSelected] = useState('')
+  useEffect(() => { listStaff().then(setStaff).catch(() => setStaff([])) }, [])
+  const save = async (e) => {
+    e.preventDefault(); const f = e.target
+    try { await qualificationAdd({ staffId: selected, title: f.title.value, institution: f.institution.value, year: Number(f.year.value) || null }); showToast('Qualification added') }
+    catch (err) { showToast('Could not add: ' + (err?.message || err)) }
+  }
+  return <><Panel title="Qualifications"><StaffSelect staff={staff} selected={selected} setSelected={setSelected} />{!selected ? <Empty>Select staff.</Empty> : <form onSubmit={save}><div className="field"><label>Qualification</label><input name="title" required /></div><div className="field"><label>Institution</label><input name="institution" /></div><div className="field"><label>Year</label><input name="year" type="number" /></div><button className="btn primary">Add qualification</button></form>}</Panel><Toast msg={toast} /></>
+}
 
-      <Panel title="PAYE brackets — 2024/25 (Income Tax Act)" subtitle="Annual taxable income · applied by the engine above" flush>
-        <table className="data">
-          <thead>
-            <tr><th>From (N$/yr)</th><th>To (N$/yr)</th><th className="num">Rate</th><th className="num">Fixed amount</th></tr>
-          </thead>
-          <tbody>
-            {PAYE_BRACKETS.map((b) => (
-              <tr key={b.from}>
-                <td className="mono" style={{ fontSize: 12.5 }}>{b.from.toLocaleString()}</td>
-                <td className="mono" style={{ fontSize: 12.5 }}>{b.to === Infinity ? '∞' : b.to.toLocaleString()}</td>
-                <td className="num">{Math.round(b.rate * 100)}%</td>
-                <td className="num">{fmtN(b.fixed)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Panel>
+function Recruitment() {
+  const [toast, showToast] = useToast()
+  const [rows, setRows] = useState([])
+  const [showNew, setShowNew] = useState(false)
+  const reload = useCallback(() => listRecruitment().then(setRows).catch(() => setRows([])), [])
+  useEffect(() => { reload() }, [reload])
+  const save = async (e) => {
+    e.preventDefault(); const f = e.target
+    try { await recruitUpsert({ position: f.position.value, candidate: f.candidate.value, stage: f.stage.value, notes: f.notes.value }); setShowNew(false); await reload(); showToast('Recruitment row saved') }
+    catch (err) { showToast('Could not save: ' + (err?.message || err)) }
+  }
+  return <><Panel title="Recruitment" actions={<button className="btn primary sm" onClick={() => setShowNew(true)}>+ Add candidate</button>} flush>{rows.length === 0 ? <Empty>No recruitment rows yet.</Empty> : <SimpleTable rows={rows} />}</Panel>{showNew && <Modal title="Add candidate" onClose={() => setShowNew(false)}><form onSubmit={save}><div className="field"><label>Position</label><input name="position" required /></div><div className="field"><label>Candidate</label><input name="candidate" /></div><div className="field"><label>Stage</label><input name="stage" defaultValue="applied" /></div><div className="field"><label>Notes</label><textarea name="notes" rows={3} /></div><button className="btn primary">Save</button></form></Modal>}<Toast msg={toast} /></>
+}
 
-      {confirmRun && (
-        <Modal title="Run payroll — July 2026" onClose={() => setConfirmRun(false)} width={420}>
-          <div className="cf-row"><span>Employees</span><span className="mono">64</span></div>
-          <div className="cf-row"><span>Total gross (sample of 6)</span><span className="mono">{fmtN(totalGross)}</span></div>
-          <div className="cf-row"><span>PAYE + SSC withheld</span><span className="mono">{fmtN(totalGross - totalNet)}</span></div>
-          <div className="cf-row total"><span>Net payable</span><span className="amt">{fmtN(totalNet)}</span></div>
-          <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', margin: '12px 0 16px' }}>
-            Payments are batched to the bank file and payslips emailed to each employee. This cannot be undone for the month.
-          </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn amber" onClick={runPayroll}>Confirm & run</button>
-            <button className="btn ghost" onClick={() => setConfirmRun(false)}>Cancel</button>
-          </div>
-        </Modal>
-      )}
+function Workload() {
+  const [toast, showToast] = useToast()
+  const [rows, setRows] = useState([])
+  const [staff, setStaff] = useState([])
+  const [showNew, setShowNew] = useState(false)
+  const reload = useCallback(() => Promise.all([listWorkload().then(setRows).catch(() => setRows([])), listStaff().then(setStaff).catch(() => setStaff([]))]), [])
+  useEffect(() => { reload() }, [reload])
+  const save = async (e) => {
+    e.preventDefault(); const f = e.target
+    try { await workloadSet({ staffId: f.staff.value, courses: Number(f.courses.value) || 0, periods: Number(f.periods.value) || 0, students: Number(f.students.value) || 0 }); setShowNew(false); await reload(); showToast('Workload saved') }
+    catch (err) { showToast('Could not save: ' + (err?.message || err)) }
+  }
+  return <><Panel title="Workload" actions={<button className="btn primary sm" onClick={() => setShowNew(true)}>+ Set workload</button>} flush>{rows.length === 0 ? <Empty>No workload rows yet.</Empty> : <SimpleTable rows={rows} />}</Panel>{showNew && <Modal title="Set workload" onClose={() => setShowNew(false)}><form onSubmit={save}><div className="field"><label>Staff</label><select name="staff">{staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div><div className="field"><label>Courses</label><input name="courses" type="number" defaultValue="0" /></div><div className="field"><label>Periods</label><input name="periods" type="number" defaultValue="0" /></div><div className="field"><label>Students</label><input name="students" type="number" defaultValue="0" /></div><button className="btn primary">Save</button></form></Modal>}<Toast msg={toast} /></>
+}
 
-      {sel && (
-        <Modal title={`Payslip — ${sel.name} · July 2026`} onClose={() => setSel(null)} width={420}>
-          {[
-            ['Gross salary', sel.gross],
-            ['PAYE', -sel.paye],
-            ['Social Security (SSC)', -sel.ssc],
-          ].map(([l, v]) => (
-            <div key={l} className="cf-row" style={{ padding: '9px 0', borderBottom: '1px solid #e9eef3' }}>
-              <span>{l}</span>
-              <span className="mono" style={{ color: v < 0 ? 'var(--red)' : 'var(--ink)' }}>
-                {v < 0 ? '− ' + fmtN(-v) : fmtN(v)}
-              </span>
-            </div>
-          ))}
-          <div className="cf-row total"><span>Net pay</span><span className="amt">{fmtN(sel.net)}</span></div>
-          <div style={{ fontSize: 12, color: 'var(--ink-soft)', margin: '10px 0 14px' }}>
-            PAYE per NamRA 2024/25 tables · SSC 0.9% (cap N$ 81) · paid to bank account on file
-          </div>
-          <button className="btn ghost sm" onClick={() => { setSel(null); showToast(`Payslip PDF for ${sel.name} downloaded`) }}>
-            <Icon name="download" size={14} /> Download PDF
-          </button>
-        </Modal>
-      )}
+function StaffSelect({ staff, selected, setSelected }) {
+  return <div className="field" style={{ maxWidth: 360 }}><label>Staff</label><select value={selected} onChange={(e) => setSelected(e.target.value)}><option value="">Select staff</option>{staff.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+}
 
-      <Toast msg={toast} />
-    </>
-  )
+function SimpleTable({ rows }) {
+  const keys = rows[0] ? Object.keys(rows[0]).slice(0, 8) : []
+  return <table className="data"><thead><tr>{keys.map((k) => <th key={k}>{k}</th>)}</tr></thead><tbody>{rows.map((r, i) => <tr key={r.id || i}>{keys.map((k) => <td key={k}>{typeof r[k] === 'number' ? fmtN(r[k]) : String(r[k] ?? '-')}</td>)}</tr>)}</tbody></table>
+}
+
+function Empty({ children }) {
+  return <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-faint)' }}>{children}</div>
 }

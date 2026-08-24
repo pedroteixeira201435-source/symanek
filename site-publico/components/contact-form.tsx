@@ -1,14 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Field, Input, Textarea, SubmitButton } from "@/components/form";
 import { submitContact } from "@/lib/api";
 import { CheckIcon } from "@/components/icons";
+import { Turnstile } from "@/components/turnstile";
 
 export function ContactForm({ className = "" }: { className?: string }) {
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const onTurnstileToken = useCallback((token: string) => setTurnstileToken(token), []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -21,6 +24,7 @@ export function ContactForm({ className = "" }: { className?: string }) {
         email: String(fd.get("email")),
         subject: String(fd.get("subject")),
         message: String(fd.get("message")),
+        turnstileToken,
       });
       setDone(true);
     } catch {
@@ -48,6 +52,7 @@ export function ContactForm({ className = "" }: { className?: string }) {
       <Field label="Email" required><Input name="email" type="email" required autoComplete="email" placeholder="you@example.com" /></Field>
       <Field label="Subject" required><Input name="subject" required placeholder="How can we help?" /></Field>
       <Field label="Message" required><Textarea name="message" required rows={4} placeholder="Write your message…" /></Field>
+      <Turnstile onToken={onTurnstileToken} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <SubmitButton pending={pending}>Send message</SubmitButton>
     </form>

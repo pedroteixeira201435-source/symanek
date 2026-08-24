@@ -9,3 +9,10 @@ export const API_BASE = (import.meta.env && import.meta.env.VITE_API_BASE) || '/
 // Multi-tenant: every request is scoped to one institution. In Phase 2 this comes
 // from the subdomain or the authenticated session, not a constant.
 export const TENANT = (import.meta.env && import.meta.env.VITE_TENANT) || 'symanek'
+
+// Day-one Suite scope. Everything outside this set stays unavailable in the
+// real backend deployment until it has its own data migration and signed UAT.
+export const PRODUCTION_CORE_MODULES = new Set([
+  'dashboard', 'students', 'academics', 'admissions', 'programmes',
+  'exams', 'graduation', 'finance', 'teacher', 'portal',
+])

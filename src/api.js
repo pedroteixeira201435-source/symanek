@@ -1,24 +1,22 @@
 // ---------------------------------------------------------------------------
-// Data-access layer — the "seam" between the UI and the future backend.
+// Data-access layer — the seam between the UI and the backend.
 //
 // Every screen should read/write through THESE functions, never by importing
-// data.js directly. Today (API_MODE='mock') they resolve the in-memory mock
-// after a tiny delay, so the whole UI already speaks async/Promise. In Phase 2,
-// flip API_MODE to 'http' and replace each body with a fetch() — no component
-// has to change. See BACKEND.md for the schema and the endpoint contracts.
+// fixture data directly. In API_MODE='mock' reads intentionally resolve to
+// empty/null after a tiny delay, so the UI exercises loading and empty states
+// without fabricated production data.
 //
-// NOTE: mock reads still join students by NAME (data.js legacy). The backend
-// must join by student_id (FK). Signatures below already take ids where the
-// backend will need them; the mock falls back to name where the seed lacks ids.
+// In API_MODE='http', Supabase/RPC is the source of truth and joins must use
+// database identifiers/session scope rather than display names.
 // ---------------------------------------------------------------------------
 import { API_MODE, API_BASE, TENANT } from './config.js'
-import * as db from './data.js'
+import { ROLES } from './lib/institution.js'
 import { supabase } from './supabaseClient.js'
 
 const clone = (d) => (typeof structuredClone === 'function' ? structuredClone(d) : JSON.parse(JSON.stringify(d)))
 const delay = (ms = 100) => new Promise((r) => setTimeout(r, ms))
 
-// mock resolver — swap this branch's callers for real fetch() in Phase 2
+// mock resolver — empty-by-default local mode
 async function mock(data) { await delay(); return clone(data) }
 
 // Phase-2 backend path (Supabase). Active when API_MODE='http' and the client is
@@ -27,10 +25,37 @@ const httpMode = () =>
   API_MODE === 'http' || (typeof process !== 'undefined' && process.env && process.env.VITE_API_MODE === 'http')
 const useHttp = () => httpMode() && supabase !== null
 
-// name → student uuid (the FK the backend joins by; kills the name-join debt)
+// name → student uuid. Kept for admin-side name lookups; the student portal now
+// resolves the caller via currentStudentId() (session), never by name.
+// eslint-disable-next-line no-unused-vars
 async function studentIdByName(name) {
   const { data } = await supabase.from('students').select('id').eq('full_name', name).maybeSingle()
   return data?.id ?? null
+}
+
+// The signed-in student's own uuid, resolved from the session (never by name).
+// RLS (students owner read: user_id = auth.uid()) guarantees this returns only
+// the caller's row, so every portal read below is scoped to themselves.
+async function currentStudentId() {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+  const { data } = await supabase.from('students').select('id').eq('user_id', user.id).maybeSingle()
+  return data?.id ?? null
+}
+
+async function resolveStudentId(student) {
+  if (!useHttp()) return null
+  if (!student) return currentStudentId()
+  const raw = String(student)
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(raw)
+  if (isUuid) return raw
+  const safe = raw.replace(/[%*,()]/g, '').trim()
+  const { data, error } = await supabase.from('students')
+    .select('id')
+    .or(`student_no.eq.${safe},reference.eq.${safe},full_name.eq.${safe}`)
+    .maybeSingle()
+  if (error) throw error
+  return data?.id ?? currentStudentId()
 }
 
 // Phase-2 helper (unused while API_MODE==='mock'); kept so the http path is obvious.
@@ -50,46 +75,53 @@ function toLearner(s) {
   return {
     id: s.student_no || s.reference || s.id,
     _uuid: s.id,
+    reference: s.reference,
     name: s.full_name,
+    email: s.email || null,
+    programmeId: s.programme_id || null,
     grade: grade || (s.programmes?.name ?? '—'),
     guardian: s.next_of_kin || '—',
     phone: s.phone || '—',
     status: s.status ? s.status[0].toUpperCase() + s.status.slice(1) : 'Admitted',
     attendance: s.attendance != null ? Number(s.attendance) : null,
+    year: s.year || null,
     intake: s.intake || null,
+    idNumber: s.id_number || null,
+    campus: s.campus || null,
   }
 }
 export async function listStudents() {
   if (useHttp()) {
     const { data, error } = await supabase.from('students')
-      .select('id,student_no,reference,full_name,next_of_kin,phone,status,attendance,year,intake,programmes(slug,name)')
+      .select('id,student_no,reference,full_name,email,next_of_kin,phone,status,attendance,year,intake,id_number,campus,programme_id,programmes(slug,name)')
     if (error) throw error
     return (data ?? []).map(toLearner)
   }
-  return mock(db.LEARNERS)
+  return mock([])
 }
 export async function getStudent(id) {
   if (useHttp()) {
     const { data, error } = await supabase.from('students')
-      .select('id,student_no,reference,full_name,next_of_kin,phone,status,attendance,year,intake,programmes(slug,name)')
-      .or(`student_no.eq.${id},reference.eq.${id}`).maybeSingle()
+      .select('id,student_no,reference,full_name,email,next_of_kin,phone,status,attendance,year,intake,id_number,campus,programme_id,programmes(slug,name)')
+      .or(`id.eq.${id},student_no.eq.${id},reference.eq.${id}`).maybeSingle()
     if (error) throw error
     return data ? toLearner(data) : null
   }
-  return mock(db.LEARNERS.find((s) => s.id === id) || null)
+  return mock(null)
 }
 
 export async function listProgrammes() {
   if (useHttp()) {
     const { data, error } = await supabase.from('programmes')
-      .select('slug,name,nqf,years,coordinator,enrolled,accreditation').eq('category', 'suite-demo')
+      .select('id,slug,name,category,level,duration,fee,modes,active')
+      .neq('category', 'suite-demo').order('name')
     if (error) throw error
     return (data ?? []).map((p) => ({
-      code: p.slug.toUpperCase(), name: p.name, nqf: p.nqf, years: p.years,
-      coordinator: p.coordinator, enrolled: p.enrolled, accreditation: p.accreditation,
+      id: p.id, slug: p.slug, code: p.slug.toUpperCase(), name: p.name, category: p.category,
+      level: p.level, nqf: p.level, duration: p.duration, fee: p.fee, modes: p.modes, active: p.active,
     }))
   }
-  return mock(db.PROGRAMMES)
+  return []
 }
 
 export async function listCourses(progCode) {
@@ -106,25 +138,25 @@ export async function listCourses(progCode) {
         sem: c.semester, lecturer: c.staff?.name, enrolled: c.enrolled, cap: c.capacity, prereq: c.prereq_code,
       }))
   }
-  return mock(progCode ? db.COURSES.filter((c) => c.prog === progCode) : db.COURSES)
+  return mock([])
 }
 
 export async function getDegreeAudit(studentName) {
   if (useHttp()) {
-    const sid = await studentIdByName(studentName)
+    const sid = await resolveStudentId(studentName)
     if (!sid) return null
     const { data, error } = await supabase.rpc('degree_audit', { p_student: sid })
     if (error) throw error
     return data // { prog, catalog, gpa, reqs: [...] }
   }
-  return mock(db.DEGREE_AUDIT[studentName] || null)
+  return mock(null)
 }
 
 // Reads wired to the backend (mapped back to the mock-compatible shapes the
 // modules already consume). Others follow the same pattern in later B2 passes.
 export async function getInvoicesForStudent(studentName) {
   if (useHttp()) {
-    const sid = await studentIdByName(studentName)
+    const sid = await resolveStudentId(studentName)
     if (!sid) return []
     const { data, error } = await supabase.from('invoices')
       .select('id,amount,balance,due,status,invoice_payments(status)').eq('student_id', sid)
@@ -135,27 +167,28 @@ export async function getInvoicesForStudent(studentName) {
       proofPending: (i.invoice_payments ?? []).some((p) => p.status === 'pending'),
     }))
   }
-  return mock(db.INVOICES.filter((i) => i.learner === studentName))
+  return mock([])
 }
 
 export async function getHoldsForStudent(studentName) {
   if (useHttp()) {
-    const sid = await studentIdByName(studentName)
+    const sid = await resolveStudentId(studentName)
     if (!sid) return []
     const { data, error } = await supabase.from('holds')
-      .select('type,reason,blocks,active,created_at').eq('student_id', sid).eq('active', true)
+      .select('id,type,reason,blocks,active,created_at').eq('student_id', sid).eq('active', true)
     if (error) throw error
     return (data ?? []).map((h) => ({
-      student: studentName, type: h.type[0].toUpperCase() + h.type.slice(1), reason: h.reason,
+      id: h.id, student: studentName, type: h.type[0].toUpperCase() + h.type.slice(1), rawType: h.type, reason: h.reason,
+      blocks: h.blocks ?? [],
       impact: (h.blocks ?? []).map((b) => 'Blocks ' + b), since: h.created_at,
     }))
   }
-  return mock(db.HOLDS.filter((h) => h.student === studentName))
+  return mock([])
 }
 
 export async function getSponsorsForStudent(studentName) {
   if (useHttp()) {
-    const sid = await studentIdByName(studentName)
+    const sid = await resolveStudentId(studentName)
     if (!sid) return []
     const { data, error } = await supabase.from('sponsor_claims')
       .select('id,coverage,billed,received,status,sponsors(name,type)').eq('student_id', sid)
@@ -165,19 +198,14 @@ export async function getSponsorsForStudent(studentName) {
       coverage: Number(c.coverage), billed: Number(c.billed), received: Number(c.received), status: c.status,
     }))
   }
-  return mock(db.SPONSORS.filter((s) => s.learners.includes(studentName)))
+  return mock([])
 }
 
-// Mutable results store (mock) so a lecturer's mark edits and publish flow reach
-// the student's transcript this session. Seeded from data.js; http mode uses the
-// Supabase `results` rows and ignores this store.
+// Empty-by-default mock result store. The http path uses Supabase results.
 let _results = null
 function results() {
   if (_results) return _results
   _results = {}
-  for (const [code, rows] of Object.entries(db.COURSE_RESULTS)) {
-    _results[code] = rows.map((r) => ({ ...r, exam2: r.exam2 ?? null, published: r.published ?? false }))
-  }
   return _results
 }
 export async function getCourseResults(code) {
@@ -218,7 +246,7 @@ export async function publishCourseResults(code) {
 
 export async function getResultsForStudent(studentName) {
   if (useHttp()) {
-    const sid = await studentIdByName(studentName)
+    const sid = await resolveStudentId(studentName)
     if (!sid) return []
     const { data, error } = await supabase.from('enrolments')
       .select('courses(code),results(ca,exam,final,grade,published)').eq('student_id', sid)
@@ -233,15 +261,13 @@ export async function getResultsForStudent(studentName) {
     rows.filter((r) => r.learner === studentName).map((r) => ({ code, ...r }))))
 }
 
-// Mock attendance store: name -> { attended, total } sessions, so a lecturer's
-// register updates the student's % this session (drives the 80% permit rule).
+// Mock attendance store starts empty; recordAttendance/recordSession can still
+// update it during a local session without importing fixture data.
 let _attendance = {}
 function seedAttendance(name) {
   if (_attendance[name]) return _attendance[name]
-  const l = db.LEARNERS.find((x) => x.name === name)
-  const pct = l?.attendance ?? 90
   const total = 25
-  return (_attendance[name] = { attended: Math.round((pct / 100) * total), total })
+  return (_attendance[name] = { attended: 0, total })
 }
 const attendancePercentOf = (name) => {
   const a = _attendance[name] || seedAttendance(name)
@@ -259,7 +285,7 @@ export async function getCourseAttendance(names, code) {
 // Class attendance for a student — feeds the 80% examination-admission rule.
 export async function getAttendanceForStudent(studentName) {
   if (useHttp()) {
-    const sid = await studentIdByName(studentName)
+    const sid = await resolveStudentId(studentName)
     if (!sid) return { percent: 0, hoursAttended: 0, hoursTotal: 0 }
     const { data } = await supabase.from('attendance_summary')
       .select('percent,hours_attended,hours_total').eq('student_id', sid).maybeSingle()
@@ -280,7 +306,7 @@ export async function listGraduands() {
       cleared: g.cleared, hasCertificate: g.has_certificate,
     }))
   }
-  return mock(db.GRADUANDS)
+  return mock([])
 }
 export async function listExamSchedule() {
   if (useHttp()) {
@@ -296,7 +322,7 @@ export async function listExamSchedule() {
       }
     })
   }
-  return mock(db.EXAM_SCHEDULE)
+  return mock([])
 }
 
 // Exam board — per-course result aggregate + publication status. http computes
@@ -317,7 +343,7 @@ export async function listExamBoard() {
       return { id: c.id, code: c.code, title: c.title, lecturer: c.staff?.name, sat, passRate, avg, status }
     }).filter(Boolean)
   }
-  return mock(db.EXAM_BOARD)
+  return mock([])
 }
 const APP_STAGE_LABEL = {
   submitted: 'Applied', under_review: 'Under Review', approved: 'Approved',
@@ -326,17 +352,45 @@ const APP_STAGE_LABEL = {
 export async function listApplicants() {
   if (useHttp()) {
     const { data, error } = await supabase.from('applications')
-      .select('id,reference,full_name,programme_slug,stage,created_at').order('created_at', { ascending: false })
+      .select('id,reference,full_name,programme_slug,stage,amount_due,created_at').order('created_at', { ascending: false })
     if (error) throw error
     return (data ?? []).map((a) => ({
       id: a.reference || a.id, _uuid: a.id, name: a.full_name,
       prog: (a.programme_slug || '').toUpperCase(), points: 0,
       stage: APP_STAGE_LABEL[a.stage] || a.stage,
+      amountDue: Number(a.amount_due || 0),
       applied: a.created_at ? new Date(a.created_at).toLocaleDateString('en-NA') : '',
       docs: {},
     }))
   }
-  return mock(db.APPLICANTS)
+  return mock([])
+}
+
+export async function approveApplication(appId) {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('approve_application', { p_app: appId })
+    if (error) throw error
+    return { ok: true, reference: data }
+  }
+  return mock({ ok: true, reference: null })
+}
+
+export async function markApplicationPaid({ appId, amount, method = 'EFT' }) {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('mark_paid', { p_app: appId, p_amount: amount, p_method: method })
+    if (error) throw error
+    return { ok: true, reference: data }
+  }
+  return mock({ ok: true, reference: null })
+}
+
+export async function rejectApplication(appId) {
+  if (useHttp()) {
+    const { error } = await supabase.from('applications').update({ stage: 'rejected' }).eq('id', appId)
+    if (error) throw error
+    return { ok: true }
+  }
+  return mock({ ok: true })
 }
 export async function listResidences() {
   if (useHttp()) {
@@ -347,7 +401,7 @@ export async function listResidences() {
       block: r.name, rooms: r.capacity, occupied: (r.allocations ?? []).length, fee: 0,
     }))
   }
-  return mock(db.RESIDENCES)
+  return mock([])
 }
 export async function listNcheReturns() {
   if (useHttp()) {
@@ -356,9 +410,9 @@ export async function listNcheReturns() {
     if (error) throw error
     return (data ?? []).map((n) => ({ ret: n.title, period: n.period, due: n.due, status: n.status }))
   }
-  return mock(db.NCHE_RETURNS)
+  return mock([])
 }
-export const getCourseware = (code) => mock(db.COURSEWARE[code] || null)
+export const getCourseware = (code) => mock(null)
 
 export async function listStaff() {
   if (useHttp()) {
@@ -366,7 +420,7 @@ export async function listStaff() {
     if (error) throw error
     return (data ?? []).map((s) => ({ id: s.staff_no, name: s.name, email: s.email, role: s.role, dept: s.department }))
   }
-  return mock(db.STAFF)
+  return mock([])
 }
 
 // ============================ WRITES (stubs → backend) ============================
@@ -377,7 +431,7 @@ export async function registerCourse({ courseId, courseCode, studentId }) {
     if (error) throw error
     return data // { ok, code, status, charge, message } — server-authoritative rules engine
   }
-  return mock({ ok: true, studentId, courseCode, charge: (db.COURSES.find((c) => c.code === courseCode)?.credits || 0) * 1150, at: Date.now() })
+  return mock({ ok: true, studentId, courseCode, charge: 0, at: Date.now() })
 }
 export async function payInvoice({ invoiceId, amount, method, studentId }) {
   if (useHttp()) {
@@ -497,7 +551,13 @@ export async function getCanteenSummary() {
     if (error) throw error
     return data // { sales_today, transactions, avg_basket, top_sellers }
   }
-  return mock(null) // CanteenAdmin keeps its demo constants in mock
+  return null
+}
+export async function listCanteenProducts() {
+  if (!useHttp()) return []
+  const { data, error } = await supabase.from('canteen_products').select('id,name,category,price,stock,reorder').order('name')
+  if (error) throw error
+  return (data ?? []).map((p) => ({ id: p.id, name: p.name, cat: p.category, price: Number(p.price), stock: p.stock, reorder: p.reorder }))
 }
 
 // --- General ledger (http-backed): journal drives trial balance / income stmt ---
@@ -510,7 +570,14 @@ export async function getGlJournal() {
       desc: r.description, acc: r.account, dr: Number(r.dr), cr: Number(r.cr), vat: r.vat || '—',
     }))
   }
-  return mock(db.JOURNAL)
+  return []
+}
+// Chart of accounts from the GL (name → type/normal side). Replaces the mock COA.
+export async function listGlAccounts() {
+  if (!useHttp()) return []
+  const { data, error } = await supabase.from('gl_accounts').select('name,type,normal_side').order('type')
+  if (error) throw error
+  return (data ?? []).map((a) => ({ name: a.name, type: a.type, side: a.normal_side }))
 }
 export async function glPost({ desc, drAcc, crAcc, amount }) {
   if (useHttp()) {
@@ -528,7 +595,7 @@ export async function getTimetables() {
   if (useHttp()) {
     const { data, error } = await supabase.rpc('timetable')
     if (error) throw error
-    const periods = db.PERIODS.filter((p) => p.id !== 'BRK').map((p) => p.id)
+    const periods = [...new Set((data ?? []).map((p) => p.period_id))]
     const out = {}
     for (const s of data ?? []) {
       if (!out[s.class_group]) { out[s.class_group] = {}; periods.forEach((pid) => { out[s.class_group][pid] = [null, null, null, null, null] }) }
@@ -537,15 +604,28 @@ export async function getTimetables() {
     }
     return out
   }
-  return mock(db.TIMETABLES)
+  return mock({})
 }
-export async function timetableSet({ classGroup, day, period, subject, venue }) {
+export async function timetableSet({ classGroup, day, period, subject, venue, lecturerStaffNo = null }) {
   if (useHttp()) {
-    const { data, error } = await supabase.rpc('timetable_set', { p_class: classGroup, p_day: day, p_period: period, p_subject: subject, p_venue: venue })
+    const { data, error } = await supabase.rpc('timetable_set', { p_class: classGroup, p_day: day, p_period: period, p_subject: subject, p_venue: venue, p_lecturer_staff_no: lecturerStaffNo })
     if (error) throw error
     return { ok: true, id: data }
   }
-  return mock({ ok: true })
+  return { ok: true }
+}
+// Flat list of timetable slots (all classes) for the schedule table.
+export async function listTimetable() {
+  if (!useHttp()) return []
+  const { data, error } = await supabase.rpc('timetable')
+  if (error) throw error
+  return (data ?? []).map((s) => ({ id: s.id, classGroup: s.class_group, day: s.day_of_week, period: s.period_id, subject: s.subject, venue: s.venue, lecturer: s.lecturer }))
+}
+export async function timetableClear(id) {
+  if (!useHttp()) return { ok: true }
+  const { error } = await supabase.rpc('timetable_clear', { p_id: id })
+  if (error) throw error
+  return { ok: true }
 }
 
 // --- Library (http-backed: catalogue + loans + issue/return/renew) ---
@@ -553,18 +633,62 @@ export async function listLibraryCatalogue() {
   if (useHttp()) {
     const { data, error } = await supabase.rpc('library_catalogue')
     if (error) throw error
-    return (data ?? []).map((b) => ({ isbn: b.isbn, title: b.title, author: b.author, cat: b.category, avail: b.avail, total: b.total }))
+    return (data ?? []).map((b) => ({ id: b.id, isbn: b.isbn, title: b.title, author: b.author, cat: b.category, avail: b.avail, total: b.total }))
   }
-  return mock(db.CATALOGUE)
+  return []
 }
 export async function listLibraryLoans() {
   if (useHttp()) {
     const { data, error } = await supabase.rpc('library_loans_active')
     if (error) throw error
     const fmt = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '')
-    return (data ?? []).map((l) => ({ id: l.id, book: l.book, borrower: l.borrower, grade: '', issued: fmt(l.issued), due: fmt(l.due), status: l.status }))
+    return (data ?? []).map((l) => ({ id: l.id, book: l.book, borrower: l.borrower, issued: fmt(l.issued), due: fmt(l.due), status: l.status }))
   }
-  return mock(db.LOANS)
+  return []
+}
+export async function listLibraryFines() {
+  if (!useHttp()) return []
+  const { data, error } = await supabase.rpc('library_fines_list')
+  if (error) throw error
+  return (data ?? []).map((f) => ({ id: f.id, borrower: f.borrower, book: f.book, days: f.days, amount: Number(f.amount), paid: f.paid }))
+}
+export async function listLibraryReservations() {
+  if (!useHttp()) return []
+  const { data, error } = await supabase.rpc('library_reservations_list')
+  if (error) throw error
+  const fmt = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '')
+  return (data ?? []).map((r) => ({ id: r.id, title: r.title, requester: r.requester, placed: fmt(r.placed), pos: r.pos, avail: r.avail, status: r.status }))
+}
+export async function libraryBookUpsert({ isbn, title, author, category, total }) {
+  if (!useHttp()) return { ok: true }
+  const { data, error } = await supabase.rpc('library_book_upsert', {
+    p_isbn: isbn || null, p_title: title, p_author: author || null, p_category: category || null, p_total: Number(total) || 1 })
+  if (error) throw error
+  return { ok: true, id: data }
+}
+export async function libraryBookDelete(id) {
+  if (!useHttp()) return { ok: true }
+  const { error } = await supabase.rpc('library_book_delete', { p_id: id })
+  if (error) throw error
+  return { ok: true }
+}
+export async function libraryFineSettle(id, waive = false) {
+  if (!useHttp()) return { ok: true }
+  const { error } = await supabase.rpc('library_fine_settle', { p_id: id, p_waive: waive })
+  if (error) throw error
+  return { ok: true }
+}
+export async function libraryReservationAdd({ isbn, requester, student = null }) {
+  if (!useHttp()) return { ok: true }
+  const { data, error } = await supabase.rpc('library_reservation_add', { p_isbn: isbn, p_requester: requester, p_student: student })
+  if (error) throw error
+  return { ok: true, id: data }
+}
+export async function libraryReservationUpdate(id, status) {
+  if (!useHttp()) return { ok: true }
+  const { error } = await supabase.rpc('library_reservation_update', { p_id: id, p_status: status })
+  if (error) throw error
+  return { ok: true }
 }
 export async function libraryIssue({ isbn, borrower, days = 14 }) {
   if (useHttp()) {
@@ -833,7 +957,7 @@ export async function listRolePermissions() {
 // --- Official documents (register + signed URL; PDF generated app/server-side) ---
 export async function listDocumentsForStudent(studentName) {
   if (useHttp()) {
-    const sid = await studentIdByName(studentName)
+    const sid = await currentStudentId()
     if (!sid) return []
     const { data, error } = await supabase.from('documents')
       .select('id,type,path,issued_at').eq('student_id', sid).order('issued_at', { ascending: false })
@@ -904,5 +1028,226 @@ export async function getSignatories() {
 // ============================ AUTH / SESSION ============================
 // Phase 1: pick a role card (no password). Phase 2: real credentials + JWT/session,
 // with RBAC enforced server-side (see BACKEND.md), not by hiding nav items.
-export const login = ({ roleId }) => mock({ ok: true, role: db.ROLES.find((r) => r.id === roleId) || null, tenant: TENANT })
+export const login = ({ roleId }) => mock({ ok: true, role: ROLES.find((r) => r.id === roleId) || null, tenant: TENANT })
 export const currentSession = () => mock({ tenant: TENANT, mode: API_MODE })
+
+// Admin grants a student portal login. Creates the auth user server-side (Edge
+// Function, service_role) and links students.user_id; returns the one-time
+// email + temporary password to show the admin. The student must change it on
+// first login. In mock mode returns demo credentials so the UI is exercisable.
+export async function grantStudentAccess(studentUuid) {
+  if (!useHttp()) return mock({ email: 'demo.student@symanek.local', password: 'Symanek-temp-1!' })
+  const { data, error } = await supabase.functions.invoke('grant-student-access', {
+    body: { student_id: studentUuid },
+  })
+  if (error) {
+    // Non-2xx bodies arrive on error.context (a Response), not on `data`.
+    let msg = error.message
+    try { msg = (await error.context?.json())?.error || msg } catch { /* keep msg */ }
+    throw new Error(msg)
+  }
+  return data // { email, password }
+}
+
+// Called after a student sets a new password on first login — clears the flag.
+export async function clearPasswordReset() {
+  if (!useHttp()) return mock({ ok: true })
+  const { error } = await supabase.rpc('clear_password_reset')
+  if (error) throw error
+  return { ok: true }
+}
+
+// ======================= BUSINESS SETTINGS =======================
+// Editable business rules (grade bands, PAYE/SSC/VET, VAT, currency) stored in
+// business_settings. In mock/dev returns null so callers keep their built-in
+// defaults; in http returns the { key: value } object.
+export async function getBusinessSettings() {
+  if (!useHttp()) return null
+  const { data, error } = await supabase.rpc('get_business_settings')
+  if (error) throw error
+  return data // { grade_bands, assessment_weights, paye_brackets, ssc, vet_levy, tax, currency }
+}
+
+// Admin-only write of a single setting; value is any JSON-serialisable value.
+export async function setBusinessSetting(key, value) {
+  if (!useHttp()) return { ok: true }
+  const { error } = await supabase.rpc('set_business_setting', { p_key: key, p_value: value })
+  if (error) throw error
+  return { ok: true }
+}
+
+// ======================= DOMAIN CRUD (Phase 2 backends) =======================
+// Thin wrappers over the SECURITY DEFINER RPCs. Reads return [] / null in mock so
+// no fabricated data reaches a real deployment; writes are no-ops in mock.
+const rows = async (fn, args) => {
+  if (!useHttp()) return []
+  const { data, error } = await supabase.rpc(fn, args)
+  if (error) throw error
+  return data ?? []
+}
+const one = async (fn, args) => {
+  if (!useHttp()) return null
+  const { data, error } = await supabase.rpc(fn, args)
+  if (error) throw error
+  return data
+}
+const call = async (fn, args) => {
+  if (!useHttp()) return { ok: true }
+  const { data, error } = await supabase.rpc(fn, args)
+  if (error) throw error
+  return { ok: true, result: data }
+}
+
+// ---- Library extra CRUD is defined above (listLibraryFines, …) ----
+
+// ---- HR / Payroll ----
+export const listPayroll        = () => rows('hr_payroll_list')
+export const listLeaveBalances  = () => rows('hr_leave_balances_list')
+export const listRecruitment    = () => rows('hr_recruitment_list')
+export const listWorkload       = () => rows('hr_workload_list')
+export const getStaffDetail     = (id) => one('hr_staff_detail', { p_staff: id })
+export const staffUpsert        = (s) => call('staff_upsert', { p_id: s.id ?? null, p_staff_no: s.staffNo ?? null, p_name: s.name, p_email: s.email ?? null, p_role: s.role ?? null, p_department: s.department ?? null })
+export const staffDelete        = (id) => call('staff_delete', { p_id: id })
+export const contractSet        = (c) => call('contract_set', { p_staff: c.staffId, p_type: c.type, p_start: c.start ?? null, p_end: c.end ?? null, p_fte: c.fte ?? 1 })
+export const qualificationAdd   = (q) => call('qualification_add', { p_staff: q.staffId, p_title: q.title, p_institution: q.institution ?? null, p_year: q.year ?? null })
+export const leaveBalanceSet    = (b) => call('leave_balance_set', { p_staff: b.staffId, p_annual: b.annual, p_sick: b.sick, p_taken: b.taken })
+export const recruitUpsert      = (r) => call('recruit_upsert', { p_id: r.id ?? null, p_position: r.position, p_candidate: r.candidate ?? null, p_stage: r.stage ?? 'applied', p_notes: r.notes ?? null })
+export const workloadSet        = (w) => call('workload_set', { p_staff: w.staffId, p_courses: w.courses, p_periods: w.periods, p_students: w.students })
+export const payrollRun         = (p) => call('payroll_run', { p_staff: p.staffId, p_month: p.month, p_gross: p.gross })
+
+// ---- Finance ----
+export const getFinanceStats    = () => one('finance_stats')
+export const listDebtors        = () => rows('finance_debtors_list')
+export const listCollectionByProgramme = () => rows('finance_collection_by_programme')
+export const listExpenseBreakdown = () => rows('finance_expense_breakdown')
+export const listInvoices       = () => rows('invoices_list')
+export const listFeeStructures  = () => rows('fee_structures_list')
+export const listBudgets        = () => rows('budgets_list')
+export const listExpenses       = () => rows('expenses_list')
+export const invoiceCreate      = (i) => call('invoice_create', { p_student: i.studentId, p_amount: i.amount, p_due: i.due ?? null })
+export const feeStructureSet    = (f) => call('fee_structure_set', { p_programme: f.programmeId, p_year: f.year, p_tuition: f.tuition, p_other: f.other })
+export const budgetSet          = (b) => call('budget_set', { p_category: b.category, p_allocated: b.allocated, p_spent: b.spent ?? 0 })
+export const expenseRecord      = (e) => call('expense_record', { p_date: e.date ?? null, p_category: e.category, p_description: e.description ?? null, p_amount: e.amount })
+
+// ---- Accounting (assets + VAT) ----
+export const listAssets         = () => rows('asset_register_list')
+export const listVatCalendar    = () => rows('vat_calendar_list')
+export const assetAdd           = (a) => call('asset_add', { p_name: a.name, p_category: a.category ?? null, p_acquired: a.acquired ?? null, p_cost: a.cost, p_life: a.life ?? 5 })
+export const assetDelete        = (id) => call('asset_delete', { p_id: id })
+export const assetDepreciate    = (id) => call('asset_depreciate', { p_id: id })
+export const vatPeriodSet       = (v) => call('vat_period_set', { p_period: v.period, p_output: v.output, p_input: v.input, p_status: v.status ?? 'open', p_due: v.due ?? null })
+
+// ---- Canteen / POS ----
+export const listTillSessions   = () => rows('canteen_till_list')
+export const listCanteenAccounts = () => rows('canteen_accounts_list')
+export const canteenProductUpsert = (p) => call('canteen_product_upsert', { p_id: p.id ?? null, p_name: p.name, p_category: p.category ?? null, p_price: p.price, p_stock: p.stock ?? 0, p_reorder: p.reorder ?? 0 })
+export const canteenProductDelete = (id) => call('canteen_product_delete', { p_id: id })
+export const canteenInventoryAdjust = (id, delta) => call('canteen_inventory_adjust', { p_id: id, p_delta: delta })
+export const canteenTillOpen    = (float) => call('canteen_till_open', { p_float: float })
+export const canteenTillClose   = (id, counted) => call('canteen_till_close', { p_id: id, p_counted: counted })
+export const canteenAccountTopup = (studentId, amount) => call('canteen_account_topup', { p_student: studentId, p_amount: amount })
+
+// ---- Scheduling ----
+export const listPeriods        = () => rows('periods_list')
+export const listDutyRoster     = () => rows('duty_roster_list')
+export const listRelief         = (date) => rows('relief_list', { p_date: date ?? null })
+export const periodSet          = (p) => call('period_set', { p_id: p.id, p_label: p.label, p_start: p.start ?? null, p_end: p.end ?? null, p_ord: p.ord ?? 0 })
+export const periodDelete       = (id) => call('period_delete', { p_id: id })
+export const dutySet            = (d) => call('duty_set', { p_id: d.id ?? null, p_day: d.day, p_area: d.area, p_staff: d.staffId ?? null })
+export const dutyDelete         = (id) => call('duty_delete', { p_id: id })
+export const reliefSet          = (r) => call('relief_set', { p_date: r.date ?? null, p_absent: r.absentId ?? null, p_cover: r.coverId ?? null, p_class: r.classGroup ?? null, p_period: r.periodId ?? null, p_note: r.note ?? null })
+export const reliefDelete       = (id) => call('relief_delete', { p_id: id })
+
+// ---- Accommodation ----
+export const listAllocations    = () => rows('allocations_list')
+export const listResidencesFull = () => rows('residences_list')
+export const residenceUpsert    = (r) => call('residence_upsert', { p_id: r.id ?? null, p_name: r.name, p_capacity: r.capacity })
+export const residenceDelete    = (id) => call('residence_delete', { p_id: id })
+export const allocateRoomRpc    = (a) => call('allocate_room', { p_student: a.studentId, p_residence: a.residenceId, p_room: a.room ?? null, p_fee: a.fee ?? 0 })
+export const allocationSetStatus = (id, status) => call('allocation_set_status', { p_id: id, p_status: status })
+
+// ---- Compliance / Institution ----
+export const listNcheReturnsFull = () => rows('nche_returns_list')
+export const ncheReturnSet      = (n) => call('nche_return_set', { p_id: n.id ?? null, p_title: n.title, p_period: n.period ?? null, p_status: n.status ?? 'draft', p_due: n.due ?? null })
+export const getInstitution     = () => one('institution_get')
+export const setInstitution     = (i) => call('institution_set', { p_name: i.name ?? null, p_type: i.type ?? null, p_modules: i.modules ?? null })
+
+// ---- Dashboard aggregates ----
+export const getFeeTrend        = () => rows('dashboard_fee_trend')
+export const getCashflow        = () => rows('dashboard_cashflow')
+export const getActivityFeed    = () => rows('dashboard_activity')
+export const getWorkQueue       = () => one('dashboard_work_queue')
+
+// ---- Students / Holds ----
+export async function studentUpsert(s) {
+  if (!useHttp()) return { ok: true, id: s.id ?? null }
+  const row = {
+    student_no: s.studentNo ?? s.student_no ?? null,
+    reference: s.reference ?? s.studentNo ?? s.student_no ?? null,
+    full_name: s.name,
+    email: s.email,
+    phone: s.phone ?? null,
+    next_of_kin: s.nextOfKin ?? s.next_of_kin ?? null,
+    programme_id: s.programmeId ?? null,
+    status: s.status ?? 'admitted',
+    year: s.year ? Number(s.year) : null,
+    intake: s.intake ?? null,
+    id_number: s.idNumber ?? s.id_number ?? null,
+    campus: s.campus ?? null,
+  }
+  const q = s.id
+    ? supabase.from('students').update(row).eq('id', s.id).select('id').single()
+    : supabase.from('students').insert(row).select('id').single()
+  const { data, error } = await q
+  if (error) throw error
+  return { ok: true, id: data.id }
+}
+
+export async function studentDelete(id) {
+  if (!useHttp()) return { ok: true }
+  const { error } = await supabase.from('students').delete().eq('id', id)
+  if (error) throw error
+  return { ok: true }
+}
+
+export async function holdUpsert(h) {
+  if (!useHttp()) return { ok: true, id: h.id ?? null }
+  const row = {
+    student_id: h.studentId,
+    type: h.type,
+    reason: h.reason ?? null,
+    blocks: h.blocks ?? [],
+    active: h.active ?? true,
+  }
+  const q = h.id
+    ? supabase.from('holds').update(row).eq('id', h.id).select('id').single()
+    : supabase.from('holds').insert(row).select('id').single()
+  const { data, error } = await q
+  if (error) throw error
+  return { ok: true, id: data.id }
+}
+
+export async function holdClear(id) {
+  if (!useHttp()) return { ok: true }
+  const { error } = await supabase.from('holds').update({ active: false }).eq('id', id)
+  if (error) throw error
+  return { ok: true }
+}
+
+// ---- Programmes / Courses / Courseware / Academics ----
+export const programmeUpsert    = (p) => call('programme_upsert', { p_id: p.id ?? null, p_slug: p.slug ?? null, p_name: p.name, p_category: p.category ?? null, p_level: p.level ?? null, p_duration: p.duration ?? null, p_fee: p.fee ?? null, p_modes: p.modes ?? null, p_description: p.description ?? null })
+export const programmeSetActive = (id, active) => call('programme_set_active', { p_id: id, p_active: active })
+export const courseUpsert       = (c) => call('course_upsert', { p_id: c.id ?? null, p_code: c.code, p_title: c.title, p_programme: c.programmeId ?? null, p_credits: c.credits ?? 0, p_semester: c.semester ?? null, p_capacity: c.capacity ?? 0, p_lecturer: c.lecturerId ?? null })
+export const courseDelete       = (id) => call('course_delete', { p_id: id })
+export const listCourseware     = (courseId) => rows('courseware_list', { p_course: courseId })
+export const coursewareUpsert   = (c) => call('courseware_upsert', { p_id: c.id ?? null, p_course: c.courseId, p_title: c.title, p_url: c.url ?? null })
+export const coursewareDelete   = (id) => call('courseware_delete', { p_id: id })
+export const listAtRisk         = () => rows('academics_at_risk')
+
+// Staff options with uuid + staff_no + name (for pickers that persist by uuid).
+export async function listStaffOptions() {
+  if (!useHttp()) return []
+  const { data, error } = await supabase.from('staff').select('id,staff_no,name').order('name')
+  if (error) throw error
+  return (data ?? []).map((s) => ({ uuid: s.id, staffNo: s.staff_no, name: s.name }))
+}

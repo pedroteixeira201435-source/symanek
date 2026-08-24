@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Field, Input, SubmitButton } from "@/components/form";
 import { lookupApplication, submitPaymentProof, type ApplicationStatus } from "@/lib/api";
 import { college, formatN } from "@/lib/content";
 import { CheckIcon, ArrowRight } from "@/components/icons";
+import { Turnstile } from "@/components/turnstile";
 
 const STAGES: { key: string; label: string }[] = [
   { key: "submitted", label: "Submitted" },
@@ -17,14 +18,18 @@ const STAGES: { key: string; label: string }[] = [
 export function PortalLookup() {
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState<ApplicationStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const onTurnstileToken = useCallback((token: string) => setTurnstileToken(token), []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setPending(true);
     const fd = new FormData(e.currentTarget);
-    const res = await lookupApplication(String(fd.get("ref")));
-    setResult(res);
-    setPending(false);
+    setError(null);
+    try { setResult(await lookupApplication(String(fd.get("ref")), turnstileToken)); }
+    catch (err) { setError(err instanceof Error ? err.message : "Could not check application status."); }
+    finally { setPending(false); }
   }
 
   return (
@@ -35,14 +40,12 @@ export function PortalLookup() {
             <Input name="ref" required placeholder="e.g. SYM-2026-0042" autoComplete="off" />
           </Field>
         </div>
+        <Turnstile onToken={onTurnstileToken} />
         <div className="sm:w-40">
           <SubmitButton pending={pending}>Check status</SubmitButton>
         </div>
       </form>
-      <p className="mt-2 text-center text-xs text-petrol-400">
-        Demo references: <button className="underline" onClick={() => document.querySelector<HTMLInputElement>("input[name=ref]")!.value = "SYM-2026-0042"}>SYM-2026-0042</button>{" "}
-        (approved) · <button className="underline" onClick={() => document.querySelector<HTMLInputElement>("input[name=ref]")!.value = "SYM-2026-0043"}>SYM-2026-0043</button> (enrolled)
-      </p>
+      {error && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 
       {result && (
         <div className="mt-8">
@@ -171,6 +174,8 @@ function ProofBlock({ reference, submitted }: { reference: string; submitted?: b
   const [done, setDone] = useState(!!submitted);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const onTurnstileToken = useCallback((token: string) => setTurnstileToken(token), []);
 
   if (done) {
     return (
@@ -189,7 +194,7 @@ function ProofBlock({ reference, submitted }: { reference: string; submitted?: b
     if (!amount || amount <= 0) return setError("Enter the amount you paid.");
     setPending(true);
     setError(null);
-    const res = await submitPaymentProof(reference, file, amount);
+    const res = await submitPaymentProof(reference, file, amount, turnstileToken);
     setPending(false);
     if (res.ok) setDone(true);
     else setError(res.error ?? "Upload failed");
@@ -211,6 +216,7 @@ function ProofBlock({ reference, submitted }: { reference: string; submitted?: b
         <span className="mb-1.5 block text-sm font-medium text-petrol-700">Proof of payment</span>
         <input name="file" type="file" accept="image/*,application/pdf" required className="block w-full text-sm text-petrol-700 file:mr-3 file:rounded-lg file:border-0 file:bg-petrol-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-petrol-700" />
       </label>
+      <Turnstile onToken={onTurnstileToken} />
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       <SubmitButton pending={pending}>Submit proof of payment</SubmitButton>
     </form>

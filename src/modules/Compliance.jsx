@@ -1,90 +1,134 @@
-import React, { useState, useEffect } from 'react'
-import { StatCard, Panel, Badge, Toast, useToast } from '../ui.jsx'
-import { NCHE_RETURNS, PROGRAMMES, INSTITUTION_TYPES, INSTITUTION_HIDE, getInstType } from '../data.js'
-import { listNcheReturns } from '../api.js'
+import React, { useState, useEffect, useCallback } from 'react'
+import { StatCard, Panel, Badge, Toast, useToast, Modal } from '../ui.jsx'
+import { listNcheReturnsFull, ncheReturnSet, listProgrammes, getInstitution, setInstitution } from '../api.js'
 
-// Regulatory compliance — NCHE statutory returns, programme accreditation,
-// and the institution-type profile (drives which modules a tenant sees).
+const INST_TYPES = ['Vocational college', 'Full university', 'Distance']
+const RET_TONE = { accepted: 'green', submitted: 'amber', draft: 'red' }
+
+// Regulatory compliance — NCHE statutory returns, programme register, and the
+// institution profile. Empty by default; the registrar files returns.
 export default function Compliance() {
   const [toast, showToast] = useToast()
-  const [type, setType] = useState(getInstType())
-  const [returns, setReturns] = useState(NCHE_RETURNS)
-  const [status, setStatus] = useState(Object.fromEntries(NCHE_RETURNS.map((r) => [r.ret, r.status])))
+  const [returns, setReturns] = useState([])
+  const [programmes, setProgrammes] = useState([])
+  const [inst, setInst] = useState(null)
+  const [showRet, setShowRet] = useState(false)
+  const [editRet, setEditRet] = useState(null)
 
-  useEffect(() => {
-    let alive = true
-    listNcheReturns()
-      .then((rows) => {
-        if (!alive || !Array.isArray(rows) || !rows.length) return
-        setReturns(rows)
-        setStatus(Object.fromEntries(rows.map((r) => [r.ret, r.status])))
+  const reload = useCallback(() => Promise.all([
+    listNcheReturnsFull().then(setReturns).catch(() => setReturns([])),
+    listProgrammes().then(setProgrammes).catch(() => setProgrammes([])),
+    getInstitution().then(setInst).catch(() => {}),
+  ]), [])
+  useEffect(() => { reload() }, [reload])
+
+  const saveReturn = async (e) => {
+    e.preventDefault(); const f = e.target
+    try {
+      await ncheReturnSet({
+        id: editRet?.id ?? null, title: f.title.value.trim(), period: f.period.value.trim(),
+        status: f.status.value, due: f.due.value || null,
       })
-      .catch(() => {})
-    return () => { alive = false }
-  }, [])
-
-  const submit = (ret) => { setStatus((s) => ({ ...s, [ret]: 'Submitted' })); showToast(`${ret} submitted to NCHE`) }
-  const tone = (s) => (s === 'Submitted' ? 'green' : s === 'In progress' ? 'amber' : 'red')
-
-  const changeType = (t) => {
-    setType(t)
-    localStorage.setItem('sym.insttype', t)
-    const hidden = INSTITUTION_HIDE[t] || []
-    showToast(hidden.length ? `Type “${t}” — hiding: ${hidden.join(', ')}. Reloading…` : `Type “${t}” — all modules enabled. Reloading…`)
-    setTimeout(() => window.location.reload(), 900)
+    } catch (err) { showToast('Could not save' + (err?.message ? `: ${err.message}` : '')); return }
+    setShowRet(false); setEditRet(null); await reload(); showToast('Return saved')
+  }
+  const submit = async (r) => {
+    try { await ncheReturnSet({ id: r.id, title: r.title, period: r.period, status: 'submitted', due: r.due }); await reload(); showToast(`${r.title} submitted to NCHE`) }
+    catch (err) { showToast('Could not submit' + (err?.message ? `: ${err.message}` : '')) }
+  }
+  const saveInst = async (e) => {
+    e.preventDefault(); const f = e.target
+    try { await setInstitution({ name: f.name.value.trim(), type: f.type.value, modules: inst?.modules_enabled ?? null }) }
+    catch (err) { showToast('Could not save institution' + (err?.message ? `: ${err.message}` : '')); return }
+    await reload(); showToast('Institution profile updated')
   }
 
   return (
     <>
       <div className="stat-row c4">
-        <StatCard icon="🏛️" label="Regulator" value="NCHE" delta="+ NQA / NTA accreditation" deltaTone="neutral" />
-        <StatCard icon="📋" label="Returns due" value={String(returns.length)} delta="statutory this cycle" deltaTone="neutral" />
-        <StatCard icon="✅" label="Accredited programmes" value={String(PROGRAMMES.filter((p) => /accredited|registered/i.test(p.accreditation)).length)} delta={`of ${PROGRAMMES.length}`} deltaTone="up" />
-        <StatCard icon="⚠️" label="Provisional" value={String(PROGRAMMES.filter((p) => /provisional/i.test(p.accreditation)).length)} delta="need renewal" deltaTone="down" />
+        <StatCard icon="🏛️" label="Regulator" value="NCHE" delta="+ NQA / NTA" deltaTone="neutral" />
+        <StatCard icon="📋" label="Returns" value={String(returns.length)} delta="on file" deltaTone="neutral" />
+        <StatCard icon="✅" label="Accepted" value={String(returns.filter((r) => r.status === 'accepted').length)} deltaTone="up" />
+        <StatCard icon="📚" label="Programmes" value={String(programmes.length)} delta="in register" deltaTone="neutral" />
       </div>
 
-      <Panel title="Institution profile" subtitle="Configures the tenant — the institution type shows or hides modules across the suite">
-        <div className="field" style={{ maxWidth: 320 }}>
-          <label>Institution type</label>
-          <select value={type} onChange={(e) => changeType(e.target.value)}>
-            {INSTITUTION_TYPES.map((t) => <option key={t}>{t}</option>)}
-          </select>
-        </div>
-        <div className="di-sub" style={{ marginTop: 4 }}>
-          Applies live across the suite — e.g. “Distance / open learning” hides Accommodation and Canteen from every role. Multi-tenant SaaS configuration.
-        </div>
+      <Panel title="Institution profile" subtitle="Tenant identity used across the suite and on official documents">
+        {inst ? (
+          <form onSubmit={saveInst} style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+            <div className="field" style={{ minWidth: 280 }}><label>Institution name</label><input name="name" defaultValue={inst.name} /></div>
+            <div className="field" style={{ minWidth: 200 }}>
+              <label>Institution type</label>
+              <select name="type" defaultValue={inst.type}>{INST_TYPES.map((t) => <option key={t}>{t}</option>)}</select>
+            </div>
+            <button className="btn primary" type="submit">Save</button>
+          </form>
+        ) : <Empty>Institution profile unavailable.</Empty>}
       </Panel>
 
-      <Panel title="NCHE statutory returns" flush>
-        <table className="data">
-          <thead><tr><th>Return</th><th>Period</th><th>Due</th><th>Status</th><th style={{ width: 130 }}></th></tr></thead>
-          <tbody>
-            {returns.map((r) => (
-              <tr key={r.ret}>
-                <td style={{ fontWeight: 600 }}>{r.ret}</td><td>{r.period}</td><td>{r.due}</td>
-                <td><Badge tone={tone(status[r.ret])}>{status[r.ret]}</Badge></td>
-                <td>{status[r.ret] !== 'Submitted' && <button className="btn primary sm" onClick={() => submit(r.ret)}>Submit</button>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <Panel
+        title="NCHE statutory returns"
+        actions={<button className="btn primary sm" onClick={() => { setEditRet(null); setShowRet(true) }}>+ Add return</button>}
+        flush
+      >
+        {returns.length === 0 ? <Empty>No returns yet — add one.</Empty> : (
+          <table className="data">
+            <thead><tr><th>Return</th><th>Period</th><th>Due</th><th>Status</th><th style={{ width: 170 }}></th></tr></thead>
+            <tbody>
+              {returns.map((r) => (
+                <tr key={r.id}>
+                  <td style={{ fontWeight: 600 }}>{r.title}</td><td>{r.period || '—'}</td><td>{r.due || '—'}</td>
+                  <td><Badge tone={RET_TONE[r.status]}>{r.status}</Badge></td>
+                  <td>
+                    <span style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn ghost sm" onClick={() => { setEditRet(r); setShowRet(true) }}>Edit</button>
+                      {r.status !== 'submitted' && r.status !== 'accepted' && <button className="btn primary sm" onClick={() => submit(r)}>Submit</button>}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </Panel>
 
-      <Panel title="Programme accreditation" flush>
-        <table className="data">
-          <thead><tr><th>Programme</th><th className="num">NQF</th><th>Accreditation</th></tr></thead>
-          <tbody>
-            {PROGRAMMES.map((p) => (
-              <tr key={p.code}>
-                <td><div style={{ fontWeight: 600 }}>{p.code}</div><div className="di-sub">{p.name}</div></td>
-                <td className="num">{p.nqf}</td>
-                <td><Badge tone={/provisional/i.test(p.accreditation) ? 'amber' : 'green'}>{p.accreditation}</Badge></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <Panel title="Programme register" flush>
+        {programmes.length === 0 ? <Empty>No programmes yet.</Empty> : (
+          <table className="data">
+            <thead><tr><th>Programme</th><th>Category</th><th>Level</th><th>Status</th></tr></thead>
+            <tbody>
+              {programmes.map((p) => (
+                <tr key={p.id}>
+                  <td style={{ fontWeight: 600 }}>{p.name}</td>
+                  <td>{p.category}</td>
+                  <td>{p.level || '—'}</td>
+                  <td><Badge tone={p.active ? 'green' : 'gray'}>{p.active ? 'Active' : 'Inactive'}</Badge></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </Panel>
+
+      {showRet && (
+        <Modal title={editRet ? 'Edit return' : 'Add NCHE return'} onClose={() => { setShowRet(false); setEditRet(null) }}>
+          <form onSubmit={saveReturn}>
+            <div className="field"><label>Return title</label><input name="title" defaultValue={editRet?.title || ''} required /></div>
+            <div className="grid2" style={{ gap: 12 }}>
+              <div className="field"><label>Period</label><input name="period" defaultValue={editRet?.period || ''} placeholder="e.g. 2026 H1" /></div>
+              <div className="field"><label>Due date</label><input name="due" type="date" defaultValue={editRet?.due || ''} /></div>
+            </div>
+            <div className="field"><label>Status</label>
+              <select name="status" defaultValue={editRet?.status || 'draft'}><option value="draft">draft</option><option value="submitted">submitted</option><option value="accepted">accepted</option></select>
+            </div>
+            <button className="btn primary" type="submit">Save</button>
+          </form>
+        </Modal>
+      )}
       <Toast msg={toast} />
     </>
   )
+}
+
+function Empty({ children }) {
+  return <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-faint)' }}>{children}</div>
 }

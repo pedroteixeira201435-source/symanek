@@ -1,26 +1,27 @@
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, useCallback } from 'react'
 import { StatCard, Tabs, Panel, Badge, Modal, Toast, useToast, Icon } from '../ui.jsx'
-import { isHttpMode, getGlJournal, glPost } from '../api.js'
-import { JOURNAL, COA, ASSET_REGISTER, TAX_CALENDAR, TAX_CONST, WORKTAG_OF, fmtN } from '../data.js'
+import { fmtN } from '../lib/format.js'
+import {
+  getGlJournal, glPost, listGlAccounts, listAssets, assetAdd, assetDelete, assetDepreciate,
+  listVatCalendar, vatPeriodSet, getBusinessSettings,
+} from '../api.js'
 
-// Bookkeeping mirror of public/assets/Namibia_Financial_Model_v8.xlsx —
-// everything downstream (TB, IS, tax) is DERIVED from the journal, like
-// the workbook. University twist: tuition is VAT-exempt, canteen taxable.
-export default function Accounting({ role }) {
+// Double-entry bookkeeping: everything downstream (Trial Balance, Income
+// Statement, Tax Engine) derives from the real general-ledger journal.
+export default function Accounting() {
   const [tab, setTab] = useState('Journal')
-  const [journal, setJournal] = useState(JOURNAL)
+  const [journal, setJournal] = useState([])
+  const [accounts, setAccounts] = useState([])
+  const reload = useCallback(() => Promise.all([
+    getGlJournal().then(setJournal).catch(() => setJournal([])),
+    listGlAccounts().then(setAccounts).catch(() => setAccounts([])),
+  ]), [])
+  useEffect(() => { reload() }, [reload])
 
-  // Load the real general ledger in http mode (everything downstream — trial
-  // balance, income statement, tax — derives from `journal`). Mock keeps demo.
-  const reload = () => getGlJournal().then((j) => { if (j && j.length) setJournal(j) }).catch(() => {})
-  useEffect(() => { reload() }, [])
-
-  // net balance per account (Dr positive for debit-normal accounts)
+  const typeOf = useMemo(() => Object.fromEntries(accounts.map((a) => [a.name, a.type])), [accounts])
   const balances = useMemo(() => {
     const b = {}
-    journal.forEach((l) => {
-      b[l.acc] = (b[l.acc] || 0) + l.dr - l.cr
-    })
+    journal.forEach((l) => { b[l.acc] = (b[l.acc] || 0) + l.dr - l.cr })
     return b
   }, [journal])
 
@@ -28,23 +29,23 @@ export default function Accounting({ role }) {
     <>
       <Tabs
         tabs={['Journal', 'Trial Balance', 'Income Statement', 'Tax Engine', 'Asset Register', 'VAT & Compliance']}
-        active={tab}
-        onChange={setTab}
+        active={tab} onChange={setTab}
       />
-      {tab === 'Journal' && <Journal journal={journal} setJournal={setJournal} reload={reload} />}
-      {tab === 'Trial Balance' && <TrialBalance balances={balances} />}
-      {tab === 'Income Statement' && <IncomeStatement balances={balances} />}
-      {tab === 'Tax Engine' && <TaxEngine balances={balances} />}
+      {tab === 'Journal' && <Journal journal={journal} accounts={accounts} reload={reload} />}
+      {tab === 'Trial Balance' && <TrialBalance balances={balances} typeOf={typeOf} />}
+      {tab === 'Income Statement' && <IncomeStatement balances={balances} typeOf={typeOf} />}
+      {tab === 'Tax Engine' && <TaxEngine balances={balances} typeOf={typeOf} />}
       {tab === 'Asset Register' && <AssetRegister />}
       {tab === 'VAT & Compliance' && <VatCompliance />}
     </>
   )
 }
 
-const isRevenue = (acc) => COA[acc]?.[0] === 'Revenue'
-const isExpense = (acc) => COA[acc]?.[0] === 'Expense'
+function Empty({ children }) { return <div style={{ padding: 36, textAlign: 'center', color: 'var(--ink-faint)' }}>{children}</div> }
+const isRevenue = (t) => t === 'Income' || t === 'Revenue'
+const CAT_TONE = { Asset: 'blue', Liability: 'orange', Equity: 'purple', Income: 'green', Revenue: 'green', Expense: 'red' }
 
-function Journal({ journal, setJournal, reload }) {
+function Journal({ journal, accounts, reload }) {
   const [toast, showToast] = useToast()
   const [showNew, setShowNew] = useState(false)
   const dr = journal.reduce((s, l) => s + l.dr, 0)
@@ -52,83 +53,46 @@ function Journal({ journal, setJournal, reload }) {
   const diff = dr - cr
 
   const postEntry = async (e) => {
-    e.preventDefault()
-    const f = e.target
+    e.preventDefault(); const f = e.target
     const amt = Number(f.amount.value) || 0
-    if (amt <= 0 || f.drAcc.value === f.crAcc.value) return
-    const desc = f.desc.value || 'Manual journal entry'
-    if (isHttpMode()) {
-      try {
-        const res = await glPost({ desc, drAcc: f.drAcc.value, crAcc: f.crAcc.value, amount: amt })
-        if (res.ok === false) throw new Error(res.error)
-      } catch (err) { showToast('Could not post entry' + (err?.message ? `: ${err.message}` : '')); return }
-      setShowNew(false)
-      await reload()
-    } else {
-      setJournal((j) => [
-        ...j,
-        { date: '04 Jul', desc, acc: f.drAcc.value, dr: amt, cr: 0, vat: '—' },
-        { date: '04 Jul', desc, acc: f.crAcc.value, dr: 0, cr: amt, vat: '—' },
-      ])
-      setShowNew(false)
-    }
-    showToast(`Posted — Dr ${f.drAcc.value} / Cr ${f.crAcc.value} · ${fmtN(amt)} (audit-logged)`)
+    if (amt <= 0 || f.drAcc.value === f.crAcc.value) { showToast('Debit and credit accounts must differ.'); return }
+    try {
+      const res = await glPost({ desc: f.desc.value || 'Manual journal entry', drAcc: f.drAcc.value, crAcc: f.crAcc.value, amount: amt })
+      if (res.ok === false) throw new Error(res.error)
+    } catch (err) { showToast('Could not post entry' + (err?.message ? `: ${err.message}` : '')); return }
+    setShowNew(false); await reload(); showToast(`Posted — Dr ${f.drAcc.value} / Cr ${f.crAcc.value} · ${fmtN(amt)}`)
   }
 
   return (
     <>
       <div className="note-banner">
         <Icon name={diff === 0 ? 'check' : 'alert'} size={16} />
-        <div>
-          <strong>Double-entry check:</strong> total debits {fmtN(dr)} − total credits {fmtN(cr)} ={' '}
-          <strong style={{ color: diff === 0 ? 'var(--green)' : 'var(--red)' }}>{fmtN(diff)}</strong> — every
-          transaction posts a debit and a credit, exactly like the Excel model.
-        </div>
+        <div><strong>Double-entry check:</strong> debits {fmtN(dr)} − credits {fmtN(cr)} = <strong style={{ color: diff === 0 ? 'var(--green)' : 'var(--red)' }}>{fmtN(diff)}</strong></div>
       </div>
       <Panel
-        title="General journal — Semester 1, 2026"
-        subtitle="Source of truth: TB, Income Statement and Tax Engine derive from these lines"
-        actions={
-          <>
-            <a className="btn ghost sm" href="/assets/Namibia_Financial_Model_v8.xlsx" download><Icon name="download" size={14} /> Workbook (.xlsx)</a>
-            <button className="btn ghost sm" onClick={() => showToast('Journal exported — audit-ready CSV')}><Icon name="download" size={14} /> Export</button>
-            <button className="btn primary sm" onClick={() => setShowNew(true)}>+ Journal entry</button>
-          </>
-        }
+        title="General journal"
+        subtitle="Source of truth — Trial Balance, Income Statement and Tax Engine derive from these lines"
+        actions={<button className="btn primary sm" onClick={() => setShowNew(true)} disabled={accounts.length === 0}>+ Journal entry</button>}
         flush
       >
-        <table className="data">
-          <thead>
-            <tr>
-              <th>Date</th><th>Description</th><th>Account</th>
-              <th className="num">Debit</th><th className="num">Credit</th><th>VAT</th><th>Worktags</th>
-            </tr>
-          </thead>
-          <tbody>
-            {journal.map((l, i) => (
-              <tr key={i}>
-                <td className="mono" style={{ fontSize: 12 }}>{l.date}</td>
-                <td style={{ fontSize: 12.5 }}>{l.desc}</td>
-                <td style={{ fontWeight: 600, fontSize: 12.5 }}>{l.acc}</td>
-                <td className="num">{l.dr ? fmtN(l.dr) : ''}</td>
-                <td className="num">{l.cr ? fmtN(l.cr) : ''}</td>
-                <td>
-                  {l.vat === 'Y' ? <Badge tone="teal">VAT 15%</Badge> : l.vat === 'Exempt' ? <Badge tone="purple">Exempt</Badge> : <span style={{ color: 'var(--ink-faint)' }}>—</span>}
-                </td>
-                <td>
-                  {WORKTAG_OF[l.acc] ? <Badge tone="gray">{WORKTAG_OF[l.acc]}</Badge> : <span style={{ color: 'var(--ink-faint)' }}>—</span>}
-                </td>
-              </tr>
-            ))}
-            <tr>
-              <td colSpan={3} style={{ fontWeight: 700 }}>TOTALS</td>
-              <td className="num" style={{ fontWeight: 700 }}>{fmtN(dr)}</td>
-              <td className="num" style={{ fontWeight: 700 }}>{fmtN(cr)}</td>
-              <td><Badge tone={diff === 0 ? 'green' : 'red'}>{diff === 0 ? 'Balanced' : 'Off'}</Badge></td>
-              <td />
-            </tr>
-          </tbody>
-        </table>
+        {journal.length === 0 ? <Empty>No journal entries yet.{accounts.length === 0 ? ' (Chart of accounts is empty.)' : ''}</Empty> : (
+          <table className="data">
+            <thead><tr><th>Date</th><th>Description</th><th>Account</th><th className="num">Debit</th><th className="num">Credit</th><th>VAT</th></tr></thead>
+            <tbody>
+              {journal.map((l, i) => (
+                <tr key={i}>
+                  <td className="mono" style={{ fontSize: 12 }}>{l.date}</td>
+                  <td style={{ fontSize: 12.5 }}>{l.desc}</td>
+                  <td style={{ fontWeight: 600, fontSize: 12.5 }}>{l.acc}</td>
+                  <td className="num">{l.dr ? fmtN(l.dr) : ''}</td>
+                  <td className="num">{l.cr ? fmtN(l.cr) : ''}</td>
+                  <td>{l.vat === 'Y' ? <Badge tone="teal">VAT 15%</Badge> : l.vat === 'Exempt' ? <Badge tone="purple">Exempt</Badge> : <span style={{ color: 'var(--ink-faint)' }}>—</span>}</td>
+                </tr>
+              ))}
+              <tr><td colSpan={3} style={{ fontWeight: 700 }}>TOTALS</td><td className="num" style={{ fontWeight: 700 }}>{fmtN(dr)}</td><td className="num" style={{ fontWeight: 700 }}>{fmtN(cr)}</td><td><Badge tone={diff === 0 ? 'green' : 'red'}>{diff === 0 ? 'Balanced' : 'Off'}</Badge></td></tr>
+            </tbody>
+          </table>
+        )}
       </Panel>
 
       {showNew && (
@@ -136,19 +100,10 @@ function Journal({ journal, setJournal, reload }) {
           <form onSubmit={postEntry}>
             <div className="field"><label>Description</label><input name="desc" placeholder="e.g. Generator fuel — campus" required /></div>
             <div className="grid2" style={{ gap: 12 }}>
-              <div className="field">
-                <label>Debit account</label>
-                <select name="drAcc">{Object.keys(COA).map((a) => <option key={a}>{a}</option>)}</select>
-              </div>
-              <div className="field">
-                <label>Credit account</label>
-                <select name="crAcc" defaultValue="Cash & Cash Equivalents">{Object.keys(COA).map((a) => <option key={a}>{a}</option>)}</select>
-              </div>
+              <div className="field"><label>Debit account</label><select name="drAcc">{accounts.map((a) => <option key={a.name}>{a.name}</option>)}</select></div>
+              <div className="field"><label>Credit account</label><select name="crAcc">{accounts.map((a) => <option key={a.name}>{a.name}</option>)}</select></div>
             </div>
             <div className="field"><label>Amount (N$)</label><input name="amount" type="number" min="1" defaultValue="2500" required /></div>
-            <div style={{ fontSize: 12.5, color: 'var(--ink-soft)', marginBottom: 14 }}>
-              Posts one debit + one credit line — the TB, Income Statement and Tax Engine update instantly.
-            </div>
             <button className="btn primary" type="submit">Post entry</button>
           </form>
         </Modal>
@@ -158,247 +113,204 @@ function Journal({ journal, setJournal, reload }) {
   )
 }
 
-function TrialBalance({ balances }) {
-  const rows = Object.entries(balances).map(([acc, net]) => ({
-    acc, cat: COA[acc]?.[0] || '—',
-    dr: net > 0 ? net : 0, cr: net < 0 ? -net : 0,
-  }))
+function TrialBalance({ balances, typeOf }) {
+  const rows = Object.entries(balances).map(([acc, net]) => ({ acc, cat: typeOf[acc] || '—', dr: net > 0 ? net : 0, cr: net < 0 ? -net : 0 }))
   const tDr = rows.reduce((s, r) => s + r.dr, 0)
   const tCr = rows.reduce((s, r) => s + r.cr, 0)
-
   return (
-    <Panel title="Trial balance — auto-generated from the journal" subtitle={`Difference (must be 0): ${fmtN(tDr - tCr)}`} flush>
-      <table className="data">
-        <thead>
-          <tr><th>Account</th><th>Category</th><th className="num">Debit</th><th className="num">Credit</th></tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr key={r.acc}>
-              <td style={{ fontWeight: 600 }}>{r.acc}</td>
-              <td><Badge tone={{ Asset: 'blue', Liability: 'orange', Equity: 'purple', Revenue: 'green', Expense: 'red' }[r.cat] || 'gray'}>{r.cat}</Badge></td>
-              <td className="num">{r.dr ? fmtN(r.dr) : ''}</td>
-              <td className="num">{r.cr ? fmtN(r.cr) : ''}</td>
-            </tr>
-          ))}
-          <tr>
-            <td colSpan={2} style={{ fontWeight: 700 }}>TOTAL</td>
-            <td className="num" style={{ fontWeight: 700 }}>{fmtN(tDr)}</td>
-            <td className="num" style={{ fontWeight: 700 }}>{fmtN(tCr)}</td>
-          </tr>
-        </tbody>
-      </table>
+    <Panel title="Trial balance" subtitle={`Auto-generated from the journal · difference (must be 0): ${fmtN(tDr - tCr)}`} flush>
+      {rows.length === 0 ? <Empty>No postings yet.</Empty> : (
+        <table className="data">
+          <thead><tr><th>Account</th><th>Category</th><th className="num">Debit</th><th className="num">Credit</th></tr></thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.acc}><td style={{ fontWeight: 600 }}>{r.acc}</td><td><Badge tone={CAT_TONE[r.cat] || 'gray'}>{r.cat}</Badge></td><td className="num">{r.dr ? fmtN(r.dr) : ''}</td><td className="num">{r.cr ? fmtN(r.cr) : ''}</td></tr>
+            ))}
+            <tr><td colSpan={2} style={{ fontWeight: 700 }}>TOTAL</td><td className="num" style={{ fontWeight: 700 }}>{fmtN(tDr)}</td><td className="num" style={{ fontWeight: 700 }}>{fmtN(tCr)}</td></tr>
+          </tbody>
+        </table>
+      )}
     </Panel>
   )
 }
 
-function IncomeStatement({ balances }) {
-  const revenue = Object.entries(balances).filter(([a]) => isRevenue(a)).map(([a, v]) => [a, -v])
-  const expenses = Object.entries(balances).filter(([a]) => isExpense(a)).map(([a, v]) => [a, v])
+function IncomeStatement({ balances, typeOf }) {
+  const revenue = Object.entries(balances).filter(([a]) => isRevenue(typeOf[a])).map(([a, v]) => [a, -v])
+  const expenses = Object.entries(balances).filter(([a]) => typeOf[a] === 'Expense').map(([a, v]) => [a, v])
   const tRev = revenue.reduce((s, [, v]) => s + v, 0)
   const tExp = expenses.reduce((s, [, v]) => s + v, 0)
   const ebt = tRev - tExp
-
   const row = (label, v, bold) => (
     <div key={label} className={`cf-row ${bold ? 'total' : ''}`} style={bold ? {} : { padding: '6px 0', borderBottom: '1px solid #e9eef3' }}>
-      <span>{label}</span>
-      <span className={bold ? 'amt' : 'mono'}>{fmtN(v)}</span>
+      <span>{label}</span><span className={bold ? 'amt' : 'mono'}>{fmtN(v)}</span>
     </div>
   )
-
   return (
-    <div className="grid2">
-      <Panel title="Income statement — Semester 1, 2026" subtitle="Symanek Specialized College (Pty) Ltd · NAD">
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)', margin: '4px 0' }}>REVENUE</div>
-        {revenue.map(([a, v]) => row(a, v))}
-        {row('Gross revenue', tRev, true)}
-        <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)', margin: '14px 0 4px' }}>EXPENSES</div>
-        {expenses.map(([a, v]) => row(a, v))}
-        {row('Total expenses', tExp, true)}
-        {row('NET PROFIT BEFORE TAX (EBT)', ebt, true)}
-      </Panel>
-      <Panel title="Where the money goes" subtitle="Expense mix — Semester 1">
-        {expenses.map(([a, v]) => (
-          <div key={a} className="hbar-row">
-            <span className="hlabel" style={{ fontSize: 11.5 }}>{a.replace(/ \(.*\)/, '')}</span>
-            <div className="progress"><div className="fill amber" style={{ width: `${(v / tExp) * 100}%` }} /></div>
-            <span className="hval">{Math.round((v / tExp) * 100)}%</span>
-          </div>
-        ))}
-        <div className="note-banner" style={{ marginTop: 16 }}>
-          <Icon name="cap" size={16} />
-          <div>
-            Tuition of {fmtN(1540000)} is a <strong>VAT-exempt educational supply</strong> — it never
-            appears in the VAT ledger, only in the income statement.
-          </div>
-        </div>
-      </Panel>
-    </div>
+    <Panel title="Income statement" subtitle="Derived from the general ledger · NAD">
+      {revenue.length === 0 && expenses.length === 0 ? <Empty>No revenue or expense postings yet.</Empty> : (
+        <>
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)', margin: '4px 0' }}>REVENUE</div>
+          {revenue.map(([a, v]) => row(a, v))}
+          {row('Gross revenue', tRev, true)}
+          <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)', margin: '14px 0 4px' }}>EXPENSES</div>
+          {expenses.map(([a, v]) => row(a, v))}
+          {row('Total expenses', tExp, true)}
+          {row('NET PROFIT BEFORE TAX (EBT)', ebt, true)}
+        </>
+      )}
+    </Panel>
   )
 }
 
-function TaxEngine({ balances }) {
+function TaxEngine({ balances, typeOf }) {
   const [toast, showToast] = useToast()
-  const tRev = Object.entries(balances).filter(([a]) => isRevenue(a)).reduce((s, [, v]) => s - v, 0)
-  const tExp = Object.entries(balances).filter(([a]) => isExpense(a)).reduce((s, [, v]) => s + v, 0)
+  const [assets, setAssets] = useState([])
+  const [rate, setRate] = useState(0.30)
+  useEffect(() => {
+    listAssets().then(setAssets).catch(() => {})
+    getBusinessSettings().then((s) => { if (s?.tax?.corporateRate != null) setRate(Number(s.tax.corporateRate)) }).catch(() => {})
+  }, [])
+  const tRev = Object.entries(balances).filter(([a]) => isRevenue(typeOf[a])).reduce((s, [, v]) => s - v, 0)
+  const tExp = Object.entries(balances).filter(([a]) => typeOf[a] === 'Expense').reduce((s, [, v]) => s + v, 0)
   const ebt = tRev - tExp
-  const fines = balances['Fines & Penalties (non-deductible)'] || 0
-  const ent50 = (balances['Entertainment (50% non-deductible)'] || 0) * 0.5
-  const addBacks = fines + ent50
-  const allowances = ASSET_REGISTER.reduce((s, a) => s + a.cost * a.rate, 0)
-  const taxable = ebt + addBacks - allowances
-  const tax = Math.round(taxable * TAX_CONST.corporateRate)
-  const p1 = Math.round(tax * 0.4)
-
-  const step = (n, label) => (
-    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--petrol-800)', margin: '14px 0 4px' }}>
-      STEP {n} — {label}
-    </div>
+  const allowances = assets.reduce((s, a) => s + (a.life_years ? a.cost / a.life_years : 0), 0)
+  const taxable = ebt - allowances
+  const tax = Math.round(Math.max(0, taxable) * rate)
+  const step = (n, label) => <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--petrol-800)', margin: '14px 0 4px' }}>STEP {n} — {label}</div>
+  const row = (label, v, bold) => (
+    <div className={`cf-row ${bold ? 'total' : ''}`} style={bold ? {} : { padding: '5px 0', fontSize: 12.5 }}><span>{label}</span><span className={bold ? 'amt' : 'mono'}>{fmtN(Math.round(v))}</span></div>
   )
-  const row = (label, v, note, bold) => (
-    <div className={`cf-row ${bold ? 'total' : ''}`} style={bold ? {} : { padding: '5px 0', fontSize: 12.5 }}>
-      <span>{label} {note && <span style={{ color: 'var(--ink-faint)', fontSize: 11 }}>· {note}</span>}</span>
-      <span className={bold ? 'amt' : 'mono'}>{fmtN(Math.round(v))}</span>
-    </div>
-  )
-
   return (
-    <div className="grid2">
-      <Panel title="NamRA tax engine — Income Tax Act computation" subtitle="Private college · non-mining corporate rate 30%">
-        {step(1, 'ACCOUNTING PROFIT')}
-        {row('Earnings before tax (EBT)', ebt, 'from Income Statement')}
-        {step(2, 'ADD-BACKS (NON-DEDUCTIBLE — s17 ITA)')}
-        {row('Fines & penalties', fines, 's17(1)')}
-        {row('50% of entertainment', ent50, 's17(1)(f)')}
-        {step(3, 'CAPITAL ALLOWANCES (WEAR & TEAR — s17B)')}
-        {ASSET_REGISTER.map((a) => row(`${a.cat} (${Math.round(a.rate * 100)}%)`, a.cost * a.rate, a.id))}
-        {step(4, 'TAXABLE INCOME')}
-        {row('EBT + add-backs − allowances', taxable, null, true)}
-        {step(5, 'INCOME TAX LIABILITY')}
-        {row(`Taxable income × ${TAX_CONST.corporateRate * 100}%`, tax, null, true)}
-      </Panel>
-
-      <div>
-        <Panel title="Provisional tax tracker" subtitle="NamRA two-payment system">
-          <div className="cf-row" style={{ padding: '7px 0', borderBottom: '1px solid #e9eef3' }}>
-            <span>P1 — due 31 Aug 2026 <span style={{ color: 'var(--ink-faint)', fontSize: 11 }}>· ≥40% of estimate</span></span>
-            <span className="mono" style={{ fontWeight: 700 }}>{fmtN(p1)}</span>
-          </div>
-          <div className="cf-row" style={{ padding: '7px 0', borderBottom: '1px solid #e9eef3' }}>
-            <span>P2 — due 28 Feb 2027 <span style={{ color: 'var(--ink-faint)', fontSize: 11 }}>· balancing payment</span></span>
-            <span className="mono" style={{ fontWeight: 700 }}>{fmtN(tax - p1)}</span>
-          </div>
-          <button className="btn primary sm" style={{ marginTop: 12 }} onClick={() => showToast(`P1 of ${fmtN(p1)} scheduled for payment via NamRA ITAS portal`)}>
-            Schedule P1 payment
-          </button>
-        </Panel>
-        <Panel title="Institution status" subtitle="Why this college pays income tax">
-          <div style={{ fontSize: 12.5, lineHeight: 1.6, color: 'var(--ink-soft)' }}>
-            <strong style={{ color: 'var(--ink)' }}>Private (Pty) Ltd college</strong> → taxed at the standard
-            non-mining rate of 30%. A State or registered <em>public benefit</em> educational institution would be
-            <strong> exempt under s16 of the Income Tax Act</strong> — worth revisiting if Symanek converts to a
-            not-for-profit. Assessed losses carry forward indefinitely.
-          </div>
-        </Panel>
-      </div>
+    <Panel title="NamRA tax engine — Income Tax computation" subtitle={`Corporate rate ${Math.round(rate * 100)}% (editable in Settings → Business rules)`}>
+      {step(1, 'ACCOUNTING PROFIT')}
+      {row('Earnings before tax (EBT)', ebt)}
+      {step(2, 'CAPITAL ALLOWANCES (WEAR & TEAR)')}
+      {assets.length === 0 ? <div style={{ fontSize: 12, color: 'var(--ink-faint)', padding: '4px 0' }}>No assets in the register.</div> : assets.map((a) => row(`${a.name} (${a.life_years}y)`, a.life_years ? a.cost / a.life_years : 0))}
+      {step(3, 'TAXABLE INCOME')}
+      {row('EBT − allowances', taxable, true)}
+      {step(4, 'INCOME TAX LIABILITY')}
+      {row(`Taxable income × ${Math.round(rate * 100)}%`, tax, true)}
       <Toast msg={toast} />
-    </div>
+    </Panel>
   )
 }
 
 function AssetRegister() {
   const [toast, showToast] = useToast()
-  const tCost = ASSET_REGISTER.reduce((s, a) => s + a.cost, 0)
-  const tDep = ASSET_REGISTER.reduce((s, a) => s + a.cost * a.rate, 0)
+  const [assets, setAssets] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [showNew, setShowNew] = useState(false)
+  const reload = useCallback(() => listAssets().then(setAssets).catch(() => setAssets([])), [])
+  useEffect(() => { reload().finally(() => setLoading(false)) }, [reload])
+
+  const add = async (e) => {
+    e.preventDefault(); const f = e.target
+    try { await assetAdd({ name: f.name.value.trim(), category: f.category.value.trim(), acquired: f.acquired.value || null, cost: Number(f.cost.value), life: Number(f.life.value) }) }
+    catch (err) { showToast('Could not add' + (err?.message ? `: ${err.message}` : '')); return }
+    setShowNew(false); await reload(); showToast('Asset added')
+  }
+  const depreciate = async (a) => { try { await assetDepreciate(a.id); await reload(); showToast(`Depreciation posted for ${a.name}`) } catch (err) { showToast('Could not depreciate' + (err?.message ? `: ${err.message}` : '')) } }
+  const remove = async (a) => { try { await assetDelete(a.id); await reload(); showToast(`${a.name} removed`) } catch (err) { showToast('Could not delete' + (err?.message ? `: ${err.message}` : '')) } }
+
+  const tCost = assets.reduce((s, a) => s + Number(a.cost || 0), 0)
+  const tBook = assets.reduce((s, a) => s + Number(a.book_value || 0), 0)
+  if (loading) return <Panel title="Asset register" flush><Empty>Loading…</Empty></Panel>
   return (
     <>
-      <Panel
-        title="Fixed asset register & wear-and-tear schedule"
-        subtitle="NamRA s17B rates: computers 33.33% · vehicles 20% · plant 10% · buildings 4%"
-        actions={<button className="btn primary sm" onClick={() => showToast('Asset added to register — depreciation schedule updated')}>+ Add asset</button>}
-        flush
-      >
-        <table className="data">
-          <thead>
-            <tr>
-              <th>ID</th><th>Asset</th><th>Category</th><th>Acquired</th>
-              <th className="num">Cost</th><th className="num">NamRA rate</th><th className="num">Annual allowance</th>
-            </tr>
-          </thead>
-          <tbody>
-            {ASSET_REGISTER.map((a) => (
-              <tr key={a.id}>
-                <td className="mono" style={{ fontSize: 12.5 }}>{a.id}</td>
-                <td style={{ fontWeight: 600 }}>{a.desc}</td>
-                <td>{a.cat}</td>
-                <td>{a.acquired}</td>
-                <td className="num">{fmtN(a.cost)}</td>
-                <td className="num">{(a.rate * 100).toFixed(a.rate === 0.3333 ? 2 : 0)}%</td>
-                <td className="num" style={{ fontWeight: 600 }}>{fmtN(Math.round(a.cost * a.rate))}</td>
-              </tr>
-            ))}
-            <tr>
-              <td colSpan={4} style={{ fontWeight: 700 }}>TOTALS — feeds the Tax Engine (Step 3)</td>
-              <td className="num" style={{ fontWeight: 700 }}>{fmtN(tCost)}</td>
-              <td />
-              <td className="num" style={{ fontWeight: 700 }}>{fmtN(Math.round(tDep))}</td>
-            </tr>
-          </tbody>
-        </table>
+      <Panel title="Fixed asset register" subtitle="Straight-line depreciation over each asset's useful life"
+        actions={<button className="btn primary sm" onClick={() => setShowNew(true)}>+ Add asset</button>} flush>
+        {assets.length === 0 ? <Empty>No assets yet — add one to start.</Empty> : (
+          <table className="data">
+            <thead><tr><th>Asset</th><th>Category</th><th>Acquired</th><th className="num">Cost</th><th className="num">Life</th><th className="num">Accumulated</th><th className="num">Book value</th><th></th></tr></thead>
+            <tbody>
+              {assets.map((a) => (
+                <tr key={a.id}>
+                  <td style={{ fontWeight: 600 }}>{a.name}</td><td>{a.category || '—'}</td><td>{a.acquired_on || '—'}</td>
+                  <td className="num">{fmtN(a.cost)}</td><td className="num">{a.life_years}y</td>
+                  <td className="num">{fmtN(a.accumulated)}</td><td className="num" style={{ fontWeight: 600 }}>{fmtN(a.book_value)}</td>
+                  <td><span style={{ display: 'flex', gap: 6 }}><button className="btn ghost sm" onClick={() => depreciate(a)}>Depreciate</button><button className="btn ghost sm" onClick={() => remove(a)}>Delete</button></span></td>
+                </tr>
+              ))}
+              <tr><td colSpan={3} style={{ fontWeight: 700 }}>TOTALS</td><td className="num" style={{ fontWeight: 700 }}>{fmtN(tCost)}</td><td colSpan={2} /><td className="num" style={{ fontWeight: 700 }}>{fmtN(tBook)}</td><td /></tr>
+            </tbody>
+          </table>
+        )}
       </Panel>
+      {showNew && (
+        <Modal title="Add asset" onClose={() => setShowNew(false)} width={440}>
+          <form onSubmit={add}>
+            <div className="field"><label>Asset name</label><input name="name" required /></div>
+            <div className="grid2" style={{ gap: 12 }}>
+              <div className="field"><label>Category</label><input name="category" placeholder="e.g. Equipment" /></div>
+              <div className="field"><label>Acquired</label><input name="acquired" type="date" /></div>
+            </div>
+            <div className="grid2" style={{ gap: 12 }}>
+              <div className="field"><label>Cost (N$)</label><input name="cost" type="number" min="0" required /></div>
+              <div className="field"><label>Useful life (years)</label><input name="life" type="number" min="1" defaultValue="5" required /></div>
+            </div>
+            <button className="btn primary" type="submit">Add</button>
+          </form>
+        </Modal>
+      )}
       <Toast msg={toast} />
     </>
   )
 }
 
-const CAL_TONE = { 'Up to date': 'green', 'Due soon': 'orange', Upcoming: 'gray' }
-
+const VAT_TONE = { open: 'orange', filed: 'blue', paid: 'green' }
 function VatCompliance() {
   const [toast, showToast] = useToast()
-  const output = 15450, input = 7200
+  const [periods, setPeriods] = useState([])
+  const [showNew, setShowNew] = useState(false)
+  const reload = useCallback(() => listVatCalendar().then(setPeriods).catch(() => setPeriods([])), [])
+  useEffect(() => { reload() }, [reload])
+  const add = async (e) => {
+    e.preventDefault(); const f = e.target
+    try { await vatPeriodSet({ period: f.period.value.trim(), output: Number(f.output.value), input: Number(f.input.value), status: f.status.value, due: f.due.value || null }) }
+    catch (err) { showToast('Could not save' + (err?.message ? `: ${err.message}` : '')); return }
+    setShowNew(false); await reload(); showToast('VAT period saved')
+  }
+  const totOut = periods.reduce((s, p) => s + Number(p.output_vat || 0), 0)
+  const totIn = periods.reduce((s, p) => s + Number(p.input_vat || 0), 0)
   return (
     <>
-      <div className="stat-row c4">
-        <StatCard icon="🧾" label="Output VAT (canteen)" value={fmtN(output)} delta="Taxable supplies only" deltaTone="neutral" />
-        <StatCard icon="↩️" label="Input VAT claimable" value={fmtN(input)} delta="Apportioned to taxable use" deltaTone="neutral" />
-        <StatCard icon="🏛️" label="VAT payable to NamRA" value={fmtN(output - input)} delta="Period May–Jun · due 25 Jul" deltaTone="down" />
-        <StatCard icon="🎓" label="Tuition VAT" value="Exempt" delta="VAT Act 10 of 2000" deltaTone="neutral" />
+      <div className="stat-row c3">
+        <StatCard icon="🧾" label="Output VAT (taxable)" value={fmtN(totOut)} delta="all periods" deltaTone="neutral" />
+        <StatCard icon="↩️" label="Input VAT claimable" value={fmtN(totIn)} deltaTone="neutral" />
+        <StatCard icon="🏛️" label="Net VAT payable" value={fmtN(totOut - totIn)} deltaTone="down" />
       </div>
-
       <div className="note-banner">
         <Icon name="scale" size={16} />
-        <div>
-          <strong>Mixed supplies:</strong> education (tuition, registration) is VAT-<strong>exempt</strong>, so no
-          output VAT is charged and input VAT on education-related costs cannot be claimed. Canteen & hostel sales are
-          <strong> taxable at 15%</strong> — input VAT is apportioned to the taxable side only.
-        </div>
+        <div><strong>Mixed supplies:</strong> education (tuition) is VAT-<strong>exempt</strong>; canteen & hostel sales are <strong>taxable at 15%</strong> — record only taxable supplies here.</div>
       </div>
-
-      <Panel title="NamRA compliance calendar" subtitle="Employer + VAT vendor obligations for a private college" flush>
-        <table className="data">
-          <thead>
-            <tr><th>Obligation</th><th>Frequency</th><th>Statutory deadline</th><th>Next due</th><th>Status</th><th /></tr>
-          </thead>
-          <tbody>
-            {TAX_CALENDAR.map((t) => (
-              <tr key={t.obligation}>
-                <td style={{ fontWeight: 600 }}>{t.obligation}</td>
-                <td>{t.freq}</td>
-                <td style={{ fontSize: 12.5 }}>{t.due}</td>
-                <td className="mono" style={{ fontSize: 12.5 }}>{t.next}</td>
-                <td><Badge tone={CAL_TONE[t.status]}>{t.status}</Badge></td>
-                <td>
-                  {t.status === 'Due soon' && (
-                    <button className="btn primary sm" onClick={() => showToast('VAT return prepared — VAT payable N$ 8,250 · file via ITAS by 25 Jul')}>
-                      Prepare return
-                    </button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <Panel title="VAT periods" actions={<button className="btn primary sm" onClick={() => setShowNew(true)}>+ Add period</button>} flush>
+        {periods.length === 0 ? <Empty>No VAT periods yet.</Empty> : (
+          <table className="data">
+            <thead><tr><th>Period</th><th className="num">Output</th><th className="num">Input</th><th className="num">Net</th><th>Due</th><th>Status</th></tr></thead>
+            <tbody>
+              {periods.map((p) => (
+                <tr key={p.id}><td style={{ fontWeight: 600 }}>{p.period}</td><td className="num">{fmtN(p.output_vat)}</td><td className="num">{fmtN(p.input_vat)}</td><td className="num" style={{ fontWeight: 600 }}>{fmtN(p.net)}</td><td>{p.due || '—'}</td><td><Badge tone={VAT_TONE[p.status]}>{p.status}</Badge></td></tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </Panel>
+      {showNew && (
+        <Modal title="Add VAT period" onClose={() => setShowNew(false)} width={440}>
+          <form onSubmit={add}>
+            <div className="field"><label>Period</label><input name="period" placeholder="e.g. 2026-05/06" required /></div>
+            <div className="grid2" style={{ gap: 12 }}>
+              <div className="field"><label>Output VAT (N$)</label><input name="output" type="number" min="0" defaultValue="0" /></div>
+              <div className="field"><label>Input VAT (N$)</label><input name="input" type="number" min="0" defaultValue="0" /></div>
+            </div>
+            <div className="grid2" style={{ gap: 12 }}>
+              <div className="field"><label>Due date</label><input name="due" type="date" /></div>
+              <div className="field"><label>Status</label><select name="status"><option value="open">open</option><option value="filed">filed</option><option value="paid">paid</option></select></div>
+            </div>
+            <button className="btn primary" type="submit">Save</button>
+          </form>
+        </Modal>
+      )}
       <Toast msg={toast} />
     </>
   )

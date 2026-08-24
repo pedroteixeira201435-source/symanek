@@ -3,7 +3,7 @@
 // against Supabase, resolves the signed-in user's Suite role from their profile
 // (profiles.suite_role + full_name), and RLS enforces what they can see/do.
 import { supabase } from './supabaseClient.js'
-import { ROLES } from './data.js'
+import { ROLES } from './lib/institution.js'
 import { API_MODE } from './config.js'
 
 export const authMode = () =>
@@ -21,9 +21,11 @@ function buildRole(suiteRole, fullName) {
 async function roleFromSession() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
-  const { data: prof } = await supabase.from('profiles').select('suite_role,full_name').eq('id', user.id).maybeSingle()
+  const { data: prof } = await supabase.from('profiles').select('suite_role,full_name,must_reset_password').eq('id', user.id).maybeSingle()
   if (!prof) return null
-  return buildRole(prof.suite_role, prof.full_name)
+  const role = buildRole(prof.suite_role, prof.full_name)
+  if (role) role.mustResetPassword = !!prof.must_reset_password
+  return role
 }
 
 // Resolve the role from a persisted session (page reload). Null if not signed in.
@@ -45,4 +47,12 @@ export async function signIn(email, password) {
 
 export async function signOut() {
   if (authEnabled()) await supabase.auth.signOut()
+}
+
+// Set a new password for the signed-in user (used by the forced first-login
+// change for students provisioned with a temporary password).
+export async function updatePassword(newPassword) {
+  const { error } = await supabase.auth.updateUser({ password: newPassword })
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
 }

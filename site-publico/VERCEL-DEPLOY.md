@@ -1,8 +1,8 @@
 # Deploy — Symanek public site (Vercel)
 
-Backend is already **live** on Supabase cloud (`zbtxhyxwtemproeomtzu`): schema,
-seeds, RPCs, RLS and the 9 demo auth accounts are all deployed and verified.
-Only the frontend hosting remains.
+The public site is production-ready only after its real Supabase data and real
+staff accounts have been configured. Never use demo credentials or demo data in
+production.
 
 ## Env vars to set in Vercel (Project → Settings → Environment Variables)
 
@@ -23,9 +23,8 @@ Only the frontend hosting remains.
 Import `pedroteixeira201435-source/symanek` twice:
 
 1. **Public website** — Root Directory = **`site-publico`** (Next.js, auto-detected). Env vars above.
-2. **Management system (Suite)** — Root Directory = **`.`** (repo root). Uses the root `vercel.json`
-   (Vite → `dist`). **No env vars needed** — the Suite runs in demo/mock mode by default
-   (`VITE_API_MODE` unset ⇒ mock). Login is the on-screen role picker.
+2. **Management system (Suite)** — Root Directory = **`.`** (repo root). Do not publish it
+   for staff use until its separate core-academic UAT is signed off.
 
 ## Deploy (CLI, no git repo needed)
 
@@ -40,9 +39,12 @@ GitHub repo first) → add the env vars → Deploy. Framework auto-detects Next.
 
 ## Verify after deploy
 1. Open the deployment URL → `/apply` → submit an application → success screen.
-2. `/admin` → sign in `admin@symanek.local` / `symanek123` → Approve → Record EFT.
+2. `/admin` → sign in with a real staff account → Approve → Record EFT.
 3. `/portal` → look up the reference → status + Download approval letter (PDF).
+4. Public forms should be protected by the server-side rate limiter. CAPTCHA is
+   optional and disabled unless Turnstile env vars are explicitly configured.
 
-## Demo accounts (password `symanek123`)
-admin@ · bursar@ · hr@ · teacher@ · librarian@ · registrar@ · seller@ ·
-applicant@ · student@  (all `…@symanek.local`; student = Gabriel !Naruseb)
+## Production account policy
+Create and test real staff accounts before launch. Then run
+`supabase/golive/retire_demo_accounts.sql`. Never deploy or share
+`@symanek.local` accounts or the former demo password.

@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react'
+import React, { useCallback, useState, useEffect } from 'react'
 import { Tabs, Panel, Badge, Toast, useToast, Icon } from '../ui.jsx'
-import { MODERATION, AT_RISK, PROGRAMMES } from '../data.js'
 import { INTAKES } from '../lib/controls.js'
 import * as api from '../api.js'
 
@@ -28,10 +27,12 @@ function MarksSuppression() {
   const [year, setYear] = useState('2026')
   const [intake, setIntake] = useState('july')
   const [prog, setProg] = useState('ALL')
+  const [programmes, setProgrammes] = useState([])
   const [marks, setMarks] = useState({ CA: false, Exam: false, Final: true })
   const [rules, setRules] = useState([
     { id: 1, year: '2026', intake: 'july', prog: 'ALL', marks: ['Final'], reason: 'Outstanding fees', active: true },
   ])
+  useEffect(() => { api.listProgrammes().then(setProgrammes).catch(() => setProgrammes([])) }, [])
 
   const toggleMark = (k) => setMarks((m) => ({ ...m, [k]: !m[k] }))
 
@@ -74,7 +75,7 @@ function MarksSuppression() {
           <label>Programme</label>
           <select value={prog} onChange={(e) => setProg(e.target.value)}>
             <option value="ALL">All programmes</option>
-            {PROGRAMMES.map((p) => <option key={p.code} value={p.code}>{p.code} — {p.name}</option>)}
+            {programmes.map((p) => <option key={p.code} value={p.code}>{p.code} — {p.name}</option>)}
           </select>
         </div>
         <div style={{ margin: '4px 0 10px', fontSize: 12, fontWeight: 600, color: 'var(--ink-soft)' }}>MARKS TO SUPPRESS</div>
@@ -118,19 +119,18 @@ function MarksSuppression() {
 }
 
 function Moderation() {
-  const [sheets, setSheets] = useState(MODERATION)
   const [toast, showToast] = useToast()
-  const pending = sheets.filter((s) => s.status === 'Awaiting moderation').length
+  const [sheets, setSheets] = useState([])
+  const [loading, setLoading] = useState(true)
+  const reload = useCallback(() => Promise.resolve().then(() => setSheets([])), [])
 
-  const decide = (i, status) => {
-    setSheets((ss) => ss.map((s, j) => (j === i ? { ...s, status } : s)))
-    const s = sheets[i]
-    showToast(
-      status === 'Approved'
-        ? `${s.cls} ${s.subject} approved — locked for report cards`
-        : `${s.cls} ${s.subject} returned to ${s.teacher} for review`
-    )
+  useEffect(() => { reload().finally(() => setLoading(false)) }, [reload])
+
+  const decide = () => {
+    showToast('Moderation backend is not available yet')
   }
+
+  const pending = sheets.filter((s) => s.status === 'Awaiting moderation').length
 
   return (
     <>
@@ -142,7 +142,7 @@ function Moderation() {
         </div>
       </div>
       <Panel title="Mark sheets — Semester 2" subtitle={`${pending} awaiting moderation`} flush>
-        <table className="data">
+        {loading ? <Empty>Loading...</Empty> : sheets.length === 0 ? <Empty>No moderation sheets yet. TODO(backend): moderation workflow.</Empty> : <table className="data">
           <thead>
             <tr>
               <th>Class</th><th>Subject</th><th>Lecturer</th>
@@ -165,8 +165,8 @@ function Moderation() {
                 <td>
                   {s.status === 'Awaiting moderation' ? (
                     <span style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn green sm" onClick={() => decide(i, 'Approved')}>Approve</button>
-                      <button className="btn red-ghost sm" onClick={() => decide(i, 'Returned')}>Return</button>
+                      <button className="btn green sm" onClick={decide}>Approve</button>
+                      <button className="btn red-ghost sm" onClick={decide}>Return</button>
                     </span>
                   ) : (
                     <span style={{ color: 'var(--ink-faint)', fontSize: 12 }}><Icon name="lock" size={12} /> locked</span>
@@ -175,7 +175,7 @@ function Moderation() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table>}
       </Panel>
       <Toast msg={toast} />
     </>
@@ -256,7 +256,11 @@ function ExamBoard() {
 
 function AtRisk({ go }) {
   const [flagged, setFlagged] = useState({})
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
   const [toast, showToast] = useToast()
+
+  useEffect(() => { api.listAtRisk().then(setRows).catch(() => setRows([])).finally(() => setLoading(false)) }, [])
 
   const intervene = (name) => {
     setFlagged((f) => ({ ...f, [name]: true }))
@@ -269,38 +273,42 @@ function AtRisk({ go }) {
       subtitle="Auto-flagged from Semester 2 marks · intervention before exams"
       flush
     >
-      <table className="data">
+      {loading ? <Empty>Loading...</Empty> : rows.length === 0 ? <Empty>No students are currently flagged as at risk.</Empty> : <table className="data">
         <thead>
           <tr><th>Student</th><th>Programme</th><th>Failing courses</th><th className="num">Attendance</th><th>Action</th></tr>
         </thead>
         <tbody>
-          {AT_RISK.map((r) => (
-            <tr key={r.learner}>
+          {rows.map((r) => (
+            <tr key={r.learner || r.student || r.name}>
               <td
                 style={{ fontWeight: 600, cursor: 'pointer', textDecoration: 'underline', textDecorationColor: 'var(--line)' }}
                 title="Open Student 360°"
-                onClick={() => go && go('students', r.learner)}
+                onClick={() => go && go('students', r.learner || r.student || r.name)}
               >
-                {r.learner}
+                {r.learner || r.student || r.name}
               </td>
-              <td>{r.grade}</td>
+              <td>{r.grade || r.programme || '-'}</td>
               <td>
                 <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {r.failing.map((f) => <Badge key={f} tone="red">{f}</Badge>)}
+                  {(r.failing || r.courses || []).map((f) => <Badge key={f} tone="red">{f}</Badge>)}
                 </span>
               </td>
-              <td className="num" style={{ color: r.attendance < 85 ? 'var(--red)' : 'var(--ink)' }}>{r.attendance}%</td>
+              <td className="num" style={{ color: Number(r.attendance) < 85 ? 'var(--red)' : 'var(--ink)' }}>{r.attendance ?? '-'}%</td>
               <td>
-                {flagged[r.learner] ? (
+                {flagged[r.learner || r.student || r.name] ? (
                   <Badge tone="green">Plan open</Badge>
                 ) : (
-                  <button className="btn primary sm" onClick={() => intervene(r.learner)}>Start intervention</button>
+                  <button className="btn primary sm" onClick={() => intervene(r.learner || r.student || r.name)}>Start intervention</button>
                 )}
               </td>
             </tr>
           ))}
         </tbody>
-      </table>
+      </table>}
     </Panel>
   )
+}
+
+function Empty({ children }) {
+  return <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-faint)' }}>{children}</div>
 }

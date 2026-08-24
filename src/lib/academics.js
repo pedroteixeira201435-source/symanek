@@ -70,11 +70,34 @@ export const RESULT_DESCRIPTIONS = Object.freeze({
 export const describeGrade = (letter) => RESULT_DESCRIPTIONS[String(letter || '').toUpperCase()] || '';
 
 // Letter grade + GPA points from a % mark (institutional scale).
+//
+// The bands are editable in Settings → Business rules and stored in the backend
+// (business_settings.grade_bands). At app boot, api.getBusinessSettings() calls
+// setGradeBands() so the client scale matches the server's grade_letter(). Until
+// then (or in dev/mock) the default below — the current confirmed-pending scale —
+// is used. Kept synchronous so no call site changes.
+let _bands = [
+  { min: 80, letter: 'A', gpa: 4.0 },
+  { min: 70, letter: 'B', gpa: 3.0 },
+  { min: 60, letter: 'C', gpa: 2.0 },
+  { min: 50, letter: 'D', gpa: 1.0 },
+];
+
+// Replace the active grade bands (from business_settings). Sorted high→low so
+// gradeOf can return the first band the mark clears. Ignores malformed input.
+export function setGradeBands(bands) {
+  if (!Array.isArray(bands) || bands.length === 0) return;
+  const clean = bands
+    .filter((b) => b && Number.isFinite(Number(b.min)) && b.letter)
+    .map((b) => ({ min: Number(b.min), letter: String(b.letter), gpa: Number(b.gpa) || 0 }))
+    .sort((a, b) => b.min - a.min);
+  if (clean.length) _bands = clean;
+}
+
 export function gradeOf(mark) {
-  if (mark >= 80) return { letter: 'A', gpa: 4.0 };
-  if (mark >= 70) return { letter: 'B', gpa: 3.0 };
-  if (mark >= 60) return { letter: 'C', gpa: 2.0 };
-  if (mark >= 50) return { letter: 'D', gpa: 1.0 };
+  for (const b of _bands) {
+    if (mark >= b.min) return { letter: b.letter, gpa: b.gpa };
+  }
   return { letter: 'F', gpa: 0 };
 }
 

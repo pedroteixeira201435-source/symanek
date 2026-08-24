@@ -6,8 +6,15 @@
 
 import { supabase } from "@/lib/supabase";
 
-export const API_MODE = (process.env.NEXT_PUBLIC_API_MODE ?? "mock") as "mock" | "supabase";
+// Production must always persist through Supabase. Mock mode is available only
+// when it is explicitly selected for local demos/tests.
+export const API_MODE = (process.env.NEXT_PUBLIC_API_MODE ?? (process.env.NODE_ENV === "production" ? "supabase" : "mock")) as "mock" | "supabase";
 const useSupabase = () => API_MODE === "supabase" && supabase !== null;
+const requireConfiguredBackend = () => {
+  if (API_MODE === "supabase" && supabase === null) {
+    throw new Error("The production backend is not configured. Please contact the college.");
+  }
+};
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -21,22 +28,20 @@ export type ApplicationInput = {
   programmeSlug: string;
   mode: string;
   message?: string;
+  turnstileToken: string;
 };
 
 export type ApplicationResult = { ok: true; applicationId: string };
 
 export async function submitApplication(input: ApplicationInput): Promise<ApplicationResult> {
+  requireConfiguredBackend();
   if (useSupabase()) {
-    const { data, error } = await supabase!.rpc("submit_application", {
-      p_full_name: input.fullName,
-      p_email: input.email,
-      p_phone: input.phone,
-      p_programme_slug: input.programmeSlug,
-      p_mode: input.mode,
-      p_message: input.message ?? null,
+    const response = await fetch("/api/public/application", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input),
     });
-    if (error) throw error;
-    return { ok: true, applicationId: String(data) };
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || "Could not submit application");
+    return { ok: true, applicationId: String(body.applicationId) };
   }
 
   await wait(900);
@@ -52,17 +57,15 @@ export async function submitApplication(input: ApplicationInput): Promise<Applic
 // ---------------------------------------------------------------------------
 // Contact
 // ---------------------------------------------------------------------------
-export type ContactInput = { name: string; email: string; subject: string; message: string };
+export type ContactInput = { name: string; email: string; subject: string; message: string; turnstileToken: string };
 
 export async function submitContact(input: ContactInput): Promise<{ ok: true }> {
+  requireConfiguredBackend();
   if (useSupabase()) {
-    const { error } = await supabase!.rpc("submit_contact", {
-      p_name: input.name,
-      p_email: input.email,
-      p_subject: input.subject,
-      p_message: input.message,
+    const response = await fetch("/api/public/contact", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input),
     });
-    if (error) throw error;
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "Could not send message");
     return { ok: true };
   }
   await wait(800);
@@ -107,12 +110,15 @@ const demoStatuses: Record<string, Extract<ApplicationStatus, { found: true }>> 
   },
 };
 
-export async function lookupApplication(refOrEmail: string): Promise<ApplicationStatus> {
+export async function lookupApplication(refOrEmail: string, turnstileToken: string): Promise<ApplicationStatus> {
+  requireConfiguredBackend();
   if (useSupabase()) {
-    const { data, error } = await supabase!.rpc("get_application_status", {
-      p_ref: refOrEmail.trim(),
+    const response = await fetch("/api/public/application-status", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ref: refOrEmail.trim(), turnstileToken }),
     });
-    if (error) throw error;
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.error || "Could not check application status");
+    const data = body.data;
     const row = Array.isArray(data) ? data[0] : data;
     if (!row || !row.found) return { found: false };
     return {
@@ -142,13 +148,16 @@ export async function lookupApplication(refOrEmail: string): Promise<Application
 export async function submitPaymentProof(
   ref: string,
   file: File,
-  amount: number
+  amount: number,
+  turnstileToken: string
 ): Promise<{ ok: boolean; error?: string }> {
+  try { requireConfiguredBackend(); } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Backend unavailable" }; }
   if (useSupabase()) {
     const fd = new FormData();
     fd.append("ref", ref);
     fd.append("amount", String(amount));
     fd.append("file", file);
+    fd.append("turnstileToken", turnstileToken);
     const res = await fetch("/api/payment-proof", { method: "POST", body: fd });
     const j = await res.json().catch(() => ({}));
     if (!res.ok) return { ok: false, error: j.error || "Upload failed" };
@@ -177,6 +186,7 @@ export type AdminApplication = {
 };
 
 export async function signIn(email: string, password: string): Promise<{ ok: boolean; error?: string }> {
+  try { requireConfiguredBackend(); } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Backend unavailable" }; }
   if (useSupabase()) {
     const { error } = await supabase!.auth.signInWithPassword({ email, password });
     if (error) return { ok: false, error: error.message };
@@ -206,6 +216,7 @@ export async function currentAdminEmail(): Promise<string | null> {
 }
 
 export async function listApplications(): Promise<AdminApplication[]> {
+  requireConfiguredBackend();
   if (useSupabase()) {
     const { data, error } = await supabase!
       .from("applications")
@@ -237,6 +248,7 @@ export async function listApplications(): Promise<AdminApplication[]> {
 
 // Admin: short-lived signed URL to view an uploaded proof of payment.
 export async function proofDownloadUrl(path: string): Promise<string | null> {
+  requireConfiguredBackend();
   if (useSupabase()) {
     const { data } = await supabase!.storage.from("payment-proofs").createSignedUrl(path, 120);
     return data?.signedUrl ?? null;
@@ -245,6 +257,7 @@ export async function proofDownloadUrl(path: string): Promise<string | null> {
 }
 
 export async function approveApplication(id: string): Promise<string> {
+  requireConfiguredBackend();
   if (useSupabase()) {
     const { data, error } = await supabase!.rpc("approve_application", { p_app: id });
     if (error) throw error;
@@ -255,6 +268,7 @@ export async function approveApplication(id: string): Promise<string> {
 }
 
 export async function rejectApplication(id: string): Promise<{ ok: boolean; error?: string }> {
+  try { requireConfiguredBackend(); } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Backend unavailable" }; }
   if (useSupabase()) {
     const { error } = await supabase!.from("applications").update({ stage: "rejected" }).eq("id", id);
     if (error) return { ok: false, error: error.message };
@@ -265,6 +279,7 @@ export async function rejectApplication(id: string): Promise<{ ok: boolean; erro
 }
 
 export async function markPaid(id: string, amount: number): Promise<string> {
+  requireConfiguredBackend();
   if (useSupabase()) {
     const { data, error } = await supabase!.rpc("mark_paid", { p_app: id, p_amount: amount });
     if (error) throw error;
