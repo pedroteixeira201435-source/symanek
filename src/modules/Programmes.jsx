@@ -3,7 +3,7 @@ import { Tabs, Panel, Badge, Modal, Toast, useToast } from '../ui.jsx'
 import { fmtN } from '../lib/format.js'
 import {
   listProgrammes, listCourses, listStaff, listStudents, getHoldsForStudent, getDegreeAudit,
-  programmeUpsert, programmeSetActive, courseUpsert, courseDelete, holdUpsert, holdClear,
+  programmeUpsert, programmeSetActive, courseUpsert, courseDelete, courseSetCapacity, holdUpsert, holdClear,
 } from '../api.js'
 
 const ACCRED_TONE = { active: 'green', inactive: 'gray', provisional: 'amber' }
@@ -87,6 +87,10 @@ function Catalogue() {
   const [programmes, setProgrammes] = useState([])
   const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
+  const [filterProg, setFilterProg] = useState('')
+  const [query, setQuery] = useState('')
+  const [edits, setEdits] = useState({})
+  const [saving, setSaving] = useState(false)
   const reload = useCallback(() => Promise.all([
     listCourses().then(setCourses).catch(() => setCourses([])),
     listProgrammes().then(setProgrammes).catch(() => setProgrammes([])),
@@ -105,16 +109,62 @@ function Catalogue() {
     catch (err) { showToast('Could not delete: ' + (err?.message || err)) }
   }
 
+  // capacity editing — set values inline, save the changed rows in one pass
+  const capOf = (c) => Number(c.cap ?? 0)
+  const editedCap = (c) => (edits[c.id] ?? String(capOf(c)))
+  const isChanged = (c) => Boolean(c.id) && edits[c.id] !== undefined && Number(edits[c.id] || 0) !== capOf(c)
+  const changed = courses.filter(isChanged)
+  const setCap = (id, val) => setEdits((e) => ({ ...e, [id]: val }))
+  const saveCaps = async () => {
+    setSaving(true); let ok = 0, fail = 0
+    for (const c of changed) {
+      try { await courseSetCapacity(c.id, Number(edits[c.id] || 0)); ok++ } catch { fail++ }
+    }
+    setSaving(false); setEdits({}); await reload()
+    showToast(fail ? `Saved ${ok}, ${fail} failed` : `Capacities saved (${ok})`)
+  }
+
+  const progOptions = [...new Set(courses.map((c) => c.prog).filter(Boolean))].sort()
+  const shown = courses.filter((c) => {
+    if (filterProg && (c.prog || '') !== filterProg) return false
+    if (query && !`${c.code} ${c.title}`.toLowerCase().includes(query.toLowerCase())) return false
+    return true
+  })
+
   if (loading) return <Panel title="Course catalogue" flush><Empty>Loading...</Empty></Panel>
   return (
     <>
-      <Panel title="Course catalogue" subtitle={`${courses.length} credit-bearing courses`} actions={<button className="btn primary sm" onClick={() => setShowNew(true)}>+ Add course</button>} flush>
-        {courses.length === 0 ? <Empty>No courses yet.</Empty> : (
-          <table className="data"><thead><tr><th>Code</th><th>Course</th><th>Programme</th><th className="num">Credits</th><th>Semester</th><th>Lecturer</th><th></th></tr></thead>
-            <tbody>{courses.map((c) => <tr key={c.id || c.code}>
-              <td className="mono">{c.code}</td><td style={{ fontWeight: 600 }}>{c.title}</td><td>{c.prog || '-'}</td><td className="num">{c.credits || 0}</td><td>{c.sem || c.semester || '-'}</td><td>{c.lecturer || '-'}</td>
-              <td>{c.id && <button className="btn ghost sm" onClick={() => remove(c)}>Delete</button>}</td>
-            </tr>)}</tbody>
+      <Panel
+        title="Course catalogue"
+        subtitle={`${shown.length} of ${courses.length} courses`}
+        actions={<>
+          {changed.length > 0 && <button className="btn primary sm" onClick={saveCaps} disabled={saving} style={{ marginRight: 8 }}>{saving ? 'Saving…' : `Save capacities (${changed.length})`}</button>}
+          <button className="btn ghost sm" onClick={() => setShowNew(true)}>+ Add course</button>
+        </>}
+        flush
+      >
+        <div style={{ display: 'flex', gap: 8, padding: '8px 0', flexWrap: 'wrap' }}>
+          <select value={filterProg} onChange={(e) => setFilterProg(e.target.value)}>
+            <option value="">All programmes</option>
+            {progOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <input placeholder="Search code or title…" value={query} onChange={(e) => setQuery(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
+        </div>
+        {shown.length === 0 ? <Empty>No courses match.</Empty> : (
+          <table className="data"><thead><tr><th>Code</th><th>Course</th><th>Programme</th><th className="num">Credits</th><th>Sem</th><th>Lecturer</th><th className="num">Enrolled</th><th style={{ width: 110 }}>Capacity</th><th></th></tr></thead>
+            <tbody>{shown.map((c) => {
+              const cap = Number(editedCap(c) || 0); const enr = Number(c.enrolled ?? 0)
+              return (
+                <tr key={c.id || c.code} style={isChanged(c) ? { background: 'rgba(37,99,235,0.06)' } : undefined}>
+                  <td className="mono">{c.code}</td><td style={{ fontWeight: 600 }}>{c.title}</td><td>{c.prog || '-'}</td><td className="num">{c.credits || 0}</td><td>{c.sem || c.semester || '-'}</td><td>{c.lecturer || '-'}</td>
+                  <td className="num">{enr}{cap > 0 && enr >= cap && <> <Badge tone="red">Full</Badge></>}</td>
+                  <td>{c.id
+                    ? <input type="number" min="0" value={editedCap(c)} onChange={(e) => setCap(c.id, e.target.value)} style={{ width: 84 }} />
+                    : <span className="mono">{cap}</span>}</td>
+                  <td>{c.id && <button className="btn ghost sm" onClick={() => remove(c)}>Delete</button>}</td>
+                </tr>
+              )
+            })}</tbody>
           </table>
         )}
       </Panel>

@@ -1232,6 +1232,7 @@ export const programmeUpsert    = (p) => call('programme_upsert', { p_id: p.id ?
 export const programmeSetActive = (id, active) => call('programme_set_active', { p_id: id, p_active: active })
 export const courseUpsert       = (c) => call('course_upsert', { p_id: c.id ?? null, p_code: c.code, p_title: c.title, p_programme: c.programmeId ?? null, p_credits: c.credits ?? 0, p_semester: c.semester ?? null, p_capacity: c.capacity ?? 0, p_lecturer: c.lecturerId ?? null })
 export const courseDelete       = (id) => call('course_delete', { p_id: id })
+export const courseSetCapacity  = (id, capacity) => call('course_set_capacity', { p_id: id, p_capacity: capacity })
 export const listCourseware     = (courseId) => rows('courseware_list', { p_course: courseId })
 export const coursewareUpsert   = (c) => call('courseware_upsert', { p_id: c.id ?? null, p_course: c.courseId, p_title: c.title, p_url: c.url ?? null })
 export const coursewareDelete   = (id) => call('courseware_delete', { p_id: id })
