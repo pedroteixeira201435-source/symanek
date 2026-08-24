@@ -19,28 +19,35 @@ A **monorepo for Symanek Specialized College** (private Namibian higher-ed) with
 > "not yet built" — that is stale. Auth, RLS, and the write RPCs exist and are deployed. When you see
 > "mock only / no backend" in a comment, verify against the current code before trusting it.
 
-> **Mock-elimination / "empty-by-default" pass (in progress, 2026-08-24).** The goal is that production
-> carries ZERO mock data and every module reads/writes the real backend, starting empty and populated by
-> the user through CRUD forms. What this changed:
-> - **Every domain now has a backend + CRUD RPCs** (migrations `20260824130000`…`20260824230000`):
->   library, HR/payroll, finance, accounting (assets/VAT), canteen/POS, scheduling, accommodation,
->   compliance, dashboard aggregates, programmes/courses/courseware. Writes are `SECURITY DEFINER` +
->   RLS-gated by `suite_role`, following `gl_backend.sql`/`canteen_backend.sql`.
-> - **`business_settings`** (`20260824140000`) holds editable business rules (grade bands, assessment
->   weights, PAYE/SSC/VET, VAT, currency) with `get_business_settings()` / `set_business_setting()`.
->   `grade_letter()` and `publish_exam_results` read the bands from here; the client mirrors them via
->   `setGradeBands()` (called at boot in `App.jsx`). Edit bands in Settings → Business rules.
-> - **`20260824130000_purge_demo_slice.sql`** deletes the Gabriel !Naruseb / `suite-demo` slice from the
->   cloud (idempotent, demo-key-scoped). `supabase/seed_golive_enrolments.sql` enrols the 24 real Aux-Nursing students.
-> - **`src/api.js`** gained one function per dataset. In **http they hit the RPC; in mock/dev they return
->   `[]`/`null`** (no mock fallback) — so no fabricated data can reach production. Helpers `rows()/one()/call()`
->   wrap the CRUD RPCs. `listProgrammes` now reads the REAL catalogue (was filtered to `suite-demo`).
-> - **Modules** are being rewritten to load via `useEffect`+`api`, show **loading / empty-states**, and
->   offer Add/Edit/Delete `Modal` forms. Done: Library, Dashboard, Accommodation, Compliance, CanteenAdmin,
->   Accounting, Scheduling, TeacherPortal (+ StudentPortal in progress). `Graduation.jsx` was already clean.
-> - **`src/lib/format.js`** now holds `fmtN`/`staffEmail` (were in `data.js`). Import formatting/logic from
->   `src/lib/*`, never from `data.js`. **`src/data.js` is being retired** — do not add new imports of it;
->   the end state deletes it. School-era terms (learner/grade/guardian, "8A/9C") are being removed on cutover.
+> **Mock-elimination / "empty-by-default" pass — DONE (2026-08-24).** Production carries ZERO mock data:
+> every module reads/writes the real backend, starting empty and populated through CRUD forms. All the
+> migrations below are **APPLIED to the cloud** (tracker in sync through `20260824234000`).
+> - **`src/data.js` is DELETED.** Import formatting/logic from `src/lib/*`: `format.js` (`fmtN`,
+>   `staffEmail`), `academics.js` (`gradeOf`, editable grade bands via `setGradeBands`), `institution.js`
+>   (`SCHOOL`, `INSTITUTION_HIDE`, `getInstType`). Never reference `data.js` — it no longer exists.
+> - **Every domain has a backend + CRUD RPCs** (`20260824130000`…`230000`): library, HR/payroll, finance,
+>   accounting (assets/VAT), canteen/POS, scheduling, accommodation, compliance, dashboard aggregates,
+>   programmes/courses/courseware. Writes are `SECURITY DEFINER` + RLS-gated by `suite_role`.
+> - **Sensitive writes go ONLY through RPCs, never raw client DML.** Hardening RPCs (`20260824233000`):
+>   `reject_application`, `student_upsert`, `student_archive`, `hold_place`, `hold_clear` (+ `staff_upsert`,
+>   `mark_paid`/`pay_invoice`). **Enforced at the DB by `20260824235000`**: on `students`/`staff`/`payments`
+>   the write policies are now **SELECT-only** and direct INSERT/UPDATE/DELETE is **revoked** from
+>   `authenticated`/`anon` — so a raw client write is denied to **every** role (even the domain owner and
+>   admin), while the `SECURITY DEFINER` RPCs still write (they run as owner, bypassing RLS). Reads are
+>   preserved. The rls-rpc test asserts exactly this (raw write blocked; RPC write-path proven via
+>   `approve_application`/`mark_paid`).
+> - **`course_set_capacity`** (`20260824234000`): admins set real course capacities in Programmes → Course
+>   Catalogue (touches only `capacity`, never programme/lecturer). Reference the finished module pattern
+>   here (filter + inline-edit + batch save) in `src/modules/Programmes.jsx` `Catalogue`.
+> - **`business_settings`** (`20260824140000`): editable business rules (grade bands, assessment weights,
+>   PAYE/SSC/VET, VAT, currency) via `get_business_settings()` / `set_business_setting()`; `App.jsx` mirrors
+>   the bands via `setGradeBands()` at boot. Edit in Settings → Business rules.
+> - **`20260824130000_purge_demo_slice.sql`** (applied) deleted the Gabriel !Naruseb / `suite-demo` slice
+>   from the cloud. `supabase/seed_golive_enrolments.sql` enrols the 24 real Aux-Nursing students.
+> - **`src/api.js`** has one function per dataset. In **http** they hit the RPC; in **mock** they return
+>   `[]`/`null` (no fabricated data reaches production). Helpers `rows()/one()/call()` wrap the CRUD RPCs.
+> - **All modules migrated** to `useEffect`+`api` with loading/empty-states and Add/Edit/Delete `Modal`
+>   forms. Reference the finished pattern in `Accommodation.jsx`, `Library.jsx`, `Programmes.jsx`.
 
 ## Commands
 
@@ -59,6 +66,14 @@ cd site-publico && npm run start # serve the production build
 npx supabase status
 npx supabase db push             # apply migrations to the LINKED cloud project (needs SUPABASE_ACCESS_TOKEN)
 
+# Validation + cloud-apply scripts (Node ESM in scripts/; read $VALIDATION_ENV or .env.codex-handoff)
+npm run validate:supabase        # E2E vs cloud: admission→payment→access→registration→holds (self-cleans)
+npm run validate:uat-core        # core UAT flow + public site
+npm run validate:public-site     # public API routes against the LIVE site
+npm run apply:migration -- <sql> # apply one migration via `pg` + Session pooler (needs SUPABASE_DB_PASSWORD)
+npm run apply:course-capacities  # bulk-set capacities from supabase/templates/course-capacities.csv
+npm run cleanup:codex-test-data  # delete codex.* / test rows
+
 # Vercel (both apps already deployed; redeploy from the app's dir)
 cd site-publico && npx --yes vercel --prod --token "$VERCEL_TOKEN"   # public site
 npx --yes vercel --prod --token "$VERCEL_TOKEN"                      # Suite (from repo root)
@@ -75,19 +90,19 @@ so UI components never change when flipping backends:
 
 - **Suite**: `src/config.js` (`API_MODE`), `src/api.js` (every read/write), `src/supabaseClient.js`.
   Flip with `VITE_API_MODE=mock|http`. Each `api.js` function has a `useHttp()` branch (Supabase) and
-  a `mock()` branch (returns `data.js`), **mapping DB rows back to the exact shapes the modules expect**.
+  a `mock()` branch that now returns `[]`/`null` (`data.js` is deleted); the http branch **maps DB rows
+  back to the exact shapes the modules expect**.
 - **Public site**: `lib/api.ts` (`API_MODE`), `lib/supabase.ts` (browser client), `lib/supabase-admin.ts`
   (server-only service-role client — never import into a Client Component). Flip with
   `NEXT_PUBLIC_API_MODE=mock|supabase`.
 
 When migrating a Suite module from mock to backend: convert its top-level **synchronous `data.js`
 reads into an async `useEffect` load via `api.js`**, keep the same prop/`ctx` shape so child components
-are untouched, and add loading/error state. **As of the 2026-08-24 mock-elimination pass this is being
-applied to every module** (see the callout above): a module loses its `../data` import, loads through
-`api.js`, renders empty-states, and gains Add/Edit/Delete forms. Reference examples of the finished
-pattern: `Graduation.jsx`, `Library.jsx`, `Accounting.jsx`, `Accommodation.jsx`, `Dashboard.jsx`. **For
-demo/UAT the Suite still runs in mock**, but in mock the seam returns empty (not `data.js`), so exercise
-new work in **http** against a Supabase (local or cloud).
+are untouched, and add loading/error state. **This pass is complete for every module** (see the callout
+above): each module loads through `api.js`, renders empty-states, and offers Add/Edit/Delete forms.
+Reference examples: `Graduation.jsx`, `Library.jsx`, `Accounting.jsx`, `Accommodation.jsx`, `Programmes.jsx`.
+**For demo/UAT the Suite still runs in mock**, but in mock the seam returns empty, so exercise new work in
+**http** against a Supabase (local or cloud).
 
 ## Backend (`supabase/`)
 
@@ -126,6 +141,13 @@ new work in **http** against a Supabase (local or cloud).
   Signatures are printed name + title only (client declined scanned signatures — forgery risk).
 - `app/api/payment-proof/route.ts` — applicant uploads EFT proof (file + amount); validates the ref is
   approved, stores it, flags the application. Admin reviews it in `/admin` and records the payment.
+- `app/api/public/{application,application-status,contact}/route.ts` — the applicant/contact write path,
+  **rate-limited** via `lib/public-security.ts` (`rateLimit`). CAPTCHA/**Turnstile was removed** (the
+  widget component is gone); `verifyTurnstile` is a no-op unless `TURNSTILE_SECRET_KEY` is set. Client
+  requirement: rate limiting yes, CAPTCHA no.
+- Edge function `supabase/functions/grant-student-access/` — admin-only; creates a student's `auth.users`
+  with a temp password and links `students.user_id` via `link_student_account()` (returns the credentials
+  once). Deployed to cloud; called by the Suite's "Grant portal access".
 
 ## Suite front-end structure
 
@@ -135,10 +157,10 @@ No router, no state library, no CSS framework. `src/App.jsx` (login/role) → `s
 **Invariants:** the `seller` role never mounts Shell — it routes straight to fullscreen `POS.jsx`;
 `goTo(mod, payload)` is the only navigation path and refuses modules outside the role's nav.
 
-`src/data.js` is the single mock database. Its datasets historically **join by student NAME** (e.g.
-`INVOICES.learner === "Gabriel !Naruseb"`) — the backend replaces this with `student_id` FKs (the seed
-carries real ids). `src/ui.jsx` holds shared primitives (`StatCard`, `Tabs`, `Panel`, `Modal`,
-`Donut`, `useToast`, …) — reuse these; every flow is table/row → `Modal` → state → toast.
+`src/data.js` **is deleted** (the old mock DB joined datasets by student NAME, e.g.
+`INVOICES.learner === "Gabriel !Naruseb"`; the backend uses `student_id` FKs instead). `src/ui.jsx` holds
+shared primitives (`StatCard`, `Tabs`, `Panel`, `Modal`, `Donut`, `useToast`, `Badge`, `Progress`, …) —
+reuse these; every flow is table/row → `Modal` → state → toast.
 
 ## Design systems
 
@@ -158,8 +180,8 @@ carries real ids). `src/ui.jsx` holds shared primitives (`StatCard`, `Tabs`, `Pa
   `final = 0.6*CA + 0.4*exam` (client rule, 2026; source of truth `src/lib/academics.js`). University
   nomenclature (Student/Programme/Semester/Credit/GPA) — avoid
   reintroducing school terms (learner/grade/guardian/term).
-- "Today" in the demo is fixed around **3 Jul 2026**; keep new dates in that window. Headline numbers are
-  reconciled (476 total enrolment across `SCHOOL`/`PROGRAMMES`/`FEE_STRUCTURE`) — keep them consistent.
+- Production is **empty-by-default** (no mock/demo numbers to reconcile — the old `data.js` "476 enrolment"
+  figures are gone). Any remaining mock/dev copy anchors "today" around **3 Jul 2026**.
 - **Payments are manual EFT + uploaded proof — no gateway.** Emails are **generated in-app but sent
   manually** (admin "Copy email"). Bank details are **REAL and confirmed** (client, 2026-08-23):
   `content.ts` `college.bank` and `college_settings` = *Symanek Specialized College* /
@@ -174,11 +196,23 @@ carries real ids). `src/ui.jsx` holds shared primitives (`StatCard`, `Tabs`, `Pa
   - **`https://symanek-site.vercel.app`** — public site, Root Directory `site-publico`. Needs 6 env vars
     incl. server-only `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (for `/api/letter`, `/api/payment-proof`)
     and `NEXT_PUBLIC_SITE_URL` (absolute portal link in the generated email). See `site-publico/VERCEL-DEPLOY.md`.
-  - **`https://symanek-suite.vercel.app`** — Suite, Root Directory `.` (repo root `vercel.json`, Vite→`dist`),
-    **no env vars** ⇒ mock/demo mode, role-picker login.
+  - **`https://symanek-suite.vercel.app`** — Suite, Root Directory `.` (repo root `vercel.json`, Vite→`dist`).
+    A **production build defaults to `http`** (`config.js`: `API_MODE = VITE_API_MODE || (PROD ? 'http' : 'mock')`)
+    with real `EmailLogin` + cloud data — **no Vercel env vars needed** (`supabaseClient.js` has a baked cloud
+    fallback). `PRODUCTION_CORE_MODULES` (`config.js`) gates the http nav to the day-one academic core
+    (dashboard/students/academics/admissions/programmes/exams/graduation/finance/teacher/portal); other
+    modules stay hidden until their own UAT. Local `dev` still defaults to `mock` (role-picker).
 - **Vercel CLI works here** (`npx --yes vercel …`, v56): `vercel link --yes --project NAME`,
   `printf '%s' VALUE | vercel env add NAME production`, `vercel --prod --yes` (all need `--token` or `VERCEL_TOKEN`).
   Both apps build clean on Vercel's Node 20. UAT test scripts + staff runbook are in `UAT-GUIA.md`.
+  Deploy runbook (avoid cross-deploys: repo root is linked to `symanek-suite`, so `vercel --prod` from the
+  root deploys the **Suite**; `cd site-publico` to deploy the **site**) is in `PRODUCTION-OPERATIONS.md`.
+- **CI** — `.github/workflows/ci.yml` runs on push to `main` and PRs: **suite** (`npm run build`), **site**
+  (`tsc --noEmit` + build), and **rls-rpc** (`supabase start` + `seed_auth.sh` + `tests/run.sh`). The
+  rls-rpc job is **blocking** (as of `20260824235000` — the suite now matches the enforced RPC-only write
+  model: raw writes to `students`/`staff`/`payments` denied to every role, RPC write-path proven). Verified
+  green locally against the container stack. Pushing `.github/workflows/**` needs a token with the
+  `workflow` scope.
 
 ## Local-dev gotchas (verified, will bite you)
 
@@ -193,10 +227,16 @@ carries real ids). `src/ui.jsx` holds shared primitives (`StatCard`, `Tabs`, `Pa
 - `supabase db push` connects to cloud via the access token (no DB password needed); a `pg-delta`
   certificate warning is **non-fatal** — the migration still applies. Changing an RPC's return type needs
   `drop function` first (a bare `create or replace` errors).
-- **Applying SQL to cloud when the CLI isn't available** (verified 2026-08-23): the `supabase` CLI and
-  `psql` are NOT installed and the **direct** connection `db.<ref>.supabase.co:5432` is **IPv6-only**
-  (unreachable from this sandbox → `ENETUNREACH`). Working path: `npm i pg` (network is available), then
-  connect with the **Session pooler** URI (IPv4, port **5432**, user `postgres.<ref>`,
-  host `aws-0-<region>.pooler.supabase.com`) and `ssl:{rejectUnauthorized:false}`; wrap each file in
-  `BEGIN/COMMIT`. Do **not** use the transaction pooler (6543) for DDL. The Session-pooler string carries
-  the DB password — ask the user for it, keep it out of committed files, and have them rotate it after.
+- **Applying SQL/DDL to cloud — simplest path is the Management API** (used 2026-08-24, no DB password):
+  `POST https://api.supabase.com/v1/projects/<ref>/database/query` with `Authorization: Bearer <token>`
+  (a personal `sbp_…` access token) and body `{"query":"<sql>"}`. Runs as postgres, returns `[]` on DDL
+  success. It does **not** update the migration tracker, so record it yourself:
+  `insert into supabase_migrations.schema_migrations(version,name) values (…) on conflict (version) do nothing;`.
+- **Alternative apply path (`apply:migration` script)** uses `pg` + the **Session pooler** and needs
+  `SUPABASE_DB_PASSWORD`: the `supabase` CLI/`psql` aren't installed and the **direct** host
+  `db.<ref>.supabase.co:5432` is **IPv6-only** (`ENETUNREACH` here) — so override `SUPABASE_DB_HOST` to
+  `aws-0-<region>.pooler.supabase.com` (IPv4, port **5432**, user `postgres.<ref>`, not the 6543 txn pooler).
+  The DB password is a secret — keep it out of committed files and have the user rotate it after.
+- **Sensitive tokens** (`sbp_…`, GitHub PAT, DB password) live only in the gitignored `.env.codex-handoff`
+  (the validation/apply scripts read it via `loadEnv`); never commit them, and have the user rotate any
+  token that passed through chat.

@@ -59,30 +59,38 @@ begin
   -- pick real FK targets so only RLS (WITH CHECK), not FK, decides
   select id into v_app from public.applications limit 1;
 
-  -- Payments are audit-sensitive: the app records them only through SECURITY DEFINER
-  -- RPCs (mark_paid / pay_invoice / confirm_invoice_payment), never via a raw client
-  -- INSERT. So RLS correctly denies a direct write even to the bursar.
+  -- Audit-sensitive tables (students, staff, payments) are write-locked to RAW client
+  -- DML by migration 20260824235000: the write policies are SELECT-only and direct
+  -- INSERT/UPDATE/DELETE is revoked. Every write MUST go through a SECURITY DEFINER RPC
+  -- (student_upsert / staff_upsert / mark_paid / pay_invoice / confirm_invoice_payment),
+  -- which runs as owner and bypasses RLS. So a raw insert is denied to EVERY role —
+  -- even the one that owns the domain, and even admin. The sanctioned RPC write-path is
+  -- proven below by approve_application (writes students) and mark_paid (writes payments).
   perform pg_temp.ok(pg_temp.as_user('bursar@symanek.local',
     format('insert into public.payments(application_id,reference,amount) values (%L,%L,1)', v_app,'T')) = 'blocked',
-    'payments are written via RPC, not raw insert (denied even to bursar)');
+    'payments are RPC-only: raw insert denied even to bursar');
   perform pg_temp.ok(pg_temp.as_user('librarian@symanek.local',
     format('insert into public.payments(application_id,reference,amount) values (%L,%L,1)', v_app,'T')) = 'blocked',
     'librarian may NOT write payments');
   perform pg_temp.ok(pg_temp.as_user('registrar@symanek.local',
-    'insert into public.students(reference,full_name,email) values (''T1'',''T'',''t@t.na'')') = 'ok',
-    'registrar may write students');
+    'insert into public.students(reference,full_name,email) values (''T1'',''T'',''t@t.na'')') = 'blocked',
+    'students are RPC-only: raw insert denied even to registrar');
   perform pg_temp.ok(pg_temp.as_user('bursar@symanek.local',
     'insert into public.students(reference,full_name,email) values (''T2'',''T'',''t@t.na'')') = 'blocked',
     'bursar may NOT write students');
   perform pg_temp.ok(pg_temp.as_user('hr@symanek.local',
-    'insert into public.staff(name,role) values (''T'',''L'')') = 'ok',
-    'hr may write staff');
+    'insert into public.staff(name,role) values (''T'',''L'')') = 'blocked',
+    'staff are RPC-only: raw insert denied even to hr');
   perform pg_temp.ok(pg_temp.as_user('teacher@symanek.local',
     'insert into public.staff(name,role) values (''T'',''L'')') = 'blocked',
     'teacher may NOT write staff');
   perform pg_temp.ok(pg_temp.as_user('admin@symanek.local',
-    'insert into public.students(reference,full_name,email) values (''T3'',''T'',''t@t.na'')') = 'ok',
-    'admin may write students (admin passes every scope)');
+    'insert into public.students(reference,full_name,email) values (''T3'',''T'',''t@t.na'')') = 'blocked',
+    'students are RPC-only: raw insert denied even to admin (writes go via student_upsert)');
+  -- Reads are preserved for the owning role (the write lock only affects DML).
+  perform pg_temp.ok(pg_temp.as_user('registrar@symanek.local',
+    'select count(*) from public.students') = 'ok',
+    'registrar can still READ students (RPC-only lock affects writes, not reads)');
   perform pg_temp.ok(pg_temp.as_user('admin@symanek.local',
     'insert into public.audit_log(action) values (''x'')') = 'blocked',
     'audit_log is write-protected even for admin (triggers only)');
