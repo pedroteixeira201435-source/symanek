@@ -134,6 +134,11 @@ begin
     'dashboard_stats() returns real aggregates');
 
   raise notice '== library backend ==';
+  -- Self-seed the book so the test does not depend on external seed data (the fresh
+  -- CI stack does not seed the demo catalogue). Runs as owner; the tx is rolled back.
+  insert into public.library_books (isbn, title, total_copies)
+    values ('978-0-435905-25-5', 'RLS Test Book', 3)
+    on conflict (isbn) do nothing;
   perform set_config('request.jwt.claims',
     json_build_object('sub',(select id from auth.users where email='librarian@symanek.local')::text)::text, true);
   select avail into v_avail0 from public.library_catalogue() where isbn = '978-0-435905-25-5';
