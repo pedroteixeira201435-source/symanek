@@ -49,19 +49,31 @@ Deno.serve(async (req) => {
     const isAdmin = !!prof && (prof.role === 'admin' || prof.suite_role === 'admin')
     if (!isAdmin) return json(403, { error: 'admin only' })
 
-    const { student_id } = await req.json().catch(() => ({}))
+    const { student_id, reset } = await req.json().catch(() => ({}))
     if (!student_id) return json(400, { error: 'student_id required' })
 
     // service client — bypasses RLS, holds the secret key (never sent to browser).
     const admin = createClient(url, service, { auth: { persistSession: false } })
 
-    // (b) load the student; must be enrolled and not already linked.
+    // (b) load the student; must be enrolled.
     const { data: s } = await admin.from('students')
       .select('id,full_name,email,status,user_id').eq('id', student_id).maybeSingle()
     if (!s) return json(404, { error: 'student not found' })
     if (!s.email) return json(422, { error: 'student has no email on file' })
     if (s.status !== 'enrolled') return json(409, { error: 'student is not enrolled yet' })
-    if (s.user_id) return json(409, { error: 'portal access already granted' })
+
+    // Already has a login: refuse unless the admin explicitly asked to reset it
+    // (e.g. the student lost their temporary password). `code` lets the UI offer
+    // a one-click reset instead of a dead end.
+    if (s.user_id && !reset) return json(409, { error: 'portal access already granted', code: 'already_granted' })
+    if (s.user_id && reset) {
+      const password = tempPassword()
+      const { error: rErr } = await admin.auth.admin.updateUserById(s.user_id, { password, email_confirm: true })
+      if (rErr) return json(400, { error: rErr.message })
+      // force the student to choose a new password again on next sign-in
+      await admin.from('profiles').update({ must_reset_password: true }).eq('id', s.user_id)
+      return json(200, { email: s.email, password, reset: true })
+    }
 
     // (c) create the auth user with a temporary password, email pre-confirmed.
     const password = tempPassword()

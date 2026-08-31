@@ -1035,18 +1035,18 @@ export const currentSession = () => mock({ tenant: TENANT, mode: API_MODE })
 // Function, service_role) and links students.user_id; returns the one-time
 // email + temporary password to show the admin. The student must change it on
 // first login. In mock mode returns demo credentials so the UI is exercisable.
-export async function grantStudentAccess(studentUuid) {
-  if (!useHttp()) return mock({ email: 'demo.student@symanek.local', password: 'Symanek-temp-1!' })
+export async function grantStudentAccess(studentUuid, { reset = false } = {}) {
+  if (!useHttp()) return mock({ email: 'demo.student@symanek.local', password: 'Symanek-temp-1!', reset })
   const { data, error } = await supabase.functions.invoke('grant-student-access', {
-    body: { student_id: studentUuid },
+    body: { student_id: studentUuid, reset },
   })
   if (error) {
     // Non-2xx bodies arrive on error.context (a Response), not on `data`.
-    let msg = error.message
-    try { msg = (await error.context?.json())?.error || msg } catch { /* keep msg */ }
-    throw new Error(msg)
+    let msg = error.message, code
+    try { const j = await error.context?.json(); msg = j?.error || msg; code = j?.code } catch { /* keep msg */ }
+    const e = new Error(msg); e.code = code; throw e
   }
-  return data // { email, password }
+  return data // { email, password, reset? }
 }
 
 // Called after a student sets a new password on first login — clears the flag.

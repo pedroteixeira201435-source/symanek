@@ -65,14 +65,21 @@ function Student360({ student, students, programmes, onSelect, reload }) {
   const [editing, setEditing] = useState(false)
   const [granting, setGranting] = useState(false)
   const [granted, setGranted] = useState(null) // { name, email, password }
-  const grant = async () => {
+  const grant = async (reset = false) => {
     setGranting(true)
     try {
-      const res = await grantStudentAccess(student._uuid)
-      if (res?.email && res?.password) setGranted({ name: student.name, email: res.email, password: res.password })
+      const res = await grantStudentAccess(student._uuid, { reset })
+      if (res?.email && res?.password) setGranted({ name: student.name, email: res.email, password: res.password, reset: !!res.reset })
       else showToast(`Access granted: ${res?.email || 'account created'}`)
     }
-    catch (err) { showToast('Could not grant access: ' + (err?.message || err)) }
+    catch (err) {
+      if (err?.code === 'already_granted') {
+        if (window.confirm(`${student.name} already has portal access. Reset their password and issue new credentials?`)) {
+          setGranting(false)
+          return grant(true)
+        }
+      } else showToast('Could not grant access: ' + (err?.message || err))
+    }
     finally { setGranting(false) }
   }
   return (
@@ -92,13 +99,16 @@ function Student360({ student, students, programmes, onSelect, reload }) {
 // admin copies these details and sends them to the student manually.
 function PortalCredentials({ data, onClose, showToast }) {
   const portalUrl = (typeof window !== 'undefined' && window.location.origin) || 'https://symanek-suite.vercel.app'
+  const lead = data.reset
+    ? 'Your student portal password has been reset.'
+    : 'Your student portal login has been created.'
   const message =
 `Symanek Specialized College — Student Portal access
 
 Hello ${data.name},
 
-Your student portal login has been created. Please sign in and set your own
-password on first login. Keep these details private.
+${lead} Please sign in and set your own password on first login.
+Keep these details private.
 
 Portal:    ${portalUrl}
 Username:  ${data.email}
@@ -108,7 +118,7 @@ Password:  ${data.password} (temporary)`
     catch { showToast('Could not copy — select the text and copy manually') }
   }
   return (
-    <Modal title="Portal access — copy & send" onClose={onClose}>
+    <Modal title={data.reset ? 'Password reset — copy & send' : 'Portal access — copy & send'} onClose={onClose}>
       <div className="note-banner" style={{ background: 'var(--amber-soft, #fff7e6)', borderColor: '#eee0c0', marginBottom: 12 }}>
         Shown once. No email is sent automatically — copy these and send them to the student.
       </div>
