@@ -111,6 +111,20 @@ Reference examples: `Graduation.jsx`, `Library.jsx`, `Accounting.jsx`, `Accommod
   **plus** `profiles.suite_role` (fine: the 9 Suite workspaces). `src/auth.js` resolves the signed-in
   user's Suite role from their profile; `App.jsx` shows `EmailLogin` in http mode, the role-picker in
   mock. Students are linked to their record via `students.user_id` (enables RLS owner-reads).
+  - **Provisioning a login (current model, migration `20260830140000`, replaces the old `staff_access`
+    table):** create the user natively in **Supabase → Authentication → Add user** (Auto Confirm); a
+    trigger mints an **empty** profile (no access). Then set **`profiles.suite_role`** in the Table
+    Editor — a trigger derives `role` from it (`admin`→admin, the staff roles→staff). **Only ever edit
+    `suite_role`, never `role`.** Students/staff are usually provisioned instead via the Suite's "Grant
+    portal access"/"Grant staff access" (the edge functions above). `is_admin()` = `role in (admin,staff)`.
+  - **Gotcha (fixed): the login role-check must filter to the caller's own profile row.** RLS is
+    `profiles: id = auth.uid() OR is_admin()`, so an admin can read *every* profile — an unfiltered
+    `.select('role').maybeSingle()` returns multiple rows once a 2nd admin exists and wrongly rejects the
+    login. Always `.eq('id', user.id)` (both `src/auth.js` and `site-publico/lib/api.ts` do this now).
+  - **The student portal IS the Suite** (there is no separate student app): a `student` logs into
+    `symanek-suite.vercel.app` and `ROLE_NAV`/`PRODUCTION_CORE_MODULES` show them only the `portal`
+    module. The public site's "Enter Student Portal" button points to `college.studentPortalUrl`
+    (`site-publico/lib/content.ts`) = the Suite; the former external **EduCIMS** LMS is deprecated.
 - **Server-authoritative rules are RPCs, not client logic** (SECURITY DEFINER, resolve the actor via
   `auth.uid()`): `register_course` (holds → prereq → credit-cap → capacity/waitlist → charge),
   `pay_invoice` (records payment, reduces balance, **auto-releases financial holds** when cleared),
@@ -145,9 +159,19 @@ Reference examples: `Graduation.jsx`, `Library.jsx`, `Accounting.jsx`, `Accommod
   **rate-limited** via `lib/public-security.ts` (`rateLimit`). CAPTCHA/**Turnstile was removed** (the
   widget component is gone); `verifyTurnstile` is a no-op unless `TURNSTILE_SECRET_KEY` is set. Client
   requirement: rate limiting yes, CAPTCHA no.
-- Edge function `supabase/functions/grant-student-access/` — admin-only; creates a student's `auth.users`
-  with a temp password and links `students.user_id` via `link_student_account()` (returns the credentials
-  once). Deployed to cloud; called by the Suite's "Grant portal access".
+- **Edge functions** `supabase/functions/grant-student-access/` and `grant-staff-access/` — admin-only;
+  create an `auth.users` row with a temp password and link it (`link_student_account()` /
+  `link_staff_account()`), returning the credentials **once** (no email provider is wired — the admin
+  copies them; the Suite shows a copyable modal after granting). `grant-student-access` also takes
+  `{ reset: true }` to reissue a lost password for an already-linked student (returns code
+  `already_granted` otherwise so the UI can offer a confirm-to-reset). Both re-flag
+  `must_reset_password`, so the student/staff must choose a new password on first sign-in
+  (`App.jsx` → `ForcePasswordChange`).
+- **These functions do their own admin check + CORS, so their `verify_jwt` is effectively bypassed for
+  the browser preflight.** Their `Access-Control-Allow-Headers` MUST include `x-client-info` and `apikey`
+  (supabase-js sends both on `invoke()`); if not, the browser preflight fails and the call dies with
+  `FunctionsFetchError: Failed to send a request to the Edge Function` — a CORS failure, NOT a function
+  bug. Redeploy with `SUPABASE_ACCESS_TOKEN=… npx supabase functions deploy <name> --project-ref <ref>`.
 
 ## Suite front-end structure
 
@@ -205,8 +229,14 @@ reuse these; every flow is table/row → `Modal` → state → toast.
 - **Vercel CLI works here** (`npx --yes vercel …`, v56): `vercel link --yes --project NAME`,
   `printf '%s' VALUE | vercel env add NAME production`, `vercel --prod --yes` (all need `--token` or `VERCEL_TOKEN`).
   Both apps build clean on Vercel's Node 20. UAT test scripts + staff runbook are in `UAT-GUIA.md`.
-  Deploy runbook (avoid cross-deploys: repo root is linked to `symanek-suite`, so `vercel --prod` from the
-  root deploys the **Suite**; `cd site-publico` to deploy the **site**) is in `PRODUCTION-OPERATIONS.md`.
+  Deploy runbook is in `PRODUCTION-OPERATIONS.md`. **Neither project auto-deploys from Git — deploy via
+  CLI.** Repo root `.vercel` is linked to `symanek-suite`, so `vercel --prod` from the root deploys the
+  **Suite** (Vite→`dist`). The **site** project's Root Directory is `site-publico`, so `cd site-publico &&
+  vercel --prod` FAILS (it looks for `site-publico/site-publico`). Deploy the site from the **repo root**
+  targeting the site project: `env VERCEL_PROJECT_ID=<site-prj> VERCEL_ORG_ID=<org> vercel --prod --yes`
+  with the root `.vercel` moved aside. `site-publico/vercel.json` (`{"framework":"nextjs"}`) is required
+  so the root Vite `vercel.json` doesn't force a `dist` output on the Next build. Add a temporary
+  `.vercelignore` for `fotos graduation/` (74 MB of source photos) to keep uploads lean.
 - **CI** — `.github/workflows/ci.yml` runs on push to `main` and PRs: **suite** (`npm run build`), **site**
   (`tsc --noEmit` + build), and **rls-rpc** (`supabase start` + `seed_auth.sh` + `tests/run.sh`). The
   rls-rpc job is **blocking** (as of `20260824235000` — the suite now matches the enforced RPC-only write
