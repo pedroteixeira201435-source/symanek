@@ -1,13 +1,14 @@
-// grant-student-access — admin-only provisioning of a student portal login.
+// grant-staff-access — admin-only provisioning of a STAFF Suite login.
 //
-// The browser cannot create auth.users (that needs the service_role key, which
-// bypasses RLS and must never ship to the client). So the Suite calls this
-// Edge Function: it (1) verifies the caller is an admin using THEIR JWT, then
-// (2) with the service_role key creates the student's auth user with a temporary
-// password and links it via link_student_account(). Credentials are returned to
-// the admin once and never stored in plaintext.
+// Mirrors grant-student-access. The browser cannot create auth.users (that needs
+// the service_role key, which bypasses RLS and must never ship to the client),
+// so the Suite calls this Edge Function: it (1) verifies the caller is an admin
+// using THEIR JWT, then (2) with the service_role key creates the staff auth user
+// with a temporary password and links it via link_staff_account(). The staff row
+// is only an HR record until this runs — a profiles.suite_role IS the approval.
+// Credentials are returned to the admin once and never stored in plaintext.
 //
-// Deploy: supabase functions deploy grant-student-access
+// Deploy: supabase functions deploy grant-staff-access
 // The Supabase-hosted runtime injects SUPABASE_URL / SUPABASE_ANON_KEY /
 // SUPABASE_SERVICE_ROLE_KEY automatically.
 
@@ -23,6 +24,9 @@ const cors = {
 
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
+
+// Allowed staff workspaces (keep in sync with the DB is_staff_suite_role()).
+const STAFF_ROLES = ['admin', 'bursar', 'hr', 'teacher', 'seller', 'librarian', 'registrar']
 
 // 12+ chars, cryptographically random, mixed classes.
 function tempPassword(): string {
@@ -49,31 +53,41 @@ Deno.serve(async (req) => {
     const isAdmin = !!prof && (prof.role === 'admin' || prof.suite_role === 'admin')
     if (!isAdmin) return json(403, { error: 'admin only' })
 
-    const { student_id } = await req.json().catch(() => ({}))
-    if (!student_id) return json(400, { error: 'student_id required' })
+    const { staff_id, suite_role, action } = await req.json().catch(() => ({}))
+    if (!staff_id) return json(400, { error: 'staff_id required' })
 
     // service client — bypasses RLS, holds the secret key (never sent to browser).
     const admin = createClient(url, service, { auth: { persistSession: false } })
 
-    // (b) load the student; must be enrolled and not already linked.
-    const { data: s } = await admin.from('students')
-      .select('id,full_name,email,status,user_id').eq('id', student_id).maybeSingle()
-    if (!s) return json(404, { error: 'student not found' })
-    if (!s.email) return json(422, { error: 'student has no email on file' })
-    if (s.status !== 'enrolled') return json(409, { error: 'student is not enrolled yet' })
-    if (s.user_id) return json(409, { error: 'portal access already granted' })
+    // ---- revoke: deactivate the login and hard-delete the orphaned auth user ----
+    if (action === 'revoke') {
+      const { data: uid, error: dErr } = await admin.rpc('deactivate_staff_account', { p_staff: staff_id })
+      if (dErr) return json(400, { error: dErr.message })
+      if (uid) await admin.auth.admin.deleteUser(uid as string)
+      return json(200, { ok: true, revoked: !!uid })
+    }
+
+    // ---- grant: create the login and link it ----
+    if (!STAFF_ROLES.includes(suite_role)) return json(400, { error: 'invalid suite_role' })
+
+    // (b) load the staff record; must have an email and no existing login.
+    const { data: s } = await admin.from('staff')
+      .select('id,name,email,user_id').eq('id', staff_id).maybeSingle()
+    if (!s) return json(404, { error: 'staff not found' })
+    if (!s.email) return json(422, { error: 'staff has no email on file' })
+    if (s.user_id) return json(409, { error: 'login already granted' })
 
     // (c) create the auth user with a temporary password, email pre-confirmed.
     const password = tempPassword()
     const { data: created, error: cErr } = await admin.auth.admin.createUser({
       email: s.email, password, email_confirm: true,
-      user_metadata: { full_name: s.full_name },
+      user_metadata: { full_name: s.name },
     })
     if (cErr || !created?.user) return json(400, { error: cErr?.message ?? 'createUser failed' })
 
-    // (d) link student + seed profile as STUDENT (must_reset_password = true).
-    const { error: lErr } = await admin.rpc('link_student_account', {
-      p_student: s.id, p_user: created.user.id, p_full_name: s.full_name,
+    // (d) link staff + seed profile with the chosen suite_role (must_reset_password).
+    const { error: lErr } = await admin.rpc('link_staff_account', {
+      p_staff: s.id, p_user: created.user.id, p_suite_role: suite_role, p_full_name: s.name,
     })
     if (lErr) {
       // best-effort rollback of the orphan auth user
@@ -82,7 +96,7 @@ Deno.serve(async (req) => {
     }
 
     // (e) return credentials to the admin (shown once).
-    return json(200, { email: s.email, password })
+    return json(200, { email: s.email, password, suite_role })
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) })
   }
