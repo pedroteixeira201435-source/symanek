@@ -132,7 +132,7 @@ function ResultCard({ status }: { status: Extract<ApplicationStatus, { found: tr
               </p>
             )}
             {enrolled && (
-              <a href="https://symanek.educims.org/" target="_blank" rel="noopener noreferrer" className="btn btn-accent btn-md">
+              <a href={college.studentPortalUrl} target="_blank" rel="noopener noreferrer" className="btn btn-accent btn-md">
                 Enter Student Portal <ArrowRight />
               </a>
             )}

@@ -7,6 +7,11 @@ export const college = {
   shortName: "Symanek",
   slogan: "Empowering Future Healthcare Professionals",
   subSlogan: "Study at Symanek — Where Dreams Take Shape",
+  // Student portal = the Symanek Suite (our system). Enrolled students sign in
+  // here; an admin provisions each login via "Grant portal access" (temporary
+  // password + forced reset on first sign-in). Replaces the former external
+  // EduCIMS LMS. Update this to the custom domain once one is attached.
+  studentPortalUrl: "https://symanek-suite.vercel.app",
   intro:
     "A registered vocational and healthcare training institution dedicated to equipping students with practical skills and professional knowledge in various fields.",
   location: "ERF 2948, Extension 6, Okahandja, Namibia",

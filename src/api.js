@@ -993,7 +993,7 @@ const COLLEGE_SETTINGS_DEFAULT = {
   cell: '+264 85 804 5679',
   email: 'info@symanekacademy.com',
   website: 'www.symanekacademy.com',
-  portal_url: 'www.symanek.educims.org',
+  portal_url: 'symanek-suite.vercel.app',
   bank_name: 'First National Bank (FNB)',
   bank_account_name: 'Symanek Specialized College',
   bank_account_no: '64279814676',
