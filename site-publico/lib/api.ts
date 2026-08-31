@@ -185,9 +185,12 @@ export type AdminApplication = {
 export async function signIn(email: string, password: string): Promise<{ ok: boolean; error?: string }> {
   try { requireConfiguredBackend(); } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Backend unavailable" }; }
   if (useSupabase()) {
-    const { error } = await supabase!.auth.signInWithPassword({ email, password });
+    const { data: auth, error } = await supabase!.auth.signInWithPassword({ email, password });
     if (error) return { ok: false, error: error.message };
-    const { data: prof } = await supabase!.from("profiles").select("role").maybeSingle();
+    // Filter to the signed-in user's own row: admins can read every profile
+    // (RLS: id = auth.uid() OR is_admin()), so an unfiltered .maybeSingle()
+    // returns multiple rows once a second staff/admin exists and wrongly rejects.
+    const { data: prof } = await supabase!.from("profiles").select("role").eq("id", auth.user?.id ?? "").maybeSingle();
     if (!prof || !["admin", "staff"].includes(prof.role)) {
       await supabase!.auth.signOut();
       return { ok: false, error: "This account is not authorised for the admin console." };
