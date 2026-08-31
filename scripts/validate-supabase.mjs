@@ -14,7 +14,7 @@ async function main() {
   await cleanupByEmail(cfg, adminEmail);
   await cleanupByEmail(cfg, studentEmail);
 
-  await createSuiteUser(cfg, { email: adminEmail, password, role: "admin", suiteRole: "registrar" });
+  await createSuiteUser(cfg, { email: adminEmail, password, role: "admin", suiteRole: "admin" });
   const adminSession = await signIn(cfg, adminEmail, password);
   const adminToken = adminSession.access_token;
 
