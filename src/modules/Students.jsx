@@ -63,19 +63,66 @@ function Register({ rows, programmes, loading, institution, onOpen, reload }) {
 function Student360({ student, students, programmes, onSelect, reload }) {
   const [toast, showToast] = useToast()
   const [editing, setEditing] = useState(false)
+  const [granting, setGranting] = useState(false)
+  const [granted, setGranted] = useState(null) // { name, email, password }
   const grant = async () => {
-    try { const res = await grantStudentAccess(student._uuid); showToast(`Access granted: ${res.email || 'account created'}`) }
+    setGranting(true)
+    try {
+      const res = await grantStudentAccess(student._uuid)
+      if (res?.email && res?.password) setGranted({ name: student.name, email: res.email, password: res.password })
+      else showToast(`Access granted: ${res?.email || 'account created'}`)
+    }
     catch (err) { showToast('Could not grant access: ' + (err?.message || err)) }
+    finally { setGranting(false) }
   }
   return (
     <>
       <Panel title="Student 360" subtitle="Select a student to inspect their file">
         <div className="field" style={{ maxWidth: 380 }}><label>Student</label><select value={student?._uuid || ''} onChange={(e) => onSelect(students.find((s) => (s._uuid || s.id) === e.target.value) || null)}><option value="">Select student</option>{students.map((s) => <option key={s._uuid || s.id} value={s._uuid || s.id}>{s.name}</option>)}</select></div>
-        {!student ? <Empty>No student selected.</Empty> : <><StudentSummary student={student} /><div style={{ display: 'flex', gap: 8, marginTop: 12 }}><button className="btn ghost sm" onClick={() => setEditing(true)}>Edit student</button><button className="btn primary sm" onClick={grant}>Grant portal access</button></div></>}
+        {!student ? <Empty>No student selected.</Empty> : <><StudentSummary student={student} /><div style={{ display: 'flex', gap: 8, marginTop: 12 }}><button className="btn ghost sm" onClick={() => setEditing(true)}>Edit student</button><button className="btn primary sm" disabled={granting} onClick={grant}>{granting ? 'Granting…' : 'Grant portal access'}</button></div></>}
       </Panel>
       {editing && <StudentForm student={student} programmes={programmes} onClose={() => setEditing(false)} onSaved={async () => { setEditing(false); await reload(); showToast('Student saved') }} showToast={showToast} />}
+      {granted && <PortalCredentials data={granted} onClose={() => setGranted(null)} showToast={showToast} />}
       <Toast msg={toast} />
     </>
+  )
+}
+
+// Shown once after "Grant portal access". No email provider is wired up, so the
+// admin copies these details and sends them to the student manually.
+function PortalCredentials({ data, onClose, showToast }) {
+  const portalUrl = (typeof window !== 'undefined' && window.location.origin) || 'https://symanek-suite.vercel.app'
+  const message =
+`Symanek Specialized College — Student Portal access
+
+Hello ${data.name},
+
+Your student portal login has been created. Please sign in and set your own
+password on first login. Keep these details private.
+
+Portal:    ${portalUrl}
+Username:  ${data.email}
+Password:  ${data.password} (temporary)`
+  const copy = async (text, what) => {
+    try { await navigator.clipboard.writeText(text); showToast(`${what} copied`) }
+    catch { showToast('Could not copy — select the text and copy manually') }
+  }
+  return (
+    <Modal title="Portal access — copy & send" onClose={onClose}>
+      <div className="note-banner" style={{ background: 'var(--amber-soft, #fff7e6)', borderColor: '#eee0c0', marginBottom: 12 }}>
+        Shown once. No email is sent automatically — copy these and send them to the student.
+      </div>
+      <div className="cf-row"><span>Portal</span><span className="mono">{portalUrl}</span></div>
+      <div className="cf-row"><span>Username (email)</span><span className="mono">{data.email}</span></div>
+      <div className="cf-row"><span>Temporary password</span><span className="mono">{data.password}</span></div>
+      <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+        <button className="btn primary" onClick={() => copy(message, 'Message')}>Copy message</button>
+        <button className="btn ghost" onClick={() => copy(data.email, 'Email')}>Copy email</button>
+        <button className="btn ghost" onClick={() => copy(data.password, 'Password')}>Copy password</button>
+      </div>
+      <textarea readOnly value={message} rows={10} onFocus={(e) => e.target.select()}
+        style={{ width: '100%', marginTop: 12, fontFamily: 'monospace', fontSize: 12, padding: 10, border: '1px solid var(--line)', borderRadius: 8, resize: 'vertical' }} />
+    </Modal>
   )
 }
 
