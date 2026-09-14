@@ -91,6 +91,8 @@ function ManualAdmission({ apps, progName, loading, go, reload }) {
   const [toast, showToast] = useToast()
   const [sel, setSel] = useState(null)
   const [payFor, setPayFor] = useState(null)
+  // Keep the open modal in sync after reload (e.g. document status changes).
+  useEffect(() => { if (sel) { const fresh = apps.find((a) => a._uuid === sel._uuid); if (fresh && fresh !== sel) setSel(fresh) } }, [apps]) // eslint-disable-line react-hooks/exhaustive-deps
   const approve = async (app) => {
     try { const res = await approveApplication(app._uuid); await reload(); setSel(null); showToast(`Approved${res.reference ? ` - ${res.reference}` : ''}`) }
     catch (err) { showToast('Could not approve: ' + (err?.message || err)) }
@@ -149,6 +151,8 @@ function ManualAdmission({ apps, progName, loading, go, reload }) {
 function Pipeline({ apps, progName, loading, reload }) {
   const [sel, setSel] = useState(null)
   const [toast, showToast] = useToast()
+  // Keep the open modal in sync after reload (e.g. document status changes).
+  useEffect(() => { if (sel) { const fresh = apps.find((a) => a._uuid === sel._uuid); if (fresh && fresh !== sel) setSel(fresh) } }, [apps]) // eslint-disable-line react-hooks/exhaustive-deps
   const counts = useMemo(() => Object.fromEntries(ADMISSION_STAGES.map((s) => [s, apps.filter((a) => a.stage === s).length])), [apps])
   const approve = async (app) => {
     try { await approveApplication(app._uuid); await reload(); setSel(null); showToast(`${app.name} approved`) }
@@ -179,7 +183,12 @@ function Pipeline({ apps, progName, loading, reload }) {
         <div className="cf-row"><span>Programme</span><span>{progName(sel.prog)}</span></div>
         <div className="cf-row"><span>Applied</span><span>{sel.applied || '-'}</span></div>
         <div className="cf-row"><span>Stage</span><Badge tone={STAGE_TONE[sel.stage] || 'gray'}>{sel.stage}</Badge></div>
-        {(sel.stage === 'Applied' || sel.stage === 'Under Review') && <button className="btn primary" style={{ marginTop: 16 }} onClick={() => approve(sel)}>Approve</button>}
+        <ApplicantReview app={sel} reload={reload} showToast={showToast} />
+        {(sel.stage === 'Applied' || sel.stage === 'Under Review') && (
+          sel.documentsComplete
+            ? <button className="btn primary" style={{ marginTop: 16 }} onClick={() => approve(sel)}>Approve</button>
+            : <button className="btn primary" style={{ marginTop: 16 }} disabled title="Required documents incomplete or rejected">Approve</button>
+        )}
       </Modal>}
       <Toast msg={toast} />
     </>
