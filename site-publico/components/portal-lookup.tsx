@@ -255,6 +255,28 @@ function Row({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
   );
 }
 
+// Custom file control so the button/hint text stays English regardless of the
+// browser's locale. The hidden input keeps name="file" so the form still submits it.
+function ProofFileInput() {
+  const [name, setName] = useState<string | null>(null);
+  return (
+    <>
+      <span className="flex items-center gap-3 rounded-xl border border-petrol-200 bg-white px-3 py-2">
+        <span className="shrink-0 rounded-lg bg-petrol-100 px-3 py-1.5 text-sm font-medium text-petrol-700">Choose file</span>
+        <span className="truncate text-sm text-petrol-500">{name ?? "No file chosen"}</span>
+      </span>
+      <input
+        name="file"
+        type="file"
+        accept="image/*,application/pdf"
+        required
+        onChange={(e) => setName(e.target.files?.[0]?.name ?? null)}
+        className="sr-only"
+      />
+    </>
+  );
+}
+
 // Manual EFT — the applicant uploads their proof of payment; the office confirms.
 function ProofBlock({ reference, submitted }: { reference: string; submitted?: boolean }) {
   const [done, setDone] = useState(!!submitted);
@@ -298,7 +320,7 @@ function ProofBlock({ reference, submitted }: { reference: string; submitted?: b
       </Field>
       <label className="block">
         <span className="mb-1.5 block text-sm font-medium text-petrol-700">Proof of payment</span>
-        <input name="file" type="file" accept="image/*,application/pdf" required className="block w-full text-sm text-petrol-700 file:mr-3 file:rounded-lg file:border-0 file:bg-petrol-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-petrol-700" />
+        <ProofFileInput />
       </label>
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       <SubmitButton pending={pending}>Submit proof of payment</SubmitButton>

@@ -227,12 +227,18 @@ export function ApplyForm({ className = "" }: { className?: string }) {
           <span className="mb-1.5 block text-sm font-medium text-petrol-700">
             Other supporting documents <span className="text-petrol-400">(optional)</span>
           </span>
+          <span className="flex items-center gap-3 rounded-xl border border-petrol-200 bg-white px-3 py-2">
+            <span className="shrink-0 rounded-lg bg-petrol-100 px-3 py-1.5 text-sm font-medium text-petrol-700">Choose files</span>
+            <span className="truncate text-sm text-petrol-500">
+              {optionalDocuments.length === 0 ? "No files chosen" : optionalDocuments.map((f) => f.name).join(", ")}
+            </span>
+          </span>
           <input
             type="file"
             multiple
             accept="image/*,application/pdf"
             onChange={(e) => setOptionalDocuments(Array.from(e.target.files ?? []))}
-            className="block w-full text-sm text-petrol-700 file:mr-3 file:rounded-lg file:border-0 file:bg-petrol-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-petrol-700"
+            className="sr-only"
           />
           <span className="mt-1 block text-xs text-petrol-400">Proof of residence, previous qualifications, etc. PDF/JPG/PNG/WebP, up to {MAX_MB} MB each.</span>
         </label>
@@ -251,19 +257,24 @@ export function ApplyForm({ className = "" }: { className?: string }) {
   );
 }
 
+// Custom file control so the button/hint text stays English regardless of the
+// browser's locale (the native <input type=file> chrome is not translatable).
 function FileField({ label, required, file, onPick }: { label: string; required?: boolean; file: File | null; onPick: (f: File | null) => void }) {
   return (
     <label className="block">
       <span className="mb-1.5 block text-sm font-medium text-petrol-700">
         {label} {required && <span className="text-accent">*</span>}
       </span>
+      <span className="flex items-center gap-3 rounded-xl border border-petrol-200 bg-white px-3 py-2">
+        <span className="shrink-0 rounded-lg bg-petrol-100 px-3 py-1.5 text-sm font-medium text-petrol-700">Choose file</span>
+        <span className="truncate text-sm text-petrol-500">{file ? file.name : "No file chosen"}</span>
+      </span>
       <input
         type="file"
         accept="image/*,application/pdf"
         onChange={(e) => onPick(e.target.files?.[0] ?? null)}
-        className="block w-full text-sm text-petrol-700 file:mr-3 file:rounded-lg file:border-0 file:bg-petrol-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-petrol-700"
+        className="sr-only"
       />
-      {file && <span className="mt-1 block truncate text-xs text-petrol-500">{file.name}</span>}
     </label>
   );
 }
