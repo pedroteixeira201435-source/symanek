@@ -352,18 +352,54 @@ const APP_STAGE_LABEL = {
 export async function listApplicants() {
   if (useHttp()) {
     const { data, error } = await supabase.from('applications')
-      .select('id,reference,full_name,programme_slug,stage,amount_due,created_at').order('created_at', { ascending: false })
+      .select('id,reference,full_name,programme_slug,stage,amount_due,created_at,highest_school_level,school_name,year_completed,english_symbol,application_documents(id,category,file_name,file_type,file_size,storage_path,status,review_note),application_academic_results(subject,level,symbol,is_english)')
+      .order('created_at', { ascending: false })
     if (error) throw error
-    return (data ?? []).map((a) => ({
-      id: a.reference || a.id, _uuid: a.id, name: a.full_name,
-      prog: (a.programme_slug || '').toUpperCase(), points: 0,
-      stage: APP_STAGE_LABEL[a.stage] || a.stage,
-      amountDue: Number(a.amount_due || 0),
-      applied: a.created_at ? new Date(a.created_at).toLocaleDateString('en-NA') : '',
-      docs: {},
-    }))
+    return (data ?? []).map((a) => {
+      const documents = a.application_documents ?? []
+      const documentsComplete =
+        documents.some((d) => d.category === 'identity_document') &&
+        documents.some((d) => d.category === 'grade_11_or_12_certificate') &&
+        !documents.some((d) => d.status === 'rejected')
+      return {
+        id: a.reference || a.id, _uuid: a.id, name: a.full_name,
+        prog: (a.programme_slug || '').toUpperCase(), points: 0,
+        stage: APP_STAGE_LABEL[a.stage] || a.stage,
+        amountDue: Number(a.amount_due || 0),
+        applied: a.created_at ? new Date(a.created_at).toLocaleDateString('en-NA') : '',
+        academic: {
+          level: a.highest_school_level || null,
+          school: a.school_name || null,
+          year: a.year_completed != null ? Number(a.year_completed) : null,
+          englishSymbol: a.english_symbol || null,
+        },
+        results: a.application_academic_results ?? [],
+        documents,
+        documentsComplete,
+        docs: {},
+      }
+    })
   }
   return mock([])
+}
+
+// Admin: short-lived signed URL to view an uploaded applicant document.
+export async function applicationDocumentUrl(path) {
+  if (useHttp()) {
+    const { data } = await supabase.storage.from('application-documents').createSignedUrl(path, 120)
+    return data?.signedUrl ?? null
+  }
+  return '#'
+}
+
+// Registrar/admin: mark a document verified/rejected/needs_resubmission.
+export async function setApplicationDocumentStatus(id, status, note = '') {
+  if (useHttp()) {
+    const { error } = await supabase.rpc('application_document_set_status', { p_document: id, p_status: status, p_note: note || null })
+    if (error) throw error
+    return { ok: true }
+  }
+  return mock({ ok: true })
 }
 
 export async function approveApplication(appId) {

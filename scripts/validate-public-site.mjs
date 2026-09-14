@@ -20,6 +20,22 @@ async function postJson(path, body) {
   return json;
 }
 
+// The application route now requires multipart/form-data with the mandatory
+// documents. A tiny PDF-typed blob satisfies the type/size checks.
+function dummyPdf(name) {
+  return new Blob([`%PDF-1.4\n% ${name} — validation dummy\n%%EOF\n`], { type: "application/pdf" });
+}
+
+async function postForm(path, fields, files) {
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+  for (const [k, name] of Object.entries(files)) fd.append(k, dummyPdf(name), name);
+  const res = await fetch(`${cfg.siteUrl}${path}`, { method: "POST", body: fd });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(`${path}: ${json.error || res.statusText}`);
+  return json;
+}
+
 async function step(label, fn) {
   try {
     return await fn();
@@ -52,13 +68,24 @@ async function main() {
   }));
   programmeId = created[0].id;
 
-  const submitted = await step("submit public application", () => postJson("/api/public/application", {
+  const submitted = await step("submit public application", () => postForm("/api/public/application", {
     fullName: "Codex Public Applicant",
     email,
     phone: "+264810000001",
     programmeSlug,
     mode: "full_time",
     message: "Temporary automated public validation",
+    highestSchoolLevel: "grade_12_nsscas",
+    schoolName: "Codex Validation High School",
+    yearCompleted: String(new Date().getFullYear()),
+    englishSymbol: "b",
+    academicResults: JSON.stringify([
+      { subject: "English", level: "nsscas_grade_12", symbol: "b", isEnglish: true },
+      { subject: "Mathematics", level: "nsscas_grade_12", symbol: "c" },
+    ]),
+  }, {
+    identityDocument: "id.pdf",
+    certificateDocument: "certificate.pdf",
   }));
   appId = submitted.applicationId;
 

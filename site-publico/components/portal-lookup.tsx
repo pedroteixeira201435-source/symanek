@@ -152,6 +152,96 @@ function ResultCard({ status }: { status: Extract<ApplicationStatus, { found: tr
           payment reference here as soon as it&apos;s approved.
         </div>
       )}
+
+      <AcademicSummary status={status} />
+    </div>
+  );
+}
+
+const DOC_CATEGORY_LABEL: Record<string, string> = {
+  identity_document: "ID / Passport",
+  grade_11_or_12_certificate: "Grade 11/12 certificate",
+  proof_of_residence: "Proof of residence",
+  previous_qualification: "Previous qualification",
+  other: "Other document",
+};
+const DOC_STATUS_LABEL: Record<string, string> = {
+  submitted: "Received",
+  verified: "Verified",
+  rejected: "Rejected",
+  needs_resubmission: "Needs resubmission",
+};
+const SCHOOL_LEVEL_LABEL: Record<string, string> = {
+  grade_11_nssco: "Grade 11 / NSSCO",
+  grade_12_nsscas: "Grade 12 / NSSCAS",
+  nssc_higher: "NSSC Higher",
+  other: "Other / equivalent",
+};
+
+// Read-only academic background + documents. Resubmission of documents flagged
+// needs_resubmission is not offered here yet.
+// TODO: resubmission — let applicants re-upload documents when status = needs_resubmission.
+function AcademicSummary({ status }: { status: Extract<ApplicationStatus, { found: true }> }) {
+  const docs = status.documents ?? [];
+  const results = status.academicResults ?? [];
+  const hasAcademic = status.highestSchoolLevel || status.schoolName || results.length > 0;
+  if (!hasAcademic && docs.length === 0) return null;
+
+  return (
+    <div className="space-y-5 border-t border-petrol-100 p-6">
+      <h4 className="font-semibold">Academic background &amp; documents</h4>
+
+      {hasAcademic && (
+        <dl className="space-y-2 text-sm">
+          {status.highestSchoolLevel && <Row k="School level" v={SCHOOL_LEVEL_LABEL[status.highestSchoolLevel] ?? status.highestSchoolLevel} />}
+          {status.schoolName && <Row k="School" v={status.yearCompleted ? `${status.schoolName} · ${status.yearCompleted}` : status.schoolName} />}
+          {status.englishSymbol && <Row k="English symbol" v={status.englishSymbol} mono />}
+        </dl>
+      )}
+
+      {results.length > 0 && (
+        <div className="overflow-hidden rounded-xl border border-petrol-100">
+          <table className="w-full text-sm">
+            <thead className="bg-petrol-50/60 text-left text-petrol-500">
+              <tr><th className="px-3 py-2 font-medium">Subject</th><th className="px-3 py-2 font-medium">Level</th><th className="px-3 py-2 font-medium">Symbol</th></tr>
+            </thead>
+            <tbody>
+              {results.map((r, i) => (
+                <tr key={i} className="border-t border-petrol-100">
+                  <td className="px-3 py-2">{r.subject}{r.is_english ? " ★" : ""}</td>
+                  <td className="px-3 py-2 text-petrol-600">{r.level}</td>
+                  <td className="px-3 py-2 font-mono">{r.symbol}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {docs.length > 0 && (
+        <ul className="space-y-2">
+          {docs.map((d) => (
+            <li key={d.id} className="flex items-center justify-between gap-3 rounded-xl border border-petrol-100 px-4 py-2.5 text-sm">
+              <div>
+                <div className="font-medium text-petrol-900">{DOC_CATEGORY_LABEL[d.category] ?? d.category}</div>
+                <div className="text-xs text-petrol-500">{d.file_name}{d.review_note ? ` — ${d.review_note}` : ""}</div>
+              </div>
+              <span className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+                d.status === "verified" ? "bg-accent-soft text-accent"
+                : d.status === "rejected" ? "bg-red-50 text-red-700"
+                : d.status === "needs_resubmission" ? "bg-amber-50 text-amber-700"
+                : "bg-petrol-100 text-petrol-600"
+              }`}>{DOC_STATUS_LABEL[d.status] ?? d.status}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {status.documentsComplete === false && (
+        <div className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Some required documents are missing or need to be resubmitted. Please contact admissions if you were asked to resend a document.
+        </div>
+      )}
     </div>
   );
 }

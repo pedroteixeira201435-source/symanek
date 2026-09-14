@@ -59,6 +59,30 @@ async function main() {
     p_message: "Temporary automated validation",
   }, { token: cfg.service, key: cfg.service });
 
+  // approve_application now requires academic background + mandatory documents.
+  // Fill them via service role before approving (storage paths can be fictitious —
+  // approval only checks the metadata rows exist and none is rejected).
+  await rest(cfg, `applications?id=eq.${appId}`, {
+    method: "PATCH",
+    body: {
+      highest_school_level: "grade_12_nsscas",
+      school_name: "Codex Validation High School",
+      year_completed: new Date().getFullYear(),
+      english_symbol: "b",
+    },
+  });
+  await rest(cfg, "application_documents", {
+    method: "POST",
+    body: [
+      { application_id: appId, category: "identity_document", file_name: "id.pdf", storage_path: `${appId}/identity_document/dummy.pdf` },
+      { application_id: appId, category: "grade_11_or_12_certificate", file_name: "certificate.pdf", storage_path: `${appId}/grade_11_or_12_certificate/dummy.pdf` },
+    ],
+  });
+  await rest(cfg, "application_academic_results", {
+    method: "POST",
+    body: [{ application_id: appId, subject: "English", level: "nsscas_grade_12", symbol: "b", is_english: true }],
+  });
+
   const reference = await rpc(cfg, "approve_application", { p_app: appId }, { token: adminToken, key: cfg.anon });
   await rpc(cfg, "mark_paid", { p_app: appId, p_amount: 1000, p_method: "EFT" }, { token: adminToken, key: cfg.anon });
 

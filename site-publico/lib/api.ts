@@ -28,6 +28,14 @@ export type ApplicationInput = {
   programmeSlug: string;
   mode: string;
   message?: string;
+  highestSchoolLevel: string;
+  schoolName: string;
+  yearCompleted: number;
+  englishSymbol: string;
+  academicResults: { subject: string; level: string; symbol: string; isEnglish?: boolean }[];
+  identityDocument: File;
+  certificateDocument: File;
+  optionalDocuments?: File[];
 };
 
 export type ApplicationResult = { ok: true; applicationId: string };
@@ -35,8 +43,23 @@ export type ApplicationResult = { ok: true; applicationId: string };
 export async function submitApplication(input: ApplicationInput): Promise<ApplicationResult> {
   requireConfiguredBackend();
   if (useSupabase()) {
+    const fd = new FormData();
+    fd.append("fullName", input.fullName);
+    fd.append("email", input.email);
+    fd.append("phone", input.phone);
+    fd.append("programmeSlug", input.programmeSlug);
+    fd.append("mode", input.mode);
+    fd.append("message", input.message ?? "");
+    fd.append("highestSchoolLevel", input.highestSchoolLevel);
+    fd.append("schoolName", input.schoolName);
+    fd.append("yearCompleted", String(input.yearCompleted));
+    fd.append("englishSymbol", input.englishSymbol);
+    fd.append("academicResults", JSON.stringify(input.academicResults));
+    fd.append("identityDocument", input.identityDocument);
+    fd.append("certificateDocument", input.certificateDocument);
+    for (const file of input.optionalDocuments ?? []) fd.append("optionalDocuments", file);
     const response = await fetch("/api/public/application", {
-      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(input),
+      method: "POST", body: fd,
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(body.error || "Could not submit application");
@@ -86,6 +109,13 @@ export type ApplicationStatus =
       amountDue?: number;
       proofSubmitted?: boolean;
       proofAmount?: number;
+      highestSchoolLevel?: string;
+      schoolName?: string;
+      yearCompleted?: number;
+      englishSymbol?: string;
+      documentsComplete?: boolean;
+      documents?: { id: string; category: string; file_name: string; status: string; review_note?: string | null; created_at?: string }[];
+      academicResults?: { subject: string; level: string; symbol: string; is_english?: boolean }[];
     };
 
 const demoStatuses: Record<string, Extract<ApplicationStatus, { found: true }>> = {
@@ -136,6 +166,13 @@ export async function lookupApplication(refOrEmail: string): Promise<Application
           : undefined,
       proofSubmitted: !!row.proof_submitted,
       proofAmount: row.proof_amount != null ? Number(row.proof_amount) : undefined,
+      highestSchoolLevel: row.highest_school_level ?? undefined,
+      schoolName: row.school_name ?? undefined,
+      yearCompleted: row.year_completed != null ? Number(row.year_completed) : undefined,
+      englishSymbol: row.english_symbol ?? undefined,
+      documentsComplete: !!row.documents_complete,
+      documents: Array.isArray(row.documents) ? row.documents : [],
+      academicResults: Array.isArray(row.academic_results) ? row.academic_results : [],
     };
   }
 
@@ -180,6 +217,13 @@ export type AdminApplication = {
   createdAt: string;
   proofPath: string | null;
   proofAmount: number | null;
+  highestSchoolLevel: string | null;
+  schoolName: string | null;
+  yearCompleted: number | null;
+  englishSymbol: string | null;
+  documentsComplete?: boolean;
+  documents?: { id: string; category: string; file_name: string; file_type?: string | null; file_size?: number; storage_path: string; status: string; review_note?: string | null }[];
+  academicResults?: { subject: string; level: string; symbol: string; is_english?: boolean }[];
 };
 
 export async function signIn(email: string, password: string): Promise<{ ok: boolean; error?: string }> {
@@ -220,7 +264,7 @@ export async function listApplications(): Promise<AdminApplication[]> {
   if (useSupabase()) {
     const { data, error } = await supabase!
       .from("applications")
-      .select("id,reference,full_name,email,phone,programme_slug,mode,stage,amount_due,created_at,proof_path,proof_amount")
+      .select("id,reference,full_name,email,phone,programme_slug,mode,stage,amount_due,created_at,proof_path,proof_amount,highest_school_level,school_name,year_completed,english_symbol,application_documents(id,category,file_name,file_type,file_size,storage_path,status,review_note),application_academic_results(subject,level,symbol,is_english)")
       .order("created_at", { ascending: false });
     if (error) throw error;
     return (data ?? []).map((r) => ({
@@ -236,13 +280,23 @@ export async function listApplications(): Promise<AdminApplication[]> {
       createdAt: r.created_at,
       proofPath: r.proof_path ?? null,
       proofAmount: r.proof_amount != null ? Number(r.proof_amount) : null,
+      highestSchoolLevel: r.highest_school_level ?? null,
+      schoolName: r.school_name ?? null,
+      yearCompleted: r.year_completed != null ? Number(r.year_completed) : null,
+      englishSymbol: r.english_symbol ?? null,
+      documents: r.application_documents ?? [],
+      academicResults: r.application_academic_results ?? [],
+      documentsComplete:
+        (r.application_documents ?? []).some((d) => d.category === "identity_document") &&
+        (r.application_documents ?? []).some((d) => d.category === "grade_11_or_12_certificate") &&
+        !(r.application_documents ?? []).some((d) => d.status === "rejected"),
     }));
   }
   await wait(400);
   return [
-    { id: "m1", reference: null, fullName: "Johanna Amukwa", email: "johanna@example.com", phone: "+264 81 000 0001", programmeSlug: "certificate-caregiving", mode: "full_time", stage: "submitted", amountDue: 0, createdAt: new Date().toISOString(), proofPath: null, proofAmount: null },
-    { id: "m2", reference: "SYM-2026-0042", fullName: "Gabriel Naruseb", email: "gabriel@example.com", phone: "+264 81 000 0002", programmeSlug: "certificate-ohs-level-4", mode: "full_time", stage: "approved", amountDue: 19670, createdAt: new Date().toISOString(), proofPath: "SYM-2026-0042/demo.pdf", proofAmount: 19670 },
-    { id: "m3", reference: "SYM-2026-0043", fullName: "Maria Shikongo", email: "maria@example.com", phone: "+264 81 000 0003", programmeSlug: "certificate-caregiving", mode: "distance", stage: "enrolled", amountDue: 0, createdAt: new Date().toISOString(), proofPath: null, proofAmount: null },
+    { id: "m1", reference: null, fullName: "Johanna Amukwa", email: "johanna@example.com", phone: "+264 81 000 0001", programmeSlug: "certificate-caregiving", mode: "full_time", stage: "submitted", amountDue: 0, createdAt: new Date().toISOString(), proofPath: null, proofAmount: null, highestSchoolLevel: null, schoolName: null, yearCompleted: null, englishSymbol: null },
+    { id: "m2", reference: "SYM-2026-0042", fullName: "Gabriel Naruseb", email: "gabriel@example.com", phone: "+264 81 000 0002", programmeSlug: "certificate-ohs-level-4", mode: "full_time", stage: "approved", amountDue: 19670, createdAt: new Date().toISOString(), proofPath: "SYM-2026-0042/demo.pdf", proofAmount: 19670, highestSchoolLevel: null, schoolName: null, yearCompleted: null, englishSymbol: null },
+    { id: "m3", reference: "SYM-2026-0043", fullName: "Maria Shikongo", email: "maria@example.com", phone: "+264 81 000 0003", programmeSlug: "certificate-caregiving", mode: "distance", stage: "enrolled", amountDue: 0, createdAt: new Date().toISOString(), proofPath: null, proofAmount: null, highestSchoolLevel: null, schoolName: null, yearCompleted: null, englishSymbol: null },
   ];
 }
 
@@ -254,6 +308,26 @@ export async function proofDownloadUrl(path: string): Promise<string | null> {
     return data?.signedUrl ?? null;
   }
   return "#";
+}
+
+export async function applicationDocumentDownloadUrl(path: string): Promise<string | null> {
+  requireConfiguredBackend();
+  if (useSupabase()) {
+    const { data } = await supabase!.storage.from("application-documents").createSignedUrl(path, 120);
+    return data?.signedUrl ?? null;
+  }
+  return "#";
+}
+
+export async function setApplicationDocumentStatus(id: string, status: string, note = ""): Promise<{ ok: boolean; error?: string }> {
+  try { requireConfiguredBackend(); } catch (error) { return { ok: false, error: error instanceof Error ? error.message : "Backend unavailable" }; }
+  if (useSupabase()) {
+    const { error } = await supabase!.rpc("application_document_set_status", { p_document: id, p_status: status, p_note: note || null });
+    if (error) return { ok: false, error: error.message };
+    return { ok: true };
+  }
+  await wait(300);
+  return { ok: true };
 }
 
 export async function approveApplication(id: string): Promise<string> {
