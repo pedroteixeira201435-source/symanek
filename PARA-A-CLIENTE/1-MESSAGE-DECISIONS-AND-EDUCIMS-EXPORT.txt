@@ -1,0 +1,40 @@
+Good day,
+
+We have finished reviewing EduCIMS against the new Symanek Suite. To move all
+students and records over and switch off EduCIMS, we need two things from you.
+
+A) FIVE QUICK DECISIONS
+
+1. Marks: should the final mark be 60% CA + 40% exam for ALL modules, or does
+   each module have its own weights? (EduCIMS currently uses 50/50.)
+
+2. Payments: should staff be able to record cash / card / POS payments at the
+   office, or do we keep EFT only (student uploads the proof of payment)?
+
+3. Application documents: besides the ID and school results, must applicants
+   also upload proof of the N$200 application fee, a passport photo and a birth
+   certificate? Which of these are compulsory?
+
+4. Emails: are you happy for staff to copy and send emails manually, or do you
+   want the system to send emails automatically (letters, receipts, reminders)?
+
+5. Extra modules: which of these do you want now, and which can wait?
+   Accommodation / Library / Canteen / HR & Payroll / Timetables.
+
+B) DATA EXPORT FROM EDUCIMS
+
+Please ask your EduCIMS provider for an Excel export of:
+  - all students since 2024 (student number, name, ID number, email, phone,
+    programme, intake, year of study, status)
+  - payments and account statements per student
+  - marks / results per module
+  - staff list
+
+If an export is not possible, the attached template (NEW-STUDENTS-TEMPLATE.csv)
+can be filled in by hand. The instructions are in 2-HOW-TO-ADD-NEW-STUDENTS.txt.
+
+New students for the next intake can be sent in the same template, so
+they are in the system from day one.
+
+Thank you,
+Pedro

@@ -31,3 +31,14 @@ supabase/.env.deploy
 
 # logical DB dumps — contain PII, never commit
 supabase/backups/dumps/
+
+# Ruflo local secrets and runtime data
+.env.local
+.env.*.local
+.claude-flow/data/
+.claude-flow/logs/
+.claude-flow/sessions/
+
+# student import: real input files and per-run results (PII + temp passwords) — NEVER commit
+supabase/import/entrada/
+supabase/import/saida/

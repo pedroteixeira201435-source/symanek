@@ -1,0 +1,40 @@
+HOW TO SEND US NEW STUDENTS (for the Symanek Suite)
+===================================================
+
+You can add one student at a time in the Suite (Students > Add student).
+For a whole intake, it is faster to fill in ONE spreadsheet and send it to us.
+
+STEP 1 — Open the template
+  Open NEW-STUDENTS-TEMPLATE.csv in Excel (or Google Sheets).
+  Row 1 holds the column names. Do not change or delete it.
+  Row 2 is an example. Replace it with your first student.
+
+STEP 2 — One row per student
+  student_no     Leave EMPTY for new students (the system creates one,
+                 e.g. 202712345). Fill it in only if the student already has one.
+  full_name      Full name, e.g. Maria Ndapewa Nangolo                (required)
+  email          The student's own email (used for the portal login) (required)
+                 Each student needs a different email.
+  phone          e.g. 0811234567
+  id_number      Namibian ID or passport number
+  programme      Copy the name EXACTLY from PROGRAMME-NAMES.txt      (required)
+  intake         January or July                                     (required)
+  academic_year  e.g. 2027                                           (required)
+  year_of_study  1, 2 or 3 (new students = 1)
+  campus         Main campus (unless another campus)
+  status         Admitted  = accepted, has not paid/registered yet
+                 Registered = paid the deposit and registered
+  next_of_kin    Name and phone of a family contact
+
+STEP 3 — Save and send
+  In Excel: File > Save As > "CSV UTF-8 (comma delimited)".
+  Send the file to Pedro by email or WhatsApp.
+
+WHAT HAPPENS NEXT
+  - We check the file. If a row has a problem (wrong email, missing
+    programme, etc.) we send you the row number to fix.
+  - The students appear in the Suite under Students.
+  - Each student receives a portal login with a temporary password,
+    which they change the first time they sign in.
+
+Questions: Pedro.
