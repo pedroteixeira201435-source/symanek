@@ -211,7 +211,9 @@ async function main() {
       try {
         await rest('profiles?on_conflict=id', { method: 'POST',
           prefer: 'resolution=merge-duplicates,return=minimal',
-          body: { id: userId, full_name: s.full_name, role: 'student', suite_role: 'student' } });
+          body: { id: userId, full_name: s.full_name, role: 'student', suite_role: 'student',
+            // a fresh temp password must be changed on first sign-in (App.jsx ForcePasswordChange)
+            ...(rec.temp_password && { must_reset_password: true }) } });
       } catch (e) { rec.result = `ERROR profile: ${e.message}`; errors++; continue; }
     }
 

@@ -54,7 +54,9 @@ A **monorepo for Symanek Specialized College** (private Namibian higher-ed) with
 ```bash
 # Suite (repo root) — Vite 5, Node 18 (do NOT bump Vite; v6+ needs Node 20)
 npm run dev                      # dev server (mock mode by default)
-npm run build                    # production build = the verification step (no tests/lint configured)
+npm run build                    # production build = the verification step (no JS tests/lint configured)
+./supabase/tests/run.sh          # backend RLS/RPC tests (one SQL file, rolled back) — needs `supabase start`
+                                 # + seed_auth.sh + seed programmes; no per-test runner, exit 0 = all pass
 node --check src/api.js          # syntax-check an ESM module (copy to /tmp/x.mjs if node treats .js as CJS)
 
 # Public site
@@ -73,6 +75,11 @@ npm run validate:public-site     # public API routes against the LIVE site
 npm run apply:migration -- <sql> # apply one migration via `pg` + Session pooler (needs SUPABASE_DB_PASSWORD)
 npm run apply:course-capacities  # bulk-set capacities from supabase/templates/course-capacities.csv
 npm run cleanup:codex-test-data  # delete codex.* / test rows
+
+# Bulk student import (new intake / EduCIMS migration) — CSV template or legacy JSON, no npm deps
+node supabase/import/import_students.mjs --dry-run --file supabase/import/entrada/<file>.csv   # offline check
+set -a; . ./.env.codex-handoff; set +a
+node supabase/import/import_students.mjs --file supabase/import/entrada/<file>.csv [--no-login]
 
 # Vercel (both apps already deployed; redeploy from the app's dir)
 cd site-publico && npx --yes vercel --prod --token "$VERCEL_TOKEN"   # public site
@@ -243,6 +250,17 @@ reuse these; every flow is table/row → `Modal` → state → toast.
   model: raw writes to `students`/`staff`/`payments` denied to every role, RPC write-path proven). Verified
   green locally against the container stack. Pushing `.github/workflows/**` needs a token with the
   `workflow` scope.
+
+## Bulk student import & client pack
+
+- `supabase/import/import_students.mjs` writes **directly via PostgREST with the service role** (it bypasses
+  the `student_upsert` RPC), upserting `students` on `reference` and creating GoTrue logins (temp password +
+  `must_reset_password` on new logins only). Blank `student_no` → generated `<academic_year><5 digits>`, or reused by email on re-run.
+  Programme matches slug **or** full name. Template: `supabase/import/templates/new-students-template.csv`.
+- Input goes in `supabase/import/entrada/`, per-row results (incl. temp passwords) land in
+  `supabase/import/saida/` — **both gitignored (PII)**.
+- `PARA-A-CLIENTE/` holds client-facing material (English messages/guides to send to Symanek) plus
+  `0-LEIA-PRIMEIRO-PEDRO.md` (Portuguese runbook for Pedro). Keep client copy in English.
 
 ## Local-dev gotchas (verified, will bite you)
 
