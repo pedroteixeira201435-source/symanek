@@ -14,5 +14,5 @@ export const TENANT = (import.meta.env && import.meta.env.VITE_TENANT) || 'syman
 // real backend deployment until it has its own data migration and signed UAT.
 export const PRODUCTION_CORE_MODULES = new Set([
   'dashboard', 'students', 'academics', 'admissions', 'programmes',
-  'exams', 'graduation', 'finance', 'teacher', 'portal',
+  'exams', 'graduation', 'finance', 'teacher', 'portal', 'lms',
 ])

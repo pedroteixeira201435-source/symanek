@@ -1,10 +1,13 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { Tabs, Panel, Badge, Modal, Toast, useToast } from '../ui.jsx'
+import { Tabs, Panel, Badge, Modal, Toast, useToast, Icon } from '../ui.jsx'
 import { fmtN } from '../lib/format.js'
 import {
-  listProgrammes, listCourses, listStaff, listStudents, getHoldsForStudent, getDegreeAudit,
+  listProgrammes, listCourses, listStudents, getHoldsForStudent, getDegreeAudit,
   programmeUpsert, programmeSetActive, courseUpsert, courseDelete, courseSetCapacity, holdUpsert, holdClear,
+  listStaffAccounts, staffUpsert, grantStaffAccess, revokeStaffAccess, setCourseLecturer,
+  listEnrolmentCohorts, enrolCohort,
 } from '../api.js'
+import { PortalCredentials } from './Students.jsx'
 
 const ACCRED_TONE = { active: 'green', inactive: 'gray', provisional: 'amber' }
 
@@ -12,10 +15,11 @@ export default function Programmes() {
   const [tab, setTab] = useState('Programmes')
   return (
     <>
-      <Tabs tabs={['Programmes', 'Course Catalogue', 'Module Allocation', 'Student Blocks', 'Degree Audit']} active={tab} onChange={setTab} />
+      <Tabs tabs={['Programmes', 'Course Catalogue', 'Lecturers', 'Cohort Enrolment', 'Student Blocks', 'Degree Audit']} active={tab} onChange={setTab} />
       {tab === 'Programmes' && <ProgrammeList />}
       {tab === 'Course Catalogue' && <Catalogue />}
-      {tab === 'Module Allocation' && <ModuleAllocation />}
+      {tab === 'Lecturers' && <ModuleAllocation />}
+      {tab === 'Cohort Enrolment' && <CohortEnrolment />}
       {tab === 'Student Blocks' && <StudentBlocks />}
       {tab === 'Degree Audit' && <DegreeAudit />}
     </>
@@ -91,16 +95,18 @@ function Catalogue() {
   const [query, setQuery] = useState('')
   const [edits, setEdits] = useState({})
   const [saving, setSaving] = useState(false)
+  const [staff, setStaff] = useState([])
   const reload = useCallback(() => Promise.all([
     listCourses().then(setCourses).catch(() => setCourses([])),
     listProgrammes().then(setProgrammes).catch(() => setProgrammes([])),
+    listStaffAccounts().then(setStaff).catch(() => setStaff([])),
   ]), [])
   useEffect(() => { reload().finally(() => setLoading(false)) }, [reload])
 
   const save = async (e) => {
     e.preventDefault(); const f = e.target
     try {
-      await courseUpsert({ code: f.code.value.trim().toUpperCase(), title: f.title.value.trim(), programmeId: f.programme.value || null, credits: Number(f.credits.value) || 0, semester: f.semester.value, capacity: Number(f.capacity.value) || 0 })
+      await courseUpsert({ code: f.code.value.trim().toUpperCase(), title: f.title.value.trim(), programmeId: f.programme.value || null, credits: Number(f.credits.value) || 0, semester: f.semester.value, capacity: Number(f.capacity.value) || 0, lecturerId: f.lecturer.value || null })
       setShowNew(false); await reload(); showToast('Course saved')
     } catch (err) { showToast('Could not save: ' + (err?.message || err)) }
   }
@@ -176,7 +182,10 @@ function Catalogue() {
             <div className="field"><label>Programme</label><select name="programme"><option value="">Unassigned</option>{programmes.map((p) => <option key={p.id || p.code} value={p.id || ''}>{p.code || p.slug} - {p.name}</option>)}</select></div>
             <div className="field"><label>Semester</label><input name="semester" placeholder="S1" /></div>
           </div>
-          <div className="field"><label>Capacity</label><input name="capacity" type="number" min="0" /></div>
+          <div className="grid2" style={{ gap: 12 }}>
+            <div className="field"><label>Capacity</label><input name="capacity" type="number" min="0" /></div>
+            <div className="field"><label>Lecturer</label><select name="lecturer"><option value="">— No lecturer —</option>{staff.map((s) => <option key={s.uuid} value={s.uuid}>{s.name}</option>)}</select></div>
+          </div>
           <button className="btn primary" type="submit">Save</button>
         </form>
       </Modal>}
@@ -185,25 +194,232 @@ function Catalogue() {
   )
 }
 
+const STAFF_WORKSPACES = [
+  ['teacher', 'Lecturer'], ['registrar', 'Registrar'], ['bursar', 'Bursar'], ['hr', 'HR'],
+  ['librarian', 'Librarian'], ['seller', 'Canteen / POS'], ['admin', 'Administrator'],
+]
+
+// Lecturers: add a lecturer, give them a Suite login, and allocate modules.
+// Staff writes need HR/admin, logins need admin, allocation needs registrar/admin
+// (all enforced server-side; errors surface in the toast).
 function ModuleAllocation() {
+  const [toast, showToast] = useToast()
   const [courses, setCourses] = useState([])
   const [staff, setStaff] = useState([])
   const [loading, setLoading] = useState(true)
-  useEffect(() => {
-    Promise.all([
-      listCourses().then(setCourses).catch(() => setCourses([])),
-      listStaff().then(setStaff).catch(() => setStaff([])),
-    ]).finally(() => setLoading(false))
-  }, [])
-  if (loading) return <Panel title="Module allocation" flush><Empty>Loading...</Empty></Panel>
+  const [editing, setEditing] = useState(null)   // {} = new, staff row = edit
+  const [granting, setGranting] = useState(null) // staff row picking a workspace
+  const [busy, setBusy] = useState(false)
+  const [creds, setCreds] = useState(null)
+  const [filterProg, setFilterProg] = useState('')
+  const [filterLect, setFilterLect] = useState('')
+  const [query, setQuery] = useState('')
+  const [alloc, setAlloc] = useState({})         // courseId -> staff uuid ('' = none)
+  const [saving, setSaving] = useState(false)
+
+  const reload = useCallback(() => Promise.all([
+    listCourses().then(setCourses).catch(() => setCourses([])),
+    listStaffAccounts().then(setStaff).catch(() => setStaff([])),
+  ]), [])
+  useEffect(() => { reload().finally(() => setLoading(false)) }, [reload])
+
+  const saveStaff = async (e) => {
+    e.preventDefault(); const f = e.target
+    try {
+      await staffUpsert({
+        id: editing.uuid ?? null, staffNo: f.staff_no.value.trim() || null, name: f.name.value.trim(),
+        email: f.email.value.trim().toLowerCase() || null, role: f.role.value.trim() || null, department: f.department.value.trim() || null,
+      })
+      setEditing(null); await reload(); showToast('Staff saved')
+    } catch (err) { showToast('Could not save: ' + (err?.message || err)) }
+  }
+  const grant = async (e) => {
+    e.preventDefault(); const s = granting; const role = e.target.suite_role.value
+    setBusy(true)
+    try {
+      const res = await grantStaffAccess(s.uuid, role)
+      setGranting(null); await reload()
+      if (res?.password) setCreds({ name: s.name, email: res.email, password: res.password })
+      else showToast(`Access granted: ${res?.email || s.email}`)
+    } catch (err) { showToast('Could not grant access: ' + (err?.message || err)) }
+    finally { setBusy(false) }
+  }
+  const revoke = async (s) => {
+    if (!window.confirm(`Remove ${s.name}'s Suite login? Their staff record and module allocation stay.`)) return
+    try { await revokeStaffAccess(s.uuid); await reload(); showToast('Login removed') }
+    catch (err) { showToast('Could not remove login: ' + (err?.message || err)) }
+  }
+
+  const lectOf = (c) => (alloc[c.id] !== undefined ? alloc[c.id] : (c.lecturerId || ''))
+  const changed = courses.filter((c) => c.id && alloc[c.id] !== undefined && alloc[c.id] !== (c.lecturerId || ''))
+  const saveAlloc = async () => {
+    setSaving(true); let ok = 0, fail = 0, lastErr = ''
+    for (const c of changed) {
+      try { await setCourseLecturer(c.id, alloc[c.id]); ok++ } catch (err) { fail++; lastErr = err?.message || String(err) }
+    }
+    setSaving(false); setAlloc({}); await reload()
+    showToast(fail ? `Saved ${ok}, ${fail} failed: ${lastErr}` : `Allocation saved (${ok})`)
+  }
+  const countFor = (uuid) => courses.filter((c) => c.lecturerId === uuid).length
+
+  const progOptions = [...new Set(courses.map((c) => c.prog).filter(Boolean))].sort()
+  const shown = courses.filter((c) => {
+    if (filterProg && (c.prog || '') !== filterProg) return false
+    if (filterLect === '__none' && c.lecturerId) return false
+    if (filterLect && filterLect !== '__none' && c.lecturerId !== filterLect) return false
+    if (query && !`${c.code} ${c.title}`.toLowerCase().includes(query.toLowerCase())) return false
+    return true
+  })
+
+  if (loading) return <Panel title="Lecturers" flush><Empty>Loading...</Empty></Panel>
   return (
-    <Panel title="Module allocation" subtitle="Teaching assignments from backend course/staff rows" flush>
-      {courses.length === 0 ? <Empty>No modules available for allocation.</Empty> : (
-        <table className="data"><thead><tr><th>Module</th><th>Programme</th><th>Lecturer</th></tr></thead>
-          <tbody>{courses.map((c) => <tr key={c.id || c.code}><td>{c.code} - {c.title}</td><td>{c.prog || '-'}</td><td>{c.lecturer || staff[0]?.name || '-'}</td></tr>)}</tbody>
-        </table>
-      )}
-    </Panel>
+    <>
+      <Panel title="Lecturers & staff" subtitle={`${staff.length} staff · ${staff.filter((s) => s.hasLogin).length} with a Suite login`}
+        actions={<button className="btn primary sm" onClick={() => setEditing({})}>+ Add lecturer</button>} flush>
+        {staff.length === 0 ? <Empty>No staff yet.</Empty> : (
+          <table className="data"><thead><tr><th>Name</th><th>Email</th><th>Role</th><th className="num">Modules</th><th>Suite login</th><th></th></tr></thead>
+            <tbody>{staff.map((s) => (
+              <tr key={s.uuid}>
+                <td style={{ fontWeight: 600 }}>{s.name}</td>
+                <td className="mono">{s.email || <Badge tone="amber">no email</Badge>}</td>
+                <td>{s.role || '-'}</td>
+                <td className="num">{countFor(s.uuid)}</td>
+                <td>{s.hasLogin ? <Badge tone="green">Active</Badge> : <Badge tone="gray">None</Badge>}</td>
+                <td style={{ whiteSpace: 'nowrap' }}>
+                  <button className="btn ghost sm" onClick={() => setEditing(s)}>Edit</button>{' '}
+                  {s.hasLogin
+                    ? <button className="btn ghost sm" onClick={() => revoke(s)}>Remove login</button>
+                    : <button className="btn primary sm" disabled={!s.email} title={s.email ? '' : 'Add an email first'} onClick={() => setGranting(s)}>Grant Suite access</button>}
+                </td>
+              </tr>
+            ))}</tbody>
+          </table>
+        )}
+      </Panel>
+
+      <Panel title="Module allocation" subtitle={`${courses.filter((c) => !c.lecturerId).length} of ${courses.length} modules without a lecturer`}
+        actions={changed.length > 0 && <button className="btn primary sm" onClick={saveAlloc} disabled={saving}>{saving ? 'Saving…' : `Save allocation (${changed.length})`}</button>} flush>
+        <div style={{ display: 'flex', gap: 8, padding: '8px 0', flexWrap: 'wrap' }}>
+          <select value={filterProg} onChange={(e) => setFilterProg(e.target.value)}>
+            <option value="">All programmes</option>
+            {progOptions.map((p) => <option key={p} value={p}>{p}</option>)}
+          </select>
+          <select value={filterLect} onChange={(e) => setFilterLect(e.target.value)}>
+            <option value="">All lecturers</option>
+            <option value="__none">No lecturer</option>
+            {staff.map((s) => <option key={s.uuid} value={s.uuid}>{s.name}</option>)}
+          </select>
+          <input placeholder="Search code or title…" value={query} onChange={(e) => setQuery(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
+        </div>
+        {shown.length === 0 ? <Empty>No modules match.</Empty> : (
+          <table className="data"><thead><tr><th>Module</th><th>Programme</th><th>Sem</th><th style={{ width: 260 }}>Lecturer</th></tr></thead>
+            <tbody>{shown.map((c) => {
+              const dirty = c.id && alloc[c.id] !== undefined && alloc[c.id] !== (c.lecturerId || '')
+              return (
+                <tr key={c.id || c.code} style={dirty ? { background: 'rgba(37,99,235,0.06)' } : undefined}>
+                  <td><span className="mono">{c.code}</span> — {c.title}</td><td>{c.prog || '-'}</td><td>{c.sem || '-'}</td>
+                  <td>{c.id ? (
+                    <select value={lectOf(c)} onChange={(e) => setAlloc((a) => ({ ...a, [c.id]: e.target.value }))} style={{ width: '100%' }}>
+                      <option value="">— No lecturer —</option>
+                      {staff.map((s) => <option key={s.uuid} value={s.uuid}>{s.name}</option>)}
+                    </select>
+                  ) : (c.lecturer || '-')}</td>
+                </tr>
+              )
+            })}</tbody>
+          </table>
+        )}
+      </Panel>
+
+      {editing && <Modal title={editing.uuid ? 'Edit staff' : 'Add lecturer'} onClose={() => setEditing(null)}>
+        <form onSubmit={saveStaff}>
+          <div className="field"><label>Full name</label><input name="name" defaultValue={editing.name || ''} required /></div>
+          <div className="grid2" style={{ gap: 12 }}>
+            <div className="field"><label>Email (used to sign in)</label><input name="email" type="email" defaultValue={editing.email || ''} /></div>
+            <div className="field"><label>Staff no.</label><input name="staff_no" defaultValue={editing.staffNo || ''} /></div>
+          </div>
+          <div className="grid2" style={{ gap: 12 }}>
+            <div className="field"><label>Job title</label><input name="role" defaultValue={editing.role ?? (editing.uuid ? '' : 'Lecturer')} /></div>
+            <div className="field"><label>Department</label><input name="department" defaultValue={editing.dept || ''} /></div>
+          </div>
+          {editing.hasLogin && <div className="note-banner" style={{ marginBottom: 12 }}>This person already has a login. Changing the email here does not change their sign-in email.</div>}
+          <button className="btn primary" type="submit">Save</button>
+        </form>
+      </Modal>}
+
+      {granting && <Modal title={`Grant Suite access — ${granting.name}`} onClose={() => setGranting(null)}>
+        <form onSubmit={grant}>
+          <div className="cf-row"><span>Sign-in email</span><span className="mono">{granting.email}</span></div>
+          <div className="field" style={{ marginTop: 12 }}><label>Workspace</label>
+            <select name="suite_role" defaultValue="teacher">{STAFF_WORKSPACES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+          </div>
+          <p style={{ color: 'var(--ink-faint)', fontSize: 13 }}>A temporary password is created and shown once. They must change it on first sign-in. A lecturer only sees the modules allocated to them below.</p>
+          <button className="btn primary" type="submit" disabled={busy}>{busy ? 'Granting…' : 'Grant access'}</button>
+        </form>
+      </Modal>}
+
+      {creds && <PortalCredentials data={creds} audience="staff" onClose={() => setCreds(null)} showToast={showToast} />}
+      <Toast msg={toast} />
+    </>
+  )
+}
+
+// Cohort enrolment: put every enrolled student of an intake on their
+// programme's modules (Bachelor "Y1/Y2…" modules follow the student's year).
+// Preview first; running it twice never duplicates. No fees are charged here.
+function CohortEnrolment() {
+  const [toast, showToast] = useToast()
+  const [cohorts, setCohorts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [preview, setPreview] = useState(null) // { cohort, res }
+  const [busy, setBusy] = useState(false)
+  const reload = useCallback(() => listEnrolmentCohorts().then(setCohorts).catch((e) => { setCohorts([]); showToast('Could not load cohorts: ' + (e?.message || e)) }), [])
+  useEffect(() => { reload().finally(() => setLoading(false)) }, [reload])
+
+  const args = (c) => ({ programmeId: c.programme_id, academicYear: c.academic_year, intake: c.intake })
+  const doPreview = async (c) => {
+    try { setPreview({ cohort: c, res: await enrolCohort({ ...args(c), dryRun: true }) }) }
+    catch (e) { showToast('Could not preview: ' + (e?.message || e)) }
+  }
+  const run = async () => {
+    setBusy(true)
+    try {
+      const res = await enrolCohort({ ...args(preview.cohort), dryRun: false })
+      showToast(`Enrolled: ${res?.created ?? 0} new module registrations`); setPreview(null); await reload()
+    } catch (e) { showToast('Could not enrol: ' + (e?.message || e)) }
+    finally { setBusy(false) }
+  }
+  const label = (c) => `${c.programme} — ${c.intake ? c.intake[0].toUpperCase() + c.intake.slice(1) : 'no intake'} ${c.academic_year ?? ''}`
+
+  if (loading) return <Panel title="Cohort enrolment" flush><Empty>Loading...</Empty></Panel>
+  return (
+    <>
+      <div className="note-banner"><Icon name="info" size={16} /><div>Enrols every <strong>enrolled</strong> student of a cohort on the modules of their programme, so lecturers see them in their registers and students see their modules. Bachelor modules follow the student's year of study. Safe to run again — nothing is duplicated and no fees are charged.</div></div>
+      <Panel title="Cohorts" subtitle={`${cohorts.length} cohorts with enrolled students`} flush>
+        {cohorts.length === 0 ? <Empty>No cohorts found.</Empty> : (
+          <table className="data"><thead><tr><th>Cohort</th><th className="num">Students</th><th className="num">Modules</th><th className="num">Registrations</th><th></th></tr></thead>
+            <tbody>{cohorts.map((c) => (
+              <tr key={`${c.programme_id}-${c.academic_year}-${c.intake}`}>
+                <td style={{ fontWeight: 600 }}>{label(c)}</td>
+                <td className="num">{c.students}</td><td className="num">{c.modules}</td>
+                <td className="num">{Number(c.enrolments) > 0 ? <Badge tone="green">{c.enrolments}</Badge> : <Badge tone="gray">0</Badge>}</td>
+                <td style={{ textAlign: 'right' }}><button className="btn ghost sm" onClick={() => doPreview(c)} disabled={!c.intake || !c.academic_year} title={!c.intake || !c.academic_year ? 'Set the intake and academic year on these students first' : ''}>Enrol…</button></td>
+              </tr>
+            ))}</tbody>
+          </table>
+        )}
+      </Panel>
+      {preview && <Modal title={`Enrol — ${label(preview.cohort)}`} onClose={() => setPreview(null)}>
+        <div className="cf-row"><span>Students</span><strong>{preview.res?.students ?? 0}</strong></div>
+        <div className="cf-row"><span>Modules</span><strong>{preview.res?.courses ?? 0}</strong></div>
+        <div className="cf-row"><span>Already registered</span><strong>{preview.res?.already ?? 0}</strong></div>
+        <div className="cf-row"><span>New registrations</span><strong>{(preview.res?.pairs ?? 0) - (preview.res?.already ?? 0)}</strong></div>
+        <div style={{ marginTop: 16 }}>
+          <button className="btn primary" onClick={run} disabled={busy || (preview.res?.pairs ?? 0) - (preview.res?.already ?? 0) <= 0}>{busy ? 'Enrolling…' : 'Confirm enrolment'}</button>
+        </div>
+      </Modal>}
+      <Toast msg={toast} />
+    </>
   )
 }
 

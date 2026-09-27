@@ -1,28 +1,16 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { Tabs, Panel, Toast, useToast, Badge, Icon, Modal } from '../ui.jsx'
 import { fmtN } from '../lib/format.js'
 import { gradeOf } from '../lib/academics.js'
 import { evaluateResult, POLICY_SUMMARY } from '../lib/academics.js'
+import { ATTENDANCE_MIN } from '../lib/controls.js'
 import * as api from '../api.js'
 
 // Lecturer workspace — marks capture (CA + exam → final → exam board), the class
 // board (announcements) and student queries. All backed by real RPCs; empty by
 // default until courses and marks exist.
 export default function TeacherPortal() {
-  const [tab, setTab] = useState('My Courses')
-  return (
-    <>
-      <Tabs tabs={['My Courses', 'Class Board', 'Student Queries']} active={tab} onChange={setTab} />
-      {tab === 'My Courses' && <MyCourses />}
-      {tab === 'Class Board' && <ClassBoard />}
-      {tab === 'Student Queries' && <StudentQueries />}
-    </>
-  )
-}
-
-function Empty({ children }) { return <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-faint)' }}>{children}</div> }
-
-function MyCourses() {
+  const [tab, setTab] = useState('Marks')
   const [courses, setCourses] = useState([])
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(true)
@@ -33,21 +21,93 @@ function MyCourses() {
   if (loading) return <Panel title="My courses" flush><Empty>Loading…</Empty></Panel>
   return (
     <>
+      <Panel title="My modules" subtitle={courses.length ? `${courses.length} allocated to you` : undefined} actions={courses.length > 0 && (
+        <select className="inline" value={code} onChange={(e) => setCode(e.target.value)}>
+          {courses.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.title} ({c.enrolled})</option>)}
+        </select>
+      )} flush>
+        {courses.length === 0 && <Empty>No modules are allocated to you yet. Ask the registrar to allocate your modules.</Empty>}
+      </Panel>
+      <Tabs tabs={['Marks', 'Attendance', 'Class Board', 'Student Queries']} active={tab} onChange={setTab} />
+      {tab === 'Marks' && (course ? <MarksTab course={course} /> : <NoCourse />)}
+      {tab === 'Attendance' && (course ? <AttendanceTab course={course} /> : <NoCourse />)}
+      {tab === 'Class Board' && (course ? <ClassBoard course={course} /> : <NoCourse />)}
+      {tab === 'Student Queries' && <StudentQueries />}
+    </>
+  )
+}
+
+function Empty({ children }) { return <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-faint)' }}>{children}</div> }
+function NoCourse() { return <Panel title="No module selected"><Empty>Select one of your modules above.</Empty></Panel> }
+
+function MarksTab({ course }) {
+  return (
+    <>
       <div className="note-banner">
         <Icon name="info" size={16} />
         <div>{POLICY_SUMMARY} Save marks (students see them as provisional); submit to the exam board to publish final grades.</div>
       </div>
-      {courses.length === 0 ? (
-        <Panel title="My courses" flush><Empty>No courses yet.</Empty></Panel>
-      ) : (
-        <Panel title="Select a course" flush actions={
-          <select className="inline" value={code} onChange={(e) => setCode(e.target.value)}>
-            {courses.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.title}</option>)}
-          </select>
-        }>
-          {course && <CourseMarks course={course} />}
+      <CourseMarks key={course.code} course={course} />
+    </>
+  )
+}
+
+// Attendance register: one session per date; re-saving a date replaces it.
+function AttendanceTab({ course }) {
+  const [toast, showToast] = useToast()
+  const [rows, setRows] = useState([])
+  const [sessions, setSessions] = useState([])
+  const [present, setPresent] = useState({})
+  const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [hours, setHours] = useState(1)
+  const [busy, setBusy] = useState(false)
+  const load = useCallback(() => Promise.all([
+    api.getCourseRegister(course.code).then((rs) => { setRows(rs); setPresent(Object.fromEntries(rs.map((r) => [r.studentId, true]))) }).catch(() => setRows([])),
+    api.listAttendanceSessions(course.code).then(setSessions).catch(() => setSessions([])),
+  ]), [course.code])
+  useEffect(() => { load() }, [load])
+  const save = async () => {
+    setBusy(true)
+    try {
+      const res = await api.saveAttendance({ code: course.code, date, hours: Number(hours) || 1, present: rows.map((r) => ({ studentId: r.studentId, present: present[r.studentId] })) })
+      showToast(`Register saved for ${res?.date || date} (${res?.recorded ?? rows.length} students)`); await load()
+    } catch (e) { showToast('Could not save' + (e?.message ? `: ${e.message}` : '')) }
+    finally { setBusy(false) }
+  }
+  const nPresent = rows.filter((r) => present[r.studentId]).length
+  const today = new Date().toISOString().slice(0, 10)
+  return (
+    <>
+      <div className="grid2">
+        <Panel title={`Register — ${course.code}`} subtitle={rows.length ? `${nPresent} of ${rows.length} present` : undefined} actions={rows.length > 0 && (
+          <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)} />
+            <input type="number" min="0.5" step="0.5" value={hours} onChange={(e) => setHours(e.target.value)} style={{ width: 64 }} title="Contact hours" />
+            <button className="btn primary sm" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save register'}</button>
+          </span>
+        )} flush>
+          {rows.length === 0 ? <Empty>No students are enrolled on this module yet.</Empty> : (
+            <table className="data">
+              <thead><tr><th>Student</th><th className="num">Attendance</th><th style={{ width: 110 }}>Present</th></tr></thead>
+              <tbody>{rows.map((r) => (
+                <tr key={r.studentId}>
+                  <td style={{ fontWeight: 600 }}>{r.student}</td>
+                  <td className="num">{r.percent}% {sessions.length > 0 && r.percent < ATTENDANCE_MIN && <Badge tone="red" title={`Below ${ATTENDANCE_MIN}% — not admitted to the exam`}>At risk</Badge>}</td>
+                  <td><label style={{ display: 'flex', gap: 6, alignItems: 'center' }}><input type="checkbox" checked={!!present[r.studentId]} onChange={(e) => setPresent((p) => ({ ...p, [r.studentId]: e.target.checked }))} />{present[r.studentId] ? 'Present' : 'Absent'}</label></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
         </Panel>
-      )}
+        <Panel title="Sessions recorded" subtitle={`${ATTENDANCE_MIN}% attendance is required for exam admission`} flush>
+          {sessions.length === 0 ? <Empty>No sessions yet.</Empty> : (
+            <table className="data"><thead><tr><th>Date</th><th className="num">Present</th></tr></thead>
+              <tbody>{sessions.map((s) => <tr key={s.session_date} style={{ cursor: 'pointer' }} onClick={() => setDate(s.session_date)}><td className="mono">{s.session_date}</td><td className="num">{s.present}/{s.total}</td></tr>)}</tbody>
+            </table>
+          )}
+        </Panel>
+      </div>
+      <Toast msg={toast} />
     </>
   )
 }
@@ -162,42 +222,42 @@ function ReplyModal({ query, onClose, onSend }) {
   )
 }
 
-function ClassBoard() {
+function ClassBoard({ course }) {
   const [toast, showToast] = useToast()
   const [board, setBoard] = useState([])
   const [busy, setBusy] = useState(false)
-  const refresh = () => api.listAnnouncements('students').then((rows) => setBoard(Array.isArray(rows) ? rows : [])).catch(() => setBoard([]))
-  useEffect(() => { refresh() }, [])
+  const refresh = useCallback(() => api.listAnnouncements('students')
+    .then((rows) => setBoard((Array.isArray(rows) ? rows : []).filter((a) => a.course_id === course.id)))
+    .catch(() => setBoard([])), [course.id])
+  useEffect(() => { refresh() }, [refresh])
   const submit = async (e) => {
     e.preventDefault(); const f = e.target
     const title = f.title.value.trim(); const body = f.body.value.trim()
     if (!title || !body) { showToast('Add a title and a message first'); return }
     setBusy(true)
-    try { await api.createAnnouncement({ title, body, audience: f.audience.value }); showToast('Announcement posted'); f.reset(); await refresh() }
-    catch { showToast('Could not post the announcement') } finally { setBusy(false) }
+    try { await api.createAnnouncement({ title, body, audience: 'students', courseId: course.id }); showToast('Notice posted'); f.reset(); await refresh() }
+    catch (err) { showToast('Could not post' + (err?.message ? `: ${err.message}` : '')) } finally { setBusy(false) }
   }
   return (
     <>
-      <div className="note-banner"><Icon name="send" size={16} /><div>Notices you post appear in every student's <strong>Announcements</strong>.</div></div>
+      <div className="note-banner"><Icon name="send" size={16} /><div>Notices you post here reach only the students enrolled on <strong>{course.code}</strong>, in their <strong>Announcements</strong>.</div></div>
       <div className="grid2">
-        <Panel title="Post a notice" subtitle="Delivered to the student portal">
+        <Panel title="Post a notice" subtitle={`${course.code} — ${course.title}`}>
           <form onSubmit={submit}>
             <div className="field"><label>Title</label><input name="title" placeholder="e.g. CA3 marks released" maxLength={90} /></div>
             <div className="field"><label>Message</label><textarea name="body" rows={4} placeholder="Write the notice…" /></div>
-            <div className="field"><label>Audience</label><select name="audience"><option value="students">All students</option><option value="all">Whole college</option></select></div>
-            <button className="btn primary" type="submit" disabled={busy}>{busy ? 'Posting…' : 'Post announcement'}</button>
+            <button className="btn primary" type="submit" disabled={busy}>{busy ? 'Posting…' : 'Post notice'}</button>
           </form>
         </Panel>
-        <Panel title="Live student board" subtitle="What students currently see" flush>
+        <Panel title="Notices on this module" flush>
           <div style={{ padding: 4 }}>
-            {board.length === 0 && <Empty>No announcements yet.</Empty>}
+            {board.length === 0 && <Empty>No notices yet.</Empty>}
             {board.map((a) => (
               <div key={a.id} className="note-banner" style={{ marginBottom: 10 }}>
                 <Icon name={a.pinned ? 'pin' : 'send'} size={16} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong>{a.title}</strong><span className="di-sub">{a.created_at || ''}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}><strong>{a.title}</strong><span className="di-sub">{String(a.created_at || '').slice(0, 10)}</span></div>
                   <div className="di-sub" style={{ marginTop: 2 }}>{a.body}</div>
-                  {a.author && <div className="di-sub" style={{ marginTop: 4, fontStyle: 'italic' }}>— {a.author}</div>}
                 </div>
               </div>
             ))}

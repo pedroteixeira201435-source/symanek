@@ -6,7 +6,7 @@ import { ATTENDANCE_MIN } from '../lib/controls.js'
 import {
   getDegreeAudit, listProgrammes, getResultsForStudent, getInvoicesForStudent, getSponsorsForStudent,
   getHoldsForStudent, getAttendanceForStudent, listCourses, registerCourse, listTimetable,
-  listAnnouncements, listQueries, createQuery, submitInvoiceProof, listDocumentsForStudent,
+  listAnnouncements, listQueries, createQuery, listStudentCourses, submitInvoiceProof, listDocumentsForStudent,
 } from '../api.js'
 import { TimetableGrid } from './Scheduling.jsx'
 
@@ -23,13 +23,13 @@ export default function StudentPortal({ role }) {
   useEffect(() => {
     let alive = true
     ;(async () => {
-      const [audit, programmes, myResults, myInvoices, mySponsors, myHolds, attendance] = await Promise.all([
+      const [audit, programmes, myResults, myInvoices, mySponsors, myHolds, attendance, myCourses] = await Promise.all([
         getDegreeAudit(me), listProgrammes(), getResultsForStudent(me), getInvoicesForStudent(me),
-        getSponsorsForStudent(me), getHoldsForStudent(me), getAttendanceForStudent(me),
+        getSponsorsForStudent(me), getHoldsForStudent(me), getAttendanceForStudent(me), listStudentCourses().catch(() => []),
       ])
       if (!alive) return
       const prog = programmes.find((p) => p.code === audit?.prog)
-      setRec({ audit, prog, myResults, myInvoices, mySponsors, myHolds, attendance })
+      setRec({ audit, prog, myResults, myInvoices, mySponsors, myHolds, attendance, myCourses })
     })().catch((e) => { if (alive) setRec({ error: e?.message || 'Failed to load your record' }) })
     return () => { alive = false }
   }, [me, reloadN])
@@ -57,8 +57,25 @@ export default function StudentPortal({ role }) {
   )
 }
 
-function MyStudies({ audit, prog, attendance }) {
-  if (!audit) return <Panel title="My studies"><Empty>No academic record on file yet.</Empty></Panel>
+function MyCourses({ myCourses }) {
+  return (
+    <Panel title="My modules" subtitle={myCourses.length ? `${myCourses.length} this year` : undefined} flush>
+      {myCourses.length === 0 ? <Empty>You are not enrolled on any module yet. Contact the registrar if this is wrong.</Empty> : (
+        <table className="data"><thead><tr><th>Module</th><th>Semester</th><th>Lecturer</th><th className="num">Attendance</th></tr></thead>
+          <tbody>{myCourses.map((c) => (
+            <tr key={c.id}>
+              <td><span className="mono">{c.code}</span> — {c.title}</td><td>{c.sem || '-'}</td><td>{c.lecturer || '-'}</td>
+              <td className="num">{c.attendance}% {c.attendance > 0 && c.attendance < ATTENDANCE_MIN && <Badge tone="red" title={`Below ${ATTENDANCE_MIN}% — exam admission at risk`}>At risk</Badge>}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      )}
+    </Panel>
+  )
+}
+
+function MyStudies({ audit, prog, attendance, myCourses = [] }) {
+  if (!audit) return <><MyCourses myCourses={myCourses} /><Panel title="My studies"><Empty>No academic record on file yet.</Empty></Panel></>
   const att = attendance || { percent: 0, hoursAttended: 0, hoursTotal: 0 }
   const attOk = att.percent >= ATTENDANCE_MIN
   return (
@@ -69,6 +86,7 @@ function MyStudies({ audit, prog, attendance }) {
         <StatCard icon="⏰" label="Attendance" value={`${att.percent || 0}%`} delta={`${att.hoursAttended || 0}/${att.hoursTotal || 0} hrs`} deltaTone={attOk ? 'up' : 'down'} />
         <StatCard icon="📚" label="Requirements" value={String((audit.reqs || []).length)} delta="degree audit" deltaTone="neutral" />
       </div>
+      <MyCourses myCourses={myCourses} />
       <Panel title="Degree audit" subtitle={`${prog?.name || audit.prog} · progress to graduation`}>
         {(audit.reqs || []).length === 0 ? <Empty>No requirements loaded yet.</Empty> : (audit.reqs || []).map((r) => (
           <div key={r.req} className="cf-row" style={{ padding: '8px 0', borderBottom: '1px solid var(--line)' }}>
@@ -185,22 +203,45 @@ function MyFinance({ myInvoices, balance, mySponsors, registered, reload }) {
 function Announcements() {
   const [items, setItems] = useState([])
   useEffect(() => { listAnnouncements('students').then(setItems).catch(() => setItems([])) }, [])
-  return <Panel title="Announcements" flush>{items.length === 0 ? <Empty>No announcements yet.</Empty> : items.map((a) => <div key={a.id} className="note-banner"><Icon name="send" size={16} /><div><strong>{a.title}</strong><div className="di-sub">{a.body}</div></div></div>)}</Panel>
+  return <Panel title="Announcements" flush>{items.length === 0 ? <Empty>No announcements yet.</Empty> : items.map((a) => <div key={a.id} className="note-banner"><Icon name={a.pinned ? 'pin' : 'send'} size={16} /><div><strong>{a.title}</strong> {a.course ? <Badge tone="blue">{a.course}</Badge> : <Badge tone="gray">College</Badge>} <span className="di-sub">{String(a.created_at || '').slice(0, 10)}</span><div className="di-sub" style={{ whiteSpace: 'pre-wrap' }}>{a.body}</div></div></div>)}</Panel>
 }
 
-function AskLecturer({ me, myResults }) {
+function AskLecturer({ me, myCourses = [] }) {
   const [rows, setRows] = useState([])
   const [toast, showToast] = useToast()
   useEffect(() => { listQueries({ student: me }).then(setRows).catch(() => setRows([])) }, [me])
   const submit = async (e) => {
     e.preventDefault(); const f = e.target
-    try { await createQuery({ course: f.course.value, student: me, subject: f.subject.value, body: f.body.value }); f.reset(); setRows(await listQueries({ student: me })); showToast('Question sent') }
+    try { await createQuery({ course: f.course.value, student: me, subject: f.subject.value, body: f.body.value }); f.reset(); setRows(await listQueries({ student: me })); showToast('Question sent to your lecturer') }
     catch (err) { showToast('Could not send: ' + (err?.message || err)) }
   }
   return (
     <>
-      <div className="grid2"><Panel title="Ask your lecturer"><form onSubmit={submit}><div className="field"><label>Course</label><select name="course">{myResults.map((r) => <option key={r.code}>{r.code}</option>)}</select></div><div className="field"><label>Subject</label><input name="subject" required /></div><div className="field"><label>Your question</label><textarea name="body" rows={4} required /></div><button className="btn primary">Send</button></form></Panel>
-        <Panel title="My questions" flush>{rows.length === 0 ? <Empty>No questions yet.</Empty> : rows.map((q) => <div key={q.id} className="note-banner"><Icon name={q.status === 'answered' ? 'check' : 'send'} size={16} /><div><strong>{q.subject}</strong><div className="di-sub">{q.body}</div>{q.reply && <div>{q.reply}</div>}</div></div>)}</Panel></div>
+      <div className="grid2">
+        <Panel title="Ask your lecturer">
+          {myCourses.length === 0 ? <Empty>You can ask a question once you are enrolled on a module.</Empty> : (
+            <form onSubmit={submit}>
+              <div className="field"><label>Module</label><select name="course">{myCourses.map((c) => <option key={c.code} value={c.code}>{c.code} — {c.title}{c.lecturer ? ` (${c.lecturer})` : ''}</option>)}</select></div>
+              <div className="field"><label>Subject</label><input name="subject" required maxLength={120} /></div>
+              <div className="field"><label>Your question</label><textarea name="body" rows={4} required /></div>
+              <button className="btn primary">Send</button>
+            </form>
+          )}
+        </Panel>
+        <Panel title="My questions" flush>{rows.length === 0 ? <Empty>No questions yet.</Empty> : rows.map((q) => (
+          <div key={q.id} className="note-banner" style={{ marginBottom: 8 }}>
+            <Icon name={q.status === 'answered' ? 'check' : 'clock'} size={16} />
+            <div style={{ flex: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                <strong>{q.subject}</strong>
+                <span>{q.course && <span className="mono di-sub">{q.course} </span>}<Badge tone={q.status === 'answered' ? 'green' : 'amber'}>{q.status === 'answered' ? 'Answered' : 'Waiting'}</Badge></span>
+              </div>
+              <div className="di-sub" style={{ whiteSpace: 'pre-wrap' }}>{q.body}</div>
+              {q.reply && <div style={{ marginTop: 6, paddingLeft: 10, borderLeft: '3px solid var(--line)', whiteSpace: 'pre-wrap' }}><strong>{q.lecturer || 'Lecturer'}:</strong> {q.reply}</div>}
+            </div>
+          </div>
+        ))}</Panel>
+      </div>
       <Toast msg={toast} />
     </>
   )

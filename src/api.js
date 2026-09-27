@@ -128,14 +128,14 @@ export async function listCourses(progCode) {
   if (useHttp()) {
     const join = progCode ? 'programmes!inner(slug)' : 'programmes(slug)'
     let q = supabase.from('courses')
-      .select(`id,code,title,credits,semester,capacity,enrolled,prereq_code,${join},staff(name)`)
+      .select(`id,code,title,credits,semester,capacity,enrolled,prereq_code,lecturer_staff_id,${join},staff(name)`)
     if (progCode) q = q.eq('programmes.slug', progCode.toLowerCase())
     const { data, error } = await q
     if (error) throw error
     return (data ?? [])
       .map((c) => ({
         id: c.id, code: c.code, title: c.title, prog: c.programmes?.slug?.toUpperCase(), credits: c.credits,
-        sem: c.semester, lecturer: c.staff?.name, enrolled: c.enrolled, cap: c.capacity, prereq: c.prereq_code,
+        sem: c.semester, lecturer: c.staff?.name, lecturerId: c.lecturer_staff_id, enrolled: c.enrolled, cap: c.capacity, prereq: c.prereq_code,
       }))
   }
   return mock([])
@@ -536,13 +536,17 @@ export async function proofUrl(path) {
   }
   return '#'
 }
-export async function submitAssignment({ student, studentId, assignmentId }) {
+export async function submitAssignment({ student, studentId, assignmentId, file = null, note = '' }) {
   if (useHttp()) {
-    const { data: a } = await supabase.from('assignments').select('id').eq('code', assignmentId).maybeSingle()
-    if (!a) return { ok: false }
-    const { error } = await supabase.rpc('submit_assignment', { p_assignment: a.id })
+    let path = null
+    if (file) {
+      const sid = await one('my_student_id')
+      if (!sid) throw new Error('No student record is linked to this login')
+      path = await uploadCourseFile(`submissions/${assignmentId}/${sid}`, file)
+    }
+    const { data, error } = await supabase.rpc('submit_assignment', { p_assignment: assignmentId, p_file_path: path, p_note: note || null })
     if (error) throw error
-    return { ok: true, assignmentId }
+    return data
   }
   const list = _submissions[assignmentId] || (_submissions[assignmentId] = [])
   if (student && !list.some((s) => s.student === student)) {
@@ -788,20 +792,21 @@ let _announcements = [
 export async function listAnnouncements(audience = 'students') {
   if (useHttp()) {
     const { data, error } = await supabase.from('announcements')
-      .select('id,title,body,audience,pinned,created_at')
+      .select('id,title,body,audience,pinned,created_at,course_id,courses(code)')
       .in('audience', [audience, 'all']).order('pinned', { ascending: false }).order('created_at', { ascending: false })
     if (error) throw error
-    return data ?? []
+    return (data ?? []).map((a) => ({ ...a, course: a.courses?.code || null }))
   }
   const rows = _announcements
     .filter((a) => a.audience === audience || a.audience === 'all')
     .sort((x, y) => (y.pinned - x.pinned) || (y.created_at < x.created_at ? -1 : 1))
   return mock(rows)
 }
-export async function createAnnouncement({ title, body, audience = 'students', author = 'Lecturer' }) {
+export async function createAnnouncement({ title, body, audience = 'students', author = 'Lecturer', courseId = null }) {
   if (useHttp()) {
     const { data: { user } } = await supabase.auth.getUser()
-    const { data, error } = await supabase.from('announcements').insert({ title, body, audience, created_by: user?.id }).select().single()
+    const { data, error } = await supabase.from('announcements')
+      .insert({ title, body, audience, course_id: courseId || null, created_by: user?.id }).select().single()
     if (error) throw error
     return data
   }
@@ -827,13 +832,11 @@ let _submissions = {
 }
 export async function listSubmissions(assignmentId) {
   if (useHttp()) {
-    const { data, error } = await supabase.from('submissions')
-      .select('id,submitted_at,grade,feedback,graded_by,students(full_name),assignments!inner(code)')
-      .eq('assignments.code', assignmentId)
-    if (error) throw error
-    return (data ?? []).map((s) => ({
-      id: s.id, assignmentId, student: s.students?.full_name, submittedAt: s.submitted_at,
-      grade: s.grade == null ? null : Number(s.grade), feedback: s.feedback || '', gradedBy: s.graded_by,
+    const data = await rows('submissions_list', { p_assignment: assignmentId })
+    return data.map((s) => ({
+      id: s.id, assignmentId, studentId: s.student_id, student: s.student, studentNo: s.student_no,
+      submittedAt: s.submitted_at, filePath: s.file_path, note: s.note || '',
+      grade: s.grade == null ? null : Number(s.grade), feedback: s.feedback || '', gradedAt: s.graded_at,
     }))
   }
   return mock(_submissions[assignmentId] || [])
@@ -1098,6 +1101,48 @@ export async function grantStudentAccess(studentUuid, { reset = false } = {}) {
   return data // { email, password, reset? }
 }
 
+// Staff Suite login (admin only). Creates the auth user with a temporary
+// password and the chosen workspace (suite_role); 'deactivate' removes it.
+async function invokeStaffAccess(body) {
+  const { data, error } = await supabase.functions.invoke('grant-staff-access', { body })
+  if (error) {
+    let msg = error.message
+    try { const j = await error.context?.json(); msg = j?.error || msg } catch { /* keep msg */ }
+    throw new Error(msg)
+  }
+  return data
+}
+export async function grantStaffAccess(staffUuid, suiteRole = 'teacher') {
+  if (!useHttp()) return mock({ email: 'demo.lecturer@symanek.local', password: 'Symanek-temp-1!', suite_role: suiteRole })
+  return invokeStaffAccess({ staff_id: staffUuid, suite_role: suiteRole }) // { email, password, suite_role }
+}
+export async function revokeStaffAccess(staffUuid) {
+  if (!useHttp()) return mock({ ok: true })
+  return invokeStaffAccess({ staff_id: staffUuid, action: 'deactivate' })
+}
+
+// Staff register with login state, for the lecturer/allocation screen.
+export async function listStaffAccounts() {
+  if (!useHttp()) return mock([])
+  const { data, error } = await supabase.from('staff')
+    .select('id,staff_no,name,email,role,department,user_id,active').order('name')
+  if (error) throw error
+  return (data ?? []).map((s) => ({
+    uuid: s.id, staffNo: s.staff_no, name: s.name, email: s.email, role: s.role,
+    dept: s.department, hasLogin: Boolean(s.user_id), active: s.active !== false,
+  }))
+}
+
+// Assign (or clear) the lecturer of one course. Registrar/admin (RLS "courses registrar write").
+export async function setCourseLecturer(courseId, staffUuid) {
+  if (!useHttp()) return mock({ ok: true })
+  const { error } = await supabase.from('courses')
+    .update({ lecturer_staff_id: staffUuid || null, updated_at: new Date().toISOString() })
+    .eq('id', courseId)
+  if (error) throw error
+  return { ok: true }
+}
+
 // Called after a student sets a new password on first login — clears the flag.
 export async function clearPasswordReset() {
   if (!useHttp()) return mock({ ok: true })
@@ -1283,7 +1328,7 @@ export const courseUpsert       = (c) => call('course_upsert', { p_id: c.id ?? n
 export const courseDelete       = (id) => call('course_delete', { p_id: id })
 export const courseSetCapacity  = (id, capacity) => call('course_set_capacity', { p_id: id, p_capacity: capacity })
 export const listCourseware     = (courseId) => rows('courseware_list', { p_course: courseId })
-export const coursewareUpsert   = (c) => call('courseware_upsert', { p_id: c.id ?? null, p_course: c.courseId, p_title: c.title, p_url: c.url ?? null })
+export const coursewareUpsert   = (c) => call('courseware_upsert', { p_id: c.id ?? null, p_course: c.courseId, p_title: c.title, p_url: c.url ?? null, p_file_path: c.filePath ?? null })
 export const coursewareDelete   = (id) => call('courseware_delete', { p_id: id })
 export const listAtRisk         = () => rows('academics_at_risk')
 
@@ -1294,3 +1339,75 @@ export async function listStaffOptions() {
   if (error) throw error
   return (data ?? []).map((s) => ({ uuid: s.id, staffNo: s.staff_no, name: s.name }))
 }
+
+// ======================= CLASSROOM (enrolment, attendance, LMS files) =======================
+// Cohort enrolment (registrar/admin): put a whole intake on its programme's modules.
+export const listEnrolmentCohorts = () => rows('enrolment_cohorts')
+export const enrolCohort = ({ programmeId, academicYear, intake, dryRun = true }) =>
+  one('enrol_cohort', { p_programme: programmeId, p_academic_year: academicYear, p_intake: intake, p_dry_run: dryRun })
+
+// The signed-in student's modules (+ lecturer and attendance %).
+export async function listStudentCourses() {
+  const data = await rows('student_courses')
+  return data.map((c) => ({
+    id: c.course_id, code: c.code, title: c.title, sem: c.semester, credits: c.credits,
+    lecturer: c.lecturer, status: c.status, attendance: Number(c.attendance ?? 0),
+  }))
+}
+
+// Attendance register per module (lecturer).
+export async function getCourseRegister(code) {
+  const data = await rows('course_attendance', { p_course_code: code })
+  return data.map((r) => ({ studentId: r.student_id, student: r.student, percent: Number(r.percent ?? 0) }))
+}
+export const listAttendanceSessions = (code) => rows('course_attendance_sessions', { p_course_code: code })
+export async function saveAttendance({ code, date, hours = 1, present }) {
+  if (!useHttp()) return mock({ ok: true })
+  const { data, error } = await supabase.rpc('record_attendance_session', {
+    p_course_code: code, p_date: date || null, p_hours: hours,
+    p_present: present.map((p) => ({ student_id: p.studentId, present: !!p.present })),
+  })
+  if (error) throw error
+  return data
+}
+
+// Files live in the private 'course-files' bucket; access is decided by the path
+// (materials/<course>/…, assignments/<course>/…, submissions/<assignment>/<student>/…).
+export async function uploadCourseFile(prefix, file) {
+  if (!useHttp()) return `${prefix}/${file?.name || 'file'}`
+  if (file && file.size > 25 * 1024 * 1024) throw new Error('File is larger than 25 MB')
+  const safe = (file?.name || 'file').replace(/[^A-Za-z0-9._-]+/g, '_').slice(-80)
+  const path = `${prefix}/${Date.now()}-${safe}`
+  const { error } = await supabase.storage.from('course-files')
+    .upload(path, file, { contentType: file?.type || 'application/octet-stream', upsert: false })
+  if (error) throw error
+  return path
+}
+export async function courseFileUrl(path) {
+  if (!useHttp() || !path) return null
+  const { data, error } = await supabase.storage.from('course-files').createSignedUrl(path, 300)
+  if (error) throw error
+  return data?.signedUrl ?? null
+}
+
+// Assignments.
+export async function listAssignments(courseId) {
+  const data = await rows('assignments_list', { p_course: courseId })
+  return data.map((a) => ({
+    id: a.id, title: a.title, description: a.description || '', due: a.due, maxMarks: a.max_marks,
+    filePath: a.file_path, createdAt: a.created_at,
+    submissions: a.submissions == null ? null : Number(a.submissions), graded: a.graded == null ? null : Number(a.graded),
+    mine: a.my_submitted_at ? {
+      submittedAt: a.my_submitted_at, filePath: a.my_file_path, note: a.my_note || '',
+      grade: a.my_grade == null ? null : Number(a.my_grade), feedback: a.my_feedback || '', gradedAt: a.my_graded_at,
+    } : null,
+  }))
+}
+export async function assignmentUpsert({ id = null, courseId, title, description = '', due = null, maxMarks = 100, file = null }) {
+  const filePath = file ? await uploadCourseFile(`assignments/${courseId}`, file) : null
+  return one('assignment_upsert', {
+    p_id: id, p_course: courseId, p_title: title, p_description: description || null,
+    p_due: due || null, p_max_marks: Number(maxMarks) || 100, p_file_path: filePath,
+  })
+}
+export const assignmentDelete = (id) => call('assignment_delete', { p_id: id })

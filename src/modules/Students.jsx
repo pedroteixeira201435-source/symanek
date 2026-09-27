@@ -95,15 +95,18 @@ function Student360({ student, students, programmes, onSelect, reload }) {
   )
 }
 
-// Shown once after "Grant portal access". No email provider is wired up, so the
-// admin copies these details and sends them to the student manually.
-function PortalCredentials({ data, onClose, showToast }) {
+// Shown once after "Grant portal access" (students) or "Grant Suite access"
+// (staff). No email provider is wired up, so the admin copies these details
+// and sends them manually.
+export function PortalCredentials({ data, onClose, showToast, audience = 'student' }) {
   const portalUrl = (typeof window !== 'undefined' && window.location.origin) || 'https://symanek-suite.vercel.app'
+  const who = audience === 'staff' ? 'staff' : 'student'
+  const title = audience === 'staff' ? 'Staff Suite' : 'Student Portal'
   const lead = data.reset
-    ? 'Your student portal password has been reset.'
-    : 'Your student portal login has been created.'
+    ? `Your ${title.toLowerCase()} password has been reset.`
+    : `Your ${title.toLowerCase()} login has been created.`
   const message =
-`Symanek Specialized College — Student Portal access
+`Symanek Specialized College — ${title} access
 
 Hello ${data.name},
 
@@ -120,7 +123,7 @@ Password:  ${data.password} (temporary)`
   return (
     <Modal title={data.reset ? 'Password reset — copy & send' : 'Portal access — copy & send'} onClose={onClose}>
       <div className="note-banner" style={{ background: 'var(--amber-soft, #fff7e6)', borderColor: '#eee0c0', marginBottom: 12 }}>
-        Shown once. No email is sent automatically — copy these and send them to the student.
+        Shown once. No email is sent automatically — copy these and send them to the {who}.
       </div>
       <div className="cf-row"><span>Portal</span><span className="mono">{portalUrl}</span></div>
       <div className="cf-row"><span>Username (email)</span><span className="mono">{data.email}</span></div>
