@@ -155,6 +155,7 @@ function StudentForm({ student, programmes, onClose, onSaved, showToast }) {
         status: f.status.value,
         year: f.year.value,
         intake: f.intake.value || null,
+        academicYear: f.academic_year.value || null,
         idNumber: f.id_number.value.trim(),
         campus: f.campus.value.trim(),
       })
@@ -180,8 +181,9 @@ function StudentForm({ student, programmes, onClose, onSaved, showToast }) {
         </div>
         <div className="grid2" style={{ gap: 12 }}>
           <div className="field"><label>Intake</label><select name="intake" defaultValue={student.intake || ''}><option value="">None</option><option value="january">January</option><option value="july">July</option></select></div>
-          <div className="field"><label>Campus</label><input name="campus" defaultValue={student.campus || 'Main campus'} /></div>
+          <div className="field"><label>Academic year (intake year)</label><input name="academic_year" type="number" min="2000" max="2100" defaultValue={student.academicYear || new Date().getFullYear()} /></div>
         </div>
+        <div className="field"><label>Campus</label><input name="campus" defaultValue={student.campus || 'Main campus'} /></div>
         <div className="grid2" style={{ gap: 12 }}>
           <div className="field"><label>ID number</label><input name="id_number" defaultValue={student.idNumber || ''} /></div>
           <div className="field"><label>Next of kin</label><input name="next_of_kin" defaultValue={student.guardian === '-' ? '' : student.guardian || ''} /></div>

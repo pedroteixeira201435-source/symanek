@@ -6,6 +6,7 @@
 | `2-HOW-TO-ADD-NEW-STUDENTS.txt` | Instruções simples para a escola preencher os alunos novos | ✅ anexar |
 | `NEW-STUDENTS-TEMPLATE.csv` | O modelo que a escola preenche (1 linha por aluno) | ✅ anexar |
 | `PROGRAMME-NAMES.txt` | Os 58 nomes de curso aceites na coluna `programme` | ✅ anexar |
+| `3-PILOT-TEST-GUIDE.txt` | Guião do teste-piloto: o que o admin da escola, a professora e os alunos fazem, dia a dia, + formulário final | ✅ enviar antes do piloto |
 | `0-LEIA-PRIMEIRO-PEDRO.md` | Este ficheiro | ❌ é só para ti |
 
 ---
@@ -50,3 +51,26 @@ entregar aos alunos. **Não partilhes este ficheiro inteiro** — tem as senhas 
 - O Excel às vezes grava com `;` em vez de `,` — o script aceita os dois.
 - O mesmo script serve para a migração do EduCIMS quando chegar o export: basta pôr as colunas
   com os mesmos nomes do modelo.
+
+---
+
+# Teste-piloto (guião `3-PILOT-TEST-GUIDE.txt`)
+
+**Antes de enviar o guião**, a escola responde às 5 decisões do início do guião
+(turma/cadeira, professora, 3–5 alunos voluntários, admin da escola, notas reais ou de treino).
+
+**O teu dia 1 (preparação), tudo na Suite com a tua conta admin:**
+1. *Programmes → Cohort Enrolment* → a turma do piloto → **Enrol…** → confirmar.
+2. *Programmes → Lecturers* → confirmar que a cadeira do piloto tem a professora certa
+   (se não, escolher na tabela e **Save allocation**).
+3. *Lecturers* → na professora → **Grant Suite access** (Lecturer) → **Copy message** → WhatsApp.
+4. Se o admin da escola ainda não está no staff: **+ Add lecturer** com o email dele →
+   **Grant Suite access** com o workspace **Administrator**.
+5. *Students* → cada aluno voluntário → **Grant portal access** → **Copy message** → WhatsApp.
+
+**Durante:** apoio por WhatsApp; guarda os prints de erros.
+**Depois:** apagar os dados de treino que a escola criou (alunos/professores de teste) e,
+se as notas eram de treino, pedir-me para as limpar.
+
+Já validado por mim a 27/09 com contas fictícias em produção (50/51 passos OK; a única falha —
+o formulário de aluno não pedir o ano académico — já tem correção; ver migration 20260928130000).

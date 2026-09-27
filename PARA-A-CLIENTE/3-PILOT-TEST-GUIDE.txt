@@ -1,0 +1,132 @@
+SYMANEK SUITE — PILOT TEST GUIDE
+Student portal and lecturer tools
+==================================================================
+
+WHAT THIS TEST IS FOR
+Before every student and lecturer starts using the Suite, we run a short
+pilot with one class and one module. The goal is simple: a real lecturer
+and a few real students use the system for a few days, exactly as they
+would in normal classes, and tell us what worked and what did not.
+
+The Suite:     https://symanek-suite.vercel.app
+Works on:      computer, tablet or phone (any modern browser)
+Duration:      about 5 working days
+Support:       Pedro (WhatsApp) — send a screenshot of any problem
+
+
+WHO TAKES PART
+  1. School administrator (1 person)  — manages students, lecturers, access
+  2. Lecturer (1 person)              — teaches the pilot module
+  3. Students (3 to 5 volunteers)     — from the same class
+  4. Pedro                            — prepares the accounts and gives support
+
+PLEASE DECIDE BEFORE WE START
+  [ ] Which class and module we use for the pilot
+      (suggested: Auxiliary Nursing, January 2026 intake)
+  [ ] Which lecturer teaches it
+  [ ] The 3 to 5 student volunteers (full name + email + phone)
+  [ ] Who is the school administrator for the Suite
+  [ ] Whether the marks entered during the pilot are real marks or practice
+      marks. Practice marks will be deleted after the pilot. Published marks
+      are locked on the student's record, so we will NOT publish final marks
+      during the pilot unless you ask us to.
+
+
+DAY 1 — ACCESS
+------------------------------------------------------------------
+Pedro:
+  - Enrols the class on its modules and checks the lecturer is allocated.
+  - Creates the logins and sends each person a WhatsApp message with the
+    link, their username (email) and a temporary password.
+
+Everyone (administrator, lecturer, students):
+  - Open the link and sign in with the temporary password.
+  - The system asks you to choose your own password. Do it and keep it private.
+  - Sign out and sign in again with your new password.
+
+
+DAYS 2–3 — TEACHING
+------------------------------------------------------------------
+Lecturer (menu "Lecturer Portal" and "Courseware"):
+  1. Check that you see ONLY your own module(s) at the top.
+  2. Attendance tab: take the register for a class (tick present/absent,
+     choose the date, save). Check each student's attendance %.
+  3. Class Board tab: post a notice to your class.
+  4. Courseware > Materials: upload a real document (PDF, Word or slides).
+  5. Courseware > Assignments: create a short assignment with a due date,
+     total marks and, if you like, a brief/worksheet file.
+
+Students (menu "Student Portal" and "Courseware"):
+  1. My Studies: check you see your module(s), your lecturer and your
+     attendance %.
+  2. Announcements: read the lecturer's notice.
+  3. Courseware > Materials: open/download the document.
+  4. Courseware > Assignments: submit the assignment. Please try it FROM
+     YOUR PHONE — attach a file (photo, PDF or Word) and/or type an answer.
+  5. Ask Lecturer: send your lecturer a question about the module.
+
+
+DAYS 4–5 — FEEDBACK AND MARKS
+------------------------------------------------------------------
+Lecturer:
+  6. Courseware > Assignments > Submissions: open each student's file,
+     give a mark and written feedback, save.
+  7. Student Queries: reply to the students' questions.
+  8. Marks tab: enter CA and exam marks and click "Save marks"
+     (provisional — students can see them, nothing is locked).
+     Do NOT click "Submit to exam board" unless the school decided the
+     pilot uses real, final marks.
+
+Students:
+  6. Courseware > Assignments: check your mark and the lecturer's feedback.
+  7. Ask Lecturer: read the lecturer's reply.
+  8. Grades & Transcript: check your provisional marks.
+
+School administrator (any day, menu "Students" and "Programmes"):
+  1. Students > Add student: register a (test) new student with programme,
+     intake and academic year, status "Enrolled".
+  2. Programmes > Cohort Enrolment: enrol that class so the new student gets
+     the modules (the preview shows how many; running it twice never
+     creates duplicates).
+  3. Students > open the student > "Grant portal access": copy the message
+     and send it.
+  4. Programmes > Lecturers > "+ Add lecturer": register a (test) lecturer,
+     then "Grant Suite access" and allocate a module to them.
+  5. Edit a detail (e.g. a phone number or email) and check it is saved.
+  Tell Pedro which test records you created so he can remove them.
+
+
+END OF PILOT — FEEDBACK FORM
+------------------------------------------------------------------
+Each participant answers (a short WhatsApp message is fine):
+
+  Name / role: ____________________________
+  Device used (computer / phone / tablet): ______________
+
+  1. Could you sign in and change your password?          YES / NO
+  2. Did you find everything you needed?                   YES / NO
+     If not, what was missing? ____________________________
+  3. Did anything give an error or not work?               YES / NO
+     What were you doing? (screenshot if possible) ________
+  4. What was confusing or slow? __________________________
+  5. On a scale of 1 to 5, how easy was it to use? _______
+  6. Anything you would like the system to do that it does not do yet?
+     ____________________________________________________
+
+After the pilot Pedro fixes what came up, removes any practice data, and
+we agree the date to open the Suite to all students and lecturers.
+
+
+GOOD TO KNOW
+  - A lecturer only sees the modules allocated to them, and only the
+    students enrolled on those modules.
+  - A student only sees their own modules, marks and submissions.
+  - Files (materials and submissions) are private: each file can only be
+    opened by the lecturer of that module and its enrolled students.
+    Maximum 25 MB per file.
+  - Forgot your password? The school administrator issues a new temporary
+    one: for a student, Students > the student > "Grant portal access";
+    for a lecturer, Programmes > Lecturers > "Remove login", then
+    "Grant Suite access" again.
+  - Nothing is sent by email or SMS yet: logins are sent by WhatsApp and
+    students see notices, marks and replies when they open the portal.

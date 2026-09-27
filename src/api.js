@@ -86,6 +86,7 @@ function toLearner(s) {
     attendance: s.attendance != null ? Number(s.attendance) : null,
     year: s.year || null,
     intake: s.intake || null,
+    academicYear: s.academic_year || null,
     idNumber: s.id_number || null,
     campus: s.campus || null,
   }
@@ -93,7 +94,7 @@ function toLearner(s) {
 export async function listStudents() {
   if (useHttp()) {
     const { data, error } = await supabase.from('students')
-      .select('id,student_no,reference,full_name,email,next_of_kin,phone,status,attendance,year,intake,id_number,campus,programme_id,programmes(slug,name)')
+      .select('id,student_no,reference,full_name,email,next_of_kin,phone,status,attendance,year,intake,academic_year,id_number,campus,programme_id,programmes(slug,name)')
     if (error) throw error
     return (data ?? []).map(toLearner)
   }
@@ -102,7 +103,7 @@ export async function listStudents() {
 export async function getStudent(id) {
   if (useHttp()) {
     const { data, error } = await supabase.from('students')
-      .select('id,student_no,reference,full_name,email,next_of_kin,phone,status,attendance,year,intake,id_number,campus,programme_id,programmes(slug,name)')
+      .select('id,student_no,reference,full_name,email,next_of_kin,phone,status,attendance,year,intake,academic_year,id_number,campus,programme_id,programmes(slug,name)')
       .or(`id.eq.${id},student_no.eq.${id},reference.eq.${id}`).maybeSingle()
     if (error) throw error
     return data ? toLearner(data) : null
@@ -1288,6 +1289,7 @@ export async function studentUpsert(s) {
     p_year: s.year ? Number(s.year) : null,
     p_intake: s.intake ?? null,
     p_id_number: s.idNumber ?? s.id_number ?? null,
+    p_academic_year: s.academicYear ? Number(s.academicYear) : null,
     p_campus: s.campus ?? null,
   })
   if (error) throw error
