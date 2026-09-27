@@ -1,0 +1,22 @@
+Good day Jeremia,
+
+Before we run the pilot with a real class, I would like you, as the Suite
+administrator, to test the student portal and the lecturer tools yourself.
+
+The attached guide takes you step by step (about 45–60 minutes). You will
+create one test lecturer and one test student, give them access, and then
+sign in as each of them to check attendance, notices, study materials,
+assignments, marks, feedback and questions.
+
+- Your login: jeremiaf@symanekacademy.com
+- Temporary password: [PASTE HERE]  (you will choose your own at first sign-in)
+- Link: https://symanek-suite.vercel.app
+
+The test uses the Nutrition and Dietetics certificate, which has no students
+yet, so no real class or mark is affected. When you finish, please send me
+the last page (results) and I will remove all the test data.
+
+Any problem, send me a screenshot on WhatsApp.
+
+Thank you,
+Pedro

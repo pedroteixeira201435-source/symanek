@@ -1103,7 +1103,7 @@ export async function grantStudentAccess(studentUuid, { reset = false } = {}) {
 }
 
 // Staff Suite login (admin only). Creates the auth user with a temporary
-// password and the chosen workspace (suite_role); 'deactivate' removes it.
+// password and the chosen workspace (suite_role); action 'revoke' removes it.
 async function invokeStaffAccess(body) {
   const { data, error } = await supabase.functions.invoke('grant-staff-access', { body })
   if (error) {
@@ -1119,7 +1119,7 @@ export async function grantStaffAccess(staffUuid, suiteRole = 'teacher') {
 }
 export async function revokeStaffAccess(staffUuid) {
   if (!useHttp()) return mock({ ok: true })
-  return invokeStaffAccess({ staff_id: staffUuid, action: 'deactivate' })
+  return invokeStaffAccess({ staff_id: staffUuid, action: 'revoke' })
 }
 
 // Staff register with login state, for the lecturer/allocation screen.

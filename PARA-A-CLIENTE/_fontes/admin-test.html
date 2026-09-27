@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Symanek Suite — Administrator Test Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 14mm 15mm 15mm; }
+  :root { --navy:#0f2740; --blue:#1d4ed8; --steel:#316591; --soft:#eef4f9; --line:#d7e5f0; --ink:#1b2533; --muted:#5b6b7d;
+          --gold:#f2b705; --gold-soft:#fff7dc; --green:#1f9d6b; --green-soft:#e3f5ec; --violet:#6d28d9; --violet-soft:#f1ebfd; --teal:#0f766e; --teal-soft:#e2f4f2; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { font-family: 'Inter', Arial, sans-serif; color: var(--ink); font-size: 9.7pt; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  h1, h2, h3 { margin: 0; color: var(--navy); line-height: 1.2; }
+  p { margin: 0 0 6px; }
+  .pb { break-before: page; }
+
+  .cover { display: flex; gap: 18px; align-items: center; padding: 18px 22px; border-radius: 14px; color: #fff;
+           background: linear-gradient(135deg, var(--navy), #173650 60%, var(--steel)); }
+  .cover .crest { width: 70px; height: 96px; background: #fff; border-radius: 9px; padding: 5px; flex-shrink: 0; }
+  .cover .crest img { width: 100%; height: 100%; object-fit: contain; }
+  .cover .kicker { font-size: 8pt; letter-spacing: .14em; text-transform: uppercase; color: var(--gold); font-weight: 700; }
+  .cover h1 { color: #fff; font-size: 21pt; font-weight: 800; margin: 3px 0 4px; }
+  .cover .sub { color: #d7e5f0; font-size: 10pt; }
+
+  .facts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+  .fact { background: var(--soft); border: 1px solid var(--line); border-radius: 9px; padding: 8px 10px; }
+  .fact .k { font-size: 7.4pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+  .fact .v { font-weight: 700; color: var(--navy); font-size: 9.4pt; }
+
+  .note { border-radius: 9px; padding: 8px 12px; font-size: 9pt; margin: 8px 0; }
+  .note.gold { background: var(--gold-soft); border: 1.3px solid var(--gold); }
+  .note.blue { background: var(--soft); border: 1px solid var(--line); color: var(--steel); }
+  .note.red { background: #fdecec; border: 1px solid #f3c4c4; color: #9b2c2c; }
+
+  table.data { width: 100%; border-collapse: collapse; font-size: 9pt; margin-top: 6px; }
+  table.data th { text-align: left; font-size: 7.4pt; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border-bottom: 1.5px solid var(--navy); padding: 4px 6px; }
+  table.data td { border-bottom: 1px solid var(--line); padding: 5px 6px; vertical-align: top; }
+  .mono { font-family: 'SFMono-Regular', Consolas, monospace; font-size: 8.8pt; color: var(--navy); font-weight: 600; }
+
+  .windows { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 8px; }
+  .win { border-radius: 10px; padding: 8px 10px; border: 1.5px solid; }
+  .win .ttl { display: block; font-size: 9.4pt; font-weight: 700; }
+  .win > span:not(.ttl) { font-size: 8.6pt; color: var(--muted); }
+  .win.a { border-color: var(--blue); background: #eef3ff; } .win.a .ttl { color: var(--blue); }
+  .win.l { border-color: var(--violet); background: var(--violet-soft); } .win.l .ttl { color: var(--violet); }
+  .win.s { border-color: var(--teal); background: var(--teal-soft); } .win.s .ttl { color: var(--teal); }
+
+  .part { margin-top: 12px; border-radius: 12px; border: 1px solid var(--line); overflow: hidden; break-inside: avoid; }
+  .part-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; color: #fff; }
+  .part-head .letter { width: 26px; height: 26px; border-radius: 50%; background: rgba(255,255,255,.2); display: grid; place-items: center; font-weight: 800; }
+  .part-head h2 { color: #fff; font-size: 11.5pt; }
+  .part-head .as { margin-left: auto; font-size: 8pt; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; background: rgba(255,255,255,.18); padding: 3px 9px; border-radius: 20px; }
+  .part.a .part-head { background: var(--blue); } .part.l .part-head { background: var(--violet); } .part.s .part-head { background: var(--teal); } .part.x .part-head { background: var(--navy); }
+
+  .step { display: grid; grid-template-columns: 26px 1fr 150px; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--line); break-inside: avoid; }
+  .step:first-of-type { border-top: 0; }
+  .step .n { width: 22px; height: 22px; border-radius: 50%; background: var(--soft); color: var(--navy); font-weight: 800; display: grid; place-items: center; font-size: 8.8pt; border: 1px solid var(--line); }
+  .step .t b.menu { color: var(--navy); }
+  .step .t ul { margin: 3px 0 0; padding-left: 16px; }
+  .step .t li { margin: 1px 0; }
+  .expect { font-size: 8.4pt; background: var(--green-soft); border-radius: 7px; padding: 6px 8px; color: #14553b; align-self: start; }
+  .expect .box { display: inline-block; width: 11px; height: 11px; border: 1.5px solid var(--green); border-radius: 3px; vertical-align: -1px; margin-right: 4px; background: #fff; }
+  .expect .lbl { display: block; font-size: 7.2pt; letter-spacing: .08em; text-transform: uppercase; color: var(--green); margin-bottom: 2px; }
+  .kbd { display: inline-block; border: 1px solid #b9c7d6; border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; font-size: 8.4pt; font-weight: 600; background: #fff; color: var(--navy); white-space: nowrap; }
+
+  table.result { width: 100%; border-collapse: collapse; font-size: 9pt; }
+  table.result th { text-align: left; font-size: 7.4pt; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border-bottom: 1.5px solid var(--navy); padding: 4px 6px; }
+  table.result td { border-bottom: 1px solid var(--line); padding: 6px 6px; }
+  table.result td.c { width: 58px; text-align: center; color: var(--muted); font-weight: 700; }
+  table.result td.notes { width: 38%; }
+  .foot { margin-top: 10px; padding-top: 6px; border-top: 1px solid var(--line); color: var(--muted); font-size: 8pt; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="crest"><img src="logo.png" alt="Symanek"></div>
+  <div>
+    <div class="kicker">Symanek Suite · Administrator test</div>
+    <h1>Test the student portal and lecturer tools</h1>
+    <div class="sub">Step-by-step guide for Jeremia Fillemon — one test lecturer and one test student</div>
+  </div>
+</div>
+
+<div class="facts">
+  <div class="fact"><div class="k">The Suite</div><div class="v">symanek-suite.vercel.app</div></div>
+  <div class="fact"><div class="k">Time needed</div><div class="v">About 45–60 minutes</div></div>
+  <div class="fact"><div class="k">You need</div><div class="v">A computer and a phone</div></div>
+  <div class="fact"><div class="k">Help</div><div class="v">Pedro on WhatsApp</div></div>
+</div>
+
+<p><b>What you will do.</b> As administrator you create one test lecturer and one test student, give them access, and then sign in <i>as each of them</i> to check that everything a real lecturer and a real student will do works: attendance, notices, study materials, assignments, marks, feedback and questions.</p>
+
+<div class="note gold"><b>Why this is safe.</b> The test uses the <b>Certificate in Nutrition and Dietetics</b>, which has no students and no lecturer yet, so no real class, mark or lecturer is touched. The test lecturer and student do not need real email accounts — nothing is sent by email. When you finish, tell Pedro and he removes all test data.</div>
+
+<h3 style="margin-top:10px">Use exactly these test details</h3>
+<table class="data">
+  <thead><tr><th>Item</th><th>Value to type / choose</th></tr></thead>
+  <tbody>
+    <tr><td>Test lecturer — name</td><td class="mono">Test Lecturer</td></tr>
+    <tr><td>Test lecturer — email (username)</td><td class="mono">test.lecturer@symanekacademy.com</td></tr>
+    <tr><td>Test student — name / student no.</td><td class="mono">Test Student &nbsp;/&nbsp; TEST0001</td></tr>
+    <tr><td>Test student — email (username)</td><td class="mono">test.student@symanekacademy.com</td></tr>
+    <tr><td>Programme</td><td class="mono">Certificate in Nutrition and Dietetics</td></tr>
+    <tr><td>Module to allocate to the test lecturer</td><td class="mono">ANPH402 — Human Anatomy and Physiology for Nutrition</td></tr>
+    <tr><td>Intake / academic year / year of study</td><td class="mono">January &nbsp;/&nbsp; 2026 &nbsp;/&nbsp; 1</td></tr>
+  </tbody>
+</table>
+
+<h3 style="margin-top:12px">Three windows, three people</h3>
+<p>The Suite remembers one signed-in person per browser, so keep the three roles apart like this:</p>
+<div class="windows">
+  <div class="win a"><span class="ttl">1 · Administrator</span><span>You. Your normal browser window on the computer.</span></div>
+  <div class="win l"><span class="ttl">2 · Test lecturer</span><span>A <b>private / incognito</b> window on the computer (Chrome: <span class="kbd">Ctrl</span> + <span class="kbd">Shift</span> + <span class="kbd">N</span>).</span></div>
+  <div class="win s"><span class="ttl">3 · Test student</span><span>Your <b>phone</b> — this is how most students will use the portal.</span></div>
+</div>
+
+<!-- ================= PART A ================= -->
+<div class="part a pb">
+  <div class="part-head"><span class="letter">A</span><h2>Your own access</h2><span class="as">Window 1 · Administrator</span></div>
+  <div class="step"><span class="n">1</span><div class="t">Open <b>symanek-suite.vercel.app</b> and sign in with the email and temporary password Pedro sent you (<span class="mono">jeremiaf@symanekacademy.com</span>).</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>A screen “Choose your password”.</div></div>
+  <div class="step"><span class="n">2</span><div class="t">Type a new password twice and click <span class="kbd">Save and continue</span>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>The Suite opens with the full menu on the left.</div></div>
+</div>
+
+<!-- ================= PART B ================= -->
+<div class="part a">
+  <div class="part-head"><span class="letter">B</span><h2>Set up the test lecturer and student</h2><span class="as">Window 1 · Administrator</span></div>
+  <div class="step"><span class="n">3</span><div class="t"><b class="menu">Programmes</b> › tab <b class="menu">Lecturers</b> › <span class="kbd">+ Add lecturer</span>. Full name <span class="mono">Test Lecturer</span>, email <span class="mono">test.lecturer@symanekacademy.com</span>, job title <span class="mono">Lecturer</span>, department <span class="mono">Test</span> › <span class="kbd">Save</span>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>“Test Lecturer” appears in the staff list, Suite login “None”.</div></div>
+  <div class="step"><span class="n">4</span><div class="t">On the Test Lecturer row click <span class="kbd">Grant Suite access</span> › Workspace <b>Lecturer</b> › <span class="kbd">Grant access</span>. Click <span class="kbd">Copy message</span> and paste it somewhere (e.g. WhatsApp to yourself) — you need the <b>temporary password</b>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>A box with the username and a temporary password. Suite login becomes “Active”.</div></div>
+  <div class="step"><span class="n">5</span><div class="t">Scroll down to <b>Module allocation</b>. Filter the programme <span class="mono">CERTIFICATE-NUTRITION-DIETETICS-LEVEL-4</span>. On <span class="mono">ANPH402</span> choose <b>Test Lecturer</b> in the Lecturer column › <span class="kbd">Save allocation</span>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>“Allocation saved (1)”. Test Lecturer shows 1 module.</div></div>
+  <div class="step"><span class="n">6</span><div class="t"><b class="menu">Students</b> › tab <b class="menu">Register</b> › <span class="kbd">+ Add student</span>:
+      <ul><li>Full name <span class="mono">Test Student</span>, Student no. <span class="mono">TEST0001</span>, email <span class="mono">test.student@symanekacademy.com</span></li>
+      <li>Programme <b>Certificate in Nutrition and Dietetics</b>, Status <b>Enrolled</b>, Year <span class="mono">1</span></li>
+      <li>Intake <b>January</b>, Academic year <span class="mono">2026</span> › <span class="kbd">Save student</span></li></ul></div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>Test Student appears in the register.</div></div>
+  <div class="step"><span class="n">7</span><div class="t"><b class="menu">Programmes</b> › tab <b class="menu">Cohort Enrolment</b>. Find <b>Certificate in Nutrition and Dietetics — January 2026</b> (1 student) › <span class="kbd">Enrol…</span>. Check the preview › <span class="kbd">Confirm enrolment</span>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>Preview: 1 student, 16 modules, 16 new registrations. Registrations column then shows 16.</div></div>
+  <div class="step"><span class="n">8</span><div class="t"><b class="menu">Students</b> › tab <b class="menu">Student 360</b> › select <b>Test Student</b> › <span class="kbd">Grant portal access</span> › <span class="kbd">Copy message</span> and keep the temporary password.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>A box with the student's username and temporary password.</div></div>
+</div>
+
+<!-- ================= PART C ================= -->
+<div class="part l">
+  <div class="part-head"><span class="letter">C</span><h2>Teach as the lecturer</h2><span class="as">Window 2 · Private window</span></div>
+  <div class="step"><span class="n">9</span><div class="t">Open a private window › <b>symanek-suite.vercel.app</b> › sign in as <span class="mono">test.lecturer@symanekacademy.com</span> with the temporary password › choose a new password.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>Menu shows only Lecturer Portal, Courseware, Library.</div></div>
+  <div class="step"><span class="n">10</span><div class="t"><b class="menu">Lecturer Portal</b>: look at <b>My modules</b> at the top.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>Only <b>ANPH402</b>, with (1) student. No other college modules.</div></div>
+  <div class="step"><span class="n">11</span><div class="t">Tab <b class="menu">Attendance</b>: Test Student is ticked “Present” › <span class="kbd">Save register</span>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>“Register saved”; attendance 100%; today's date under Sessions recorded.</div></div>
+  <div class="step"><span class="n">12</span><div class="t">Tab <b class="menu">Class Board</b>: title <span class="mono">Welcome</span>, a short message › <span class="kbd">Post notice</span>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>The notice appears under “Notices on this module”.</div></div>
+  <div class="step"><span class="n">13</span><div class="t"><b class="menu">Courseware</b> › <b>Materials</b> › <span class="kbd">+ Add material</span>: a title and any PDF or Word file from the computer › <span class="kbd">Publish</span>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>The material is listed; <span class="kbd">File</span> opens it.</div></div>
+  <div class="step"><span class="n">14</span><div class="t"><b class="menu">Courseware</b> › <b>Assignments</b> › <span class="kbd">+ New assignment</span>: title <span class="mono">Test assignment</span>, instructions, a due date next week, total marks <span class="mono">10</span> › <span class="kbd">Publish</span>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>The assignment is listed with “Submissions (0)”.</div></div>
+</div>
+
+<!-- ================= PART D ================= -->
+<div class="part s">
+  <div class="part-head"><span class="letter">D</span><h2>Study as the student</h2><span class="as">Window 3 · Phone</span></div>
+  <div class="step"><span class="n">15</span><div class="t">On the phone open <b>symanek-suite.vercel.app</b> › sign in as <span class="mono">test.student@symanekacademy.com</span> with the temporary password › choose a new password.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>Menu shows only Student Portal and Courseware.</div></div>
+  <div class="step"><span class="n">16</span><div class="t"><b class="menu">Student Portal</b> › tab <b class="menu">My Studies</b>: look at <b>My modules</b>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>16 modules; ANPH402 shows “Test Lecturer” and 100% attendance.</div></div>
+  <div class="step"><span class="n">17</span><div class="t">Tab <b class="menu">Announcements</b>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>The “Welcome” notice, tagged ANPH402.</div></div>
+  <div class="step"><span class="n">18</span><div class="t"><b class="menu">Courseware</b> › choose module <b>ANPH402</b> › <b>Materials</b> › <span class="kbd">File</span>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>The lecturer's document opens on the phone.</div></div>
+  <div class="step"><span class="n">19</span><div class="t"><b>Assignments</b> › <span class="kbd">Submit</span> › attach a photo or file (take a photo of any page) and/or type an answer › <span class="kbd">Submit</span>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>“Submitted”; status shows the date and file name.</div></div>
+  <div class="step"><span class="n">20</span><div class="t"><b class="menu">Student Portal</b> › tab <b class="menu">Ask Lecturer</b>: module ANPH402, a subject and a question › <span class="kbd">Send</span>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>The question appears under “My questions” as <b>Waiting</b>.</div></div>
+</div>
+
+<!-- ================= PART E ================= -->
+<div class="part l">
+  <div class="part-head"><span class="letter">E</span><h2>Mark and reply as the lecturer</h2><span class="as">Window 2 · Private window</span></div>
+  <div class="step"><span class="n">21</span><div class="t"><b class="menu">Courseware</b> › <b>Assignments</b> › <span class="kbd">Submissions (1)</span>: open the student's file, give a mark (e.g. <span class="mono">8</span>) and feedback › <span class="kbd">Save</span>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>The file opens; “Saved — Test Student”; badge “Graded”.</div></div>
+  <div class="step"><span class="n">22</span><div class="t"><b class="menu">Lecturer Portal</b> › tab <b class="menu">Student Queries</b> › <span class="kbd">Reply</span> › write an answer › <span class="kbd">Send reply</span>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>The query changes to “Answered”.</div></div>
+  <div class="step"><span class="n">23</span><div class="t">Tab <b class="menu">Marks</b>: CA <span class="mono">60</span>, Exam <span class="mono">55</span> › <span class="kbd">Save marks</span>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>“marks saved (provisional)”; final 58%.</div></div>
+  <div class="note red" style="margin:0 12px 10px">Do <b>not</b> click “Submit to exam board” — that publishes and locks the mark.</div>
+</div>
+
+<!-- ================= PART F ================= -->
+<div class="part s">
+  <div class="part-head"><span class="letter">F</span><h2>Check the results as the student</h2><span class="as">Window 3 · Phone</span></div>
+  <div class="step"><span class="n">24</span><div class="t"><b class="menu">Courseware</b> › ANPH402 › <b>Assignments</b>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>“Graded 8/10” and the lecturer's feedback; Resubmit is no longer offered.</div></div>
+  <div class="step"><span class="n">25</span><div class="t"><b class="menu">Student Portal</b> › <b class="menu">Ask Lecturer</b>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>The question shows <b>Answered</b> with the lecturer's reply.</div></div>
+  <div class="step"><span class="n">26</span><div class="t"><b class="menu">Student Portal</b> › <b class="menu">Grades &amp; Transcript</b>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>ANPH402 with CA 60, Exam 55, final 58%, badge <b>Provisional</b>.</div></div>
+</div>
+
+<!-- ================= PART G ================= -->
+<div class="part x">
+  <div class="part-head"><span class="letter">G</span><h2>Quick checks as administrator</h2><span class="as">Window 1 · Administrator</span></div>
+  <div class="step"><span class="n">27</span><div class="t"><b class="menu">Students</b> › Register › <span class="kbd">Edit</span> on Test Student › change the phone number › <span class="kbd">Save student</span>.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>The new phone number is shown.</div></div>
+  <div class="step"><span class="n">28</span><div class="t"><b class="menu">Programmes</b> › <b class="menu">Lecturers</b> › Test Lecturer › <span class="kbd">Remove login</span> › confirm. Then try to sign in again as the test lecturer in the private window.</div><div class="expect"><span class="lbl">Expect</span><span class="box"></span>The login is refused — access can be withdrawn at any time.</div></div>
+</div>
+
+<!-- ================= RESULTS ================= -->
+<div class="pb">
+  <h2 style="font-size:14pt">Results — please send this page to Pedro</h2>
+  <p style="color:var(--muted)">Tick OK or Problem for each part. For any problem, note the step number and send a screenshot on WhatsApp.</p>
+  <table class="result">
+    <thead><tr><th>Part</th><th>What was tested</th><th>OK</th><th>Problem</th><th>Notes (step number, what happened)</th></tr></thead>
+    <tbody>
+      <tr><td><b>A</b></td><td>My own sign-in and new password</td><td class="c">☐</td><td class="c">☐</td><td class="notes"></td></tr>
+      <tr><td><b>B</b></td><td>Add lecturer, give access, allocate module, add student, enrol class, give portal access</td><td class="c">☐</td><td class="c">☐</td><td class="notes"></td></tr>
+      <tr><td><b>C</b></td><td>Lecturer: own module only, attendance, notice, material, assignment</td><td class="c">☐</td><td class="c">☐</td><td class="notes"></td></tr>
+      <tr><td><b>D</b></td><td>Student: modules, notice, material, submit from phone, ask a question</td><td class="c">☐</td><td class="c">☐</td><td class="notes"></td></tr>
+      <tr><td><b>E</b></td><td>Lecturer: open submission, mark + feedback, reply, provisional marks</td><td class="c">☐</td><td class="c">☐</td><td class="notes"></td></tr>
+      <tr><td><b>F</b></td><td>Student: sees mark, feedback, reply and provisional marks</td><td class="c">☐</td><td class="c">☐</td><td class="notes"></td></tr>
+      <tr><td><b>G</b></td><td>Edit a student; remove a lecturer's login</td><td class="c">☐</td><td class="c">☐</td><td class="notes"></td></tr>
+    </tbody>
+  </table>
+
+  <h3 style="margin-top:14px">Overall</h3>
+  <table class="result">
+    <tbody>
+      <tr><td style="width:55%">How easy was it to use? (1 = very difficult · 5 = very easy)</td><td>1 &nbsp;&nbsp; 2 &nbsp;&nbsp; 3 &nbsp;&nbsp; 4 &nbsp;&nbsp; 5</td></tr>
+      <tr><td>Anything confusing, slow or missing?</td><td style="height:60px"></td></tr>
+      <tr><td>Ready to run the pilot with one real class?</td><td>YES &nbsp; / &nbsp; NO — because:</td></tr>
+      <tr><td>Tested by / date</td><td></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note blue" style="margin-top:14px"><b>When you finish:</b> tell Pedro. He removes the Test Lecturer, the Test Student, their files, marks and messages, and clears the ANPH402 allocation, so the system is clean for the real pilot.</div>
+
+  <div class="foot"><span>Symanek Specialized College · Symanek Suite</span><span>Administrator Test Guide · September 2026</span></div>
+</div>
+
+</body>
+</html>

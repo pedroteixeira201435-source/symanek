@@ -11,6 +11,8 @@
 | `3-PILOT-TEST-GUIDE.txt` | O mesmo guião em texto simples | opcional |
 | `5-PROJECT-ROADMAP.pdf` | Mapa ilustrado do projeto (2 págs.): 8 etapas, "we are here", o que falta e quem deve o quê. **Atualizar a data e os estados a cada avanço** | ✅ anexar |
 | `5-PROJECT-ROADMAP.png` | Página 1 do mapa em imagem, para mandar no WhatsApp | ✅ |
+| `6-ADMIN-TEST-GUIDE-JEREMIA.pdf` | Passo a passo (6 págs.) para o Jeremia testar como admin: 1 professor + 1 aluno de teste, circuito completo, folha de resultados | ✅ anexar |
+| `6-MESSAGE-JEREMIA.txt` | Mensagem para o Jeremia (colar a senha temporária dele) | ✅ copiar e colar |
 | `0-LEIA-PRIMEIRO-PEDRO.md` | Este ficheiro | ❌ é só para ti |
 
 ---
@@ -78,3 +80,16 @@ se as notas eram de treino, pedir-me para as limpar.
 
 Já validado por mim a 27/09 com contas fictícias em produção (50/51 passos OK; a única falha —
 o formulário de aluno não pedir o ano académico — já tem correção; ver migration 20260928130000).
+
+---
+
+# Teste do admin (Jeremia) — antes do piloto
+
+1. **Dar acesso ao Jeremia:** Suite → *Programmes → Lecturers* → linha "Jeremia Fillemon" →
+   **Grant Suite access** → workspace **Administrator** → **Copy message**.
+2. Colar a senha temporária em `6-MESSAGE-JEREMIA.txt` e enviar com o PDF `6-ADMIN-TEST-GUIDE-JEREMIA.pdf`.
+3. O teste usa o *Certificate in Nutrition and Dietetics* (0 alunos, 0 professores) e a cadeira ANPH402 —
+   não mexe em turmas reais. Contas de teste: `test.lecturer@symanekacademy.com` / `test.student@symanekacademy.com`
+   (não precisam de caixa de email).
+4. **No fim, pedir ao Claude para limpar:** Test Lecturer (staff + login), Test Student (aluno, login, 16 inscrições,
+   entregas, notas, perguntas, presenças), ficheiros no bucket `course-files`, aviso "Welcome" e a alocação da ANPH402.

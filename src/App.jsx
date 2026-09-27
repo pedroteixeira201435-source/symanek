@@ -117,7 +117,7 @@ function ForcePasswordChange({ onDone, onLogout }) {
           <div className="lp-brand"><div className="lp-mark">S</div><span>SYMANEK&nbsp;SUITE</span></div>
           <div className="lp-overlay">
             <div className="lp-name">{SCHOOL.name}</div>
-            <div className="lp-tag">Set a new password to finish activating your student portal.</div>
+            <div className="lp-tag">Set a new password to finish activating your Symanek Suite account.</div>
           </div>
         </div>
         <div className="login-form">
