@@ -141,6 +141,19 @@ export async function listCourses(progCode) {
   return mock([])
 }
 
+// Courses the signed-in lecturer teaches (admin/registrar: all). Scoped server-side.
+export async function listMyCourses() {
+  if (useHttp()) {
+    const { data, error } = await supabase.rpc('my_courses')
+    if (error) throw error
+    return (data ?? []).map((c) => ({
+      id: c.id, code: c.code, title: c.title, prog: c.prog, credits: c.credits,
+      sem: c.semester, lecturer: c.lecturer, enrolled: Number(c.enrolled ?? 0),
+    }))
+  }
+  return mock([])
+}
+
 export async function getDegreeAudit(studentName) {
   if (useHttp()) {
     const sid = await resolveStudentId(studentName)

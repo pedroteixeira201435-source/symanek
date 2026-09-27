@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Tabs, Panel, Badge, Modal, Toast, useToast, Icon } from '../ui.jsx'
-import { listCourses, listCourseware, coursewareUpsert, coursewareDelete, listSubmissions, submitAssignment, gradeSubmission } from '../api.js'
+import { listCourses, listMyCourses, listCourseware, coursewareUpsert, coursewareDelete, listSubmissions, submitAssignment, gradeSubmission } from '../api.js'
 
 export default function Courseware({ role }) {
   const isTeacher = role.id === 'teacher'
@@ -11,9 +11,8 @@ export default function Courseware({ role }) {
 
   useEffect(() => {
     let alive = true
-    listCourses().then((rows) => {
+    ;(isTeacher ? listMyCourses() : listCourses()).then((visible) => {
       if (!alive) return
-      const visible = isTeacher ? rows.filter((c) => !c.lecturer || c.lecturer === me) : rows
       setCourses(visible)
       setActive(visible[0]?.id || visible[0]?.code || null)
     }).catch(() => setCourses([])).finally(() => setLoading(false))

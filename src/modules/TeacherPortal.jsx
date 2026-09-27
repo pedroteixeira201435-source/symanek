@@ -27,7 +27,7 @@ function MyCourses() {
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(true)
   useEffect(() => {
-    api.listCourses().then((cs) => { setCourses(cs); if (cs.length) setCode(cs[0].code) }).catch(() => setCourses([])).finally(() => setLoading(false))
+    api.listMyCourses().then((cs) => { setCourses(cs); if (cs.length) setCode(cs[0].code) }).catch(() => setCourses([])).finally(() => setLoading(false))
   }, [])
   const course = courses.find((c) => c.code === code)
   if (loading) return <Panel title="My courses" flush><Empty>Loading…</Empty></Panel>
