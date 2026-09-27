@@ -9,6 +9,8 @@
 | `4-MESSAGE-PILOT-TEST.txt` | Mensagem a pedir o piloto (5 decisões + emails dos 4 professores + professor de Nutrition) | ✅ copiar e colar (email/WhatsApp) |
 | `3-PILOT-TEST-GUIDE.pdf` | Guião do teste-piloto em PDF (4 págs.) — anexar à mensagem acima | ✅ anexar |
 | `3-PILOT-TEST-GUIDE.txt` | O mesmo guião em texto simples | opcional |
+| `5-PROJECT-ROADMAP.pdf` | Mapa ilustrado do projeto (2 págs.): 8 etapas, "we are here", o que falta e quem deve o quê. **Atualizar a data e os estados a cada avanço** | ✅ anexar |
+| `5-PROJECT-ROADMAP.png` | Página 1 do mapa em imagem, para mandar no WhatsApp | ✅ |
 | `0-LEIA-PRIMEIRO-PEDRO.md` | Este ficheiro | ❌ é só para ti |
 
 ---

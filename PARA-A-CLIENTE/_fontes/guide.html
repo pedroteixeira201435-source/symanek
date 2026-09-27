@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Symanek Suite — Pilot Test Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4; margin: 16mm 16mm 18mm; }
+  :root {
+    --navy: #0f2740; --blue: #1d4ed8; --steel: #316591; --steel-soft: #eef4f9; --line: #d7e5f0;
+    --ink: #1b2533; --muted: #5b6b7d; --gold: #f2b705; --gold-soft: #fff7dc; --green: #2f9e8f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: 'Inter', 'Helvetica Neue', Arial, sans-serif; color: var(--ink); font-size: 10.2pt; line-height: 1.5; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  h1, h2, h3 { color: var(--navy); margin: 0; line-height: 1.2; }
+  p { margin: 0 0 8px; }
+  .page-break { break-before: page; }
+
+  /* cover band */
+  .cover { display: flex; gap: 22px; align-items: center; padding: 22px 26px; border-radius: 14px;
+           background: linear-gradient(135deg, var(--navy) 0%, #173650 55%, var(--steel) 100%); color: #fff; }
+  .cover .crest { width: 86px; height: 118px; background: #fff; border-radius: 10px; padding: 6px; flex-shrink: 0; }
+  .cover .crest img { width: 100%; height: 100%; object-fit: contain; }
+  .cover .kicker { font-size: 8.5pt; letter-spacing: .14em; text-transform: uppercase; color: var(--gold); font-weight: 700; }
+  .cover h1 { color: #fff; font-size: 24pt; font-weight: 800; margin: 4px 0 6px; }
+  .cover .sub { color: #d7e5f0; font-size: 11pt; }
+
+  .facts { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin: 16px 0 18px; }
+  .fact { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--steel-soft); }
+  .fact .k { font-size: 7.8pt; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); font-weight: 600; }
+  .fact .v { font-weight: 700; color: var(--navy); font-size: 10pt; margin-top: 2px; word-break: break-word; }
+
+  .section { margin-top: 18px; }
+  .section > h2 { font-size: 13.5pt; display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .section > h2 .num { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%;
+                       background: var(--blue); color: #fff; font-size: 10pt; font-weight: 700; }
+  .lead { color: var(--muted); }
+
+  .roles { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .role { border: 1px solid var(--line); border-left: 4px solid var(--blue); border-radius: 8px; padding: 9px 12px; }
+  .role b { color: var(--navy); }
+  .role span { display: block; color: var(--muted); font-size: 9.2pt; }
+
+  .decide { border: 1.5px solid var(--gold); background: var(--gold-soft); border-radius: 10px; padding: 12px 16px; margin-top: 12px; }
+  .decide h3 { font-size: 11pt; margin-bottom: 6px; }
+  .check { list-style: none; padding: 0; margin: 0; }
+  .check li { position: relative; padding-left: 24px; margin: 5px 0; }
+  .check li::before { content: ''; position: absolute; left: 0; top: 2px; width: 13px; height: 13px; border: 1.6px solid var(--navy); border-radius: 3px; background: #fff; }
+
+  .day { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; margin-top: 12px; break-inside: avoid; }
+  .day-head { background: var(--navy); color: #fff; padding: 8px 14px; display: flex; justify-content: space-between; align-items: baseline; }
+  .day-head b { font-size: 11pt; }
+  .day-head span { color: var(--gold); font-size: 8.8pt; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  .day-body { display: grid; grid-template-columns: 1fr 1fr; }
+  .day-body.single { grid-template-columns: 1fr; }
+  .col { padding: 10px 14px 12px; }
+  .col + .col { border-left: 1px solid var(--line); }
+  .who { font-size: 8.4pt; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--blue); margin-bottom: 2px; }
+  .where { font-size: 8.6pt; color: var(--muted); margin-bottom: 6px; }
+  ol.steps { margin: 0; padding-left: 18px; }
+  ol.steps li { margin: 3px 0; }
+  .menu { font-weight: 600; color: var(--navy); }
+  .tip { margin-top: 8px; font-size: 9pt; background: var(--steel-soft); border-radius: 6px; padding: 6px 9px; color: var(--steel); }
+  .warn { margin-top: 8px; font-size: 9pt; background: #fdecec; border-radius: 6px; padding: 6px 9px; color: #9b2c2c; }
+
+  .know { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .know div { border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; font-size: 9.4pt; }
+  .know b { color: var(--navy); display: block; margin-bottom: 2px; }
+
+  .form { border: 1.5px solid var(--navy); border-radius: 12px; padding: 16px 20px; }
+  .form .row { display: flex; gap: 16px; margin-bottom: 12px; }
+  .form .field { flex: 1; }
+  .form .label { font-size: 8.6pt; color: var(--muted); font-weight: 600; }
+  .form .blank { border-bottom: 1px solid #9fb3c8; height: 20px; }
+  .q { margin: 12px 0 0; break-inside: avoid; }
+  .q .qt { font-weight: 600; color: var(--navy); }
+  .q .opts { float: right; font-weight: 600; color: var(--muted); letter-spacing: .04em; }
+  .q .lines div { border-bottom: 1px solid #9fb3c8; height: 22px; }
+  .scale { display: inline-flex; gap: 8px; margin-left: 8px; }
+  .scale i { font-style: normal; display: inline-grid; place-items: center; width: 22px; height: 22px; border: 1.5px solid var(--navy); border-radius: 50%; font-size: 9pt; font-weight: 700; color: var(--navy); }
+
+  .foot { margin-top: 18px; padding-top: 10px; border-top: 1px solid var(--line); color: var(--muted); font-size: 8.8pt; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="crest"><img src="logo.png" alt="Symanek Specialized College"></div>
+  <div>
+    <div class="kicker">Symanek Suite · Pilot</div>
+    <h1>Pilot Test Guide</h1>
+    <div class="sub">Student Portal and Lecturer tools — one class, one module, five days</div>
+  </div>
+</div>
+
+<div class="facts">
+  <div class="fact"><div class="k">The Suite</div><div class="v">symanek-suite.vercel.app</div></div>
+  <div class="fact"><div class="k">Works on</div><div class="v">Computer, tablet or phone</div></div>
+  <div class="fact"><div class="k">Duration</div><div class="v">About 5 working days</div></div>
+  <div class="fact"><div class="k">Support</div><div class="v">Pedro, WhatsApp + screenshot</div></div>
+</div>
+
+<div class="section">
+  <h2><span class="num">1</span> Why we run a pilot</h2>
+  <p>Before every student and lecturer starts using the Suite, one real lecturer and a few real students use it for a few days, exactly as they would in normal classes: taking the register, sharing notes, setting and submitting work, asking questions and receiving marks. They then tell us what worked and what did not, so everything is right before the whole college moves over.</p>
+</div>
+
+<div class="section">
+  <h2><span class="num">2</span> Who takes part</h2>
+  <div class="roles">
+    <div class="role"><b>School administrator</b><span>1 person. Manages students, lecturers and access.</span></div>
+    <div class="role"><b>Lecturer</b><span>1 person. Teaches the pilot module.</span></div>
+    <div class="role"><b>Students</b><span>3 to 5 volunteers from the same class.</span></div>
+    <div class="role"><b>Pedro</b><span>Prepares the accounts and gives support throughout.</span></div>
+  </div>
+
+  <div class="decide">
+    <h3>Please decide before we start</h3>
+    <ul class="check">
+      <li>Which <b>class and module</b> we use (suggested: Auxiliary Nursing, January 2026 intake).</li>
+      <li>Which <b>lecturer</b> teaches it.</li>
+      <li>The <b>3 to 5 student volunteers</b> (full name, email and phone of each).</li>
+      <li>Who is the <b>school administrator</b> for the Suite.</li>
+      <li>Whether pilot marks are <b>real or practice</b>. Practice marks are deleted afterwards. Final published marks are locked on the student's record, so we will <b>not</b> publish final marks during the pilot unless you ask us to.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="section page-break">
+  <h2><span class="num">3</span> Day by day</h2>
+
+  <div class="day">
+    <div class="day-head"><b>Day 1 — Access</b><span>Everyone signs in</span></div>
+    <div class="day-body">
+      <div class="col">
+        <div class="who">Pedro</div>
+        <ol class="steps">
+          <li>Enrols the class on its modules and checks the lecturer is allocated.</li>
+          <li>Creates the logins and sends each person a WhatsApp message with the link, their username (email) and a temporary password.</li>
+        </ol>
+      </div>
+      <div class="col">
+        <div class="who">Administrator, lecturer and students</div>
+        <ol class="steps">
+          <li>Open the link and sign in with the temporary password.</li>
+          <li>Choose your own password when asked, and keep it private.</li>
+          <li>Sign out and sign in again with your new password.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <div class="day">
+    <div class="day-head"><b>Days 2–3 — Teaching</b><span>The class in the Suite</span></div>
+    <div class="day-body">
+      <div class="col">
+        <div class="who">Lecturer</div>
+        <div class="where">Menus: <span class="menu">Lecturer Portal</span> and <span class="menu">Courseware</span></div>
+        <ol class="steps">
+          <li>Check you see <b>only your own module(s)</b> at the top.</li>
+          <li><span class="menu">Attendance</span>: take the register for a class (present/absent, date, save) and check each student's %.</li>
+          <li><span class="menu">Class Board</span>: post a notice to your class.</li>
+          <li><span class="menu">Courseware › Materials</span>: upload a real document (PDF, Word or slides).</li>
+          <li><span class="menu">Courseware › Assignments</span>: create a short assignment with a due date, total marks and, if you like, a brief.</li>
+        </ol>
+      </div>
+      <div class="col">
+        <div class="who">Students</div>
+        <div class="where">Menus: <span class="menu">Student Portal</span> and <span class="menu">Courseware</span></div>
+        <ol class="steps">
+          <li><span class="menu">My Studies</span>: check your module(s), your lecturer and your attendance %.</li>
+          <li><span class="menu">Announcements</span>: read the lecturer's notice.</li>
+          <li><span class="menu">Courseware › Materials</span>: open or download the document.</li>
+          <li><span class="menu">Courseware › Assignments</span>: submit the assignment — attach a file (photo, PDF or Word) and/or type an answer.</li>
+          <li><span class="menu">Ask Lecturer</span>: send your lecturer a question about the module.</li>
+        </ol>
+        <div class="tip">Please submit the assignment <b>from your phone</b> — that is how most students will use it.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="day">
+    <div class="day-head"><b>Days 4–5 — Feedback and marks</b><span>Closing the loop</span></div>
+    <div class="day-body">
+      <div class="col">
+        <div class="who">Lecturer</div>
+        <ol class="steps" start="6">
+          <li><span class="menu">Courseware › Assignments › Submissions</span>: open each student's file, give a mark and written feedback, save.</li>
+          <li><span class="menu">Student Queries</span>: reply to the students' questions.</li>
+          <li><span class="menu">Marks</span>: enter CA and exam marks and click <b>Save marks</b> (provisional — students see them, nothing is locked).</li>
+        </ol>
+        <div class="warn">Do <b>not</b> click “Submit to exam board” unless the school decided the pilot uses real, final marks.</div>
+      </div>
+      <div class="col">
+        <div class="who">Students</div>
+        <ol class="steps" start="6">
+          <li><span class="menu">Courseware › Assignments</span>: check your mark and the lecturer's feedback.</li>
+          <li><span class="menu">Ask Lecturer</span>: read the lecturer's reply.</li>
+          <li><span class="menu">Grades &amp; Transcript</span>: check your provisional marks.</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <div class="day">
+    <div class="day-head"><b>Any day — School administrator</b><span>Running the school in the Suite</span></div>
+    <div class="day-body single">
+      <div class="col">
+        <div class="where">Menus: <span class="menu">Students</span> and <span class="menu">Programmes</span></div>
+        <ol class="steps">
+          <li><span class="menu">Students › Add student</span>: register a test new student with programme, intake, academic year and status “Enrolled”.</li>
+          <li><span class="menu">Programmes › Cohort Enrolment</span>: enrol that class so the new student gets the modules. The preview shows how many; running it twice never creates duplicates.</li>
+          <li><span class="menu">Students</span> › open the student › <b>Grant portal access</b>: copy the message and send it.</li>
+          <li><span class="menu">Programmes › Lecturers › + Add lecturer</span>: register a test lecturer, then <b>Grant Suite access</b> and allocate a module to them.</li>
+          <li>Edit a detail (for example a phone number or email) and check it is saved.</li>
+        </ol>
+        <div class="tip">Tell Pedro which test records you created, so he can remove them after the pilot.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2><span class="num">4</span> Good to know</h2>
+  <div class="know">
+    <div><b>Lecturers see only their modules</b>They see only the students enrolled on those modules.</div>
+    <div><b>Students see only their own records</b>Their own modules, marks, submissions and questions.</div>
+    <div><b>Files are private</b>Only the module's lecturer and its enrolled students can open them. Maximum 25 MB per file.</div>
+    <div><b>Forgot your password?</b>The administrator issues a new temporary one: Students › Grant portal access (students), or Lecturers › Remove login, then Grant Suite access (lecturers).</div>
+    <div><b>No emails or SMS yet</b>Logins are sent by WhatsApp. Notices, marks and replies appear when the portal is opened.</div>
+    <div><b>Something went wrong?</b>Take a screenshot and send it to Pedro on WhatsApp with what you were doing.</div>
+  </div>
+</div>
+
+<div class="section page-break">
+  <h2><span class="num">5</span> Feedback form</h2>
+  <p class="lead">Each participant completes this at the end of the pilot. A photo of this page or a short WhatsApp message with the answers is fine.</p>
+  <div class="form">
+    <div class="row">
+      <div class="field"><div class="label">Name</div><div class="blank"></div></div>
+      <div class="field"><div class="label">Role (administrator / lecturer / student)</div><div class="blank"></div></div>
+    </div>
+    <div class="row">
+      <div class="field"><div class="label">Device used (computer / phone / tablet)</div><div class="blank"></div></div>
+      <div class="field"><div class="label">Date</div><div class="blank"></div></div>
+    </div>
+
+    <div class="q"><span class="opts">YES &nbsp;/&nbsp; NO</span><div class="qt">1. Could you sign in and change your password?</div></div>
+    <div class="q"><span class="opts">YES &nbsp;/&nbsp; NO</span><div class="qt">2. Did you find everything you needed?</div><div class="lines"><div></div></div><div class="label">If not, what was missing?</div></div>
+    <div class="q"><span class="opts">YES &nbsp;/&nbsp; NO</span><div class="qt">3. Did anything give an error or not work?</div><div class="lines"><div></div><div></div></div><div class="label">What were you doing? (screenshot if possible)</div></div>
+    <div class="q"><div class="qt">4. What was confusing or slow?</div><div class="lines"><div></div><div></div></div></div>
+    <div class="q"><div class="qt">5. How easy was it to use? <span class="scale"><i>1</i><i>2</i><i>3</i><i>4</i><i>5</i></span></div><div class="label" style="margin-top:4px">1 = very difficult · 5 = very easy</div></div>
+    <div class="q"><div class="qt">6. Anything you would like the system to do that it does not do yet?</div><div class="lines"><div></div><div></div><div></div></div></div>
+  </div>
+
+  <div class="section">
+    <h2><span class="num">6</span> After the pilot</h2>
+    <p>Pedro fixes what came up, removes any practice data, and together we agree the date to open the Suite to all students and lecturers.</p>
+  </div>
+
+  <div class="foot"><span>Symanek Specialized College · Symanek Suite</span><span>Pilot Test Guide · September 2026</span></div>
+</div>
+
+</body>
+</html>

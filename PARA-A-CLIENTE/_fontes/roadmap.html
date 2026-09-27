@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Symanek Suite — Project Roadmap</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  @page { size: A4 landscape; margin: 11mm 13mm; }
+  :root {
+    --navy: #0f2740; --blue: #1d4ed8; --steel: #316591; --steel-soft: #eef4f9; --line: #d7e5f0;
+    --ink: #1b2533; --muted: #5b6b7d; --gold: #f2b705; --gold-soft: #fff7dc;
+    --green: #1f9d6b; --green-soft: #e3f5ec; --grey: #a9b6c4; --grey-soft: #f3f6f9;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: 'Inter', Arial, sans-serif; color: var(--ink); font-size: 9.6pt; line-height: 1.45; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  h1, h2, h3 { margin: 0; color: var(--navy); line-height: 1.2; }
+  .page { height: 187mm; display: flex; flex-direction: column; }
+  .page + .page { break-before: page; }
+
+  .top { display: flex; align-items: center; gap: 16px; padding-bottom: 8px; border-bottom: 2px solid var(--navy); }
+  .top img { height: 58px; }
+  .top .kicker { font-size: 8pt; letter-spacing: .14em; text-transform: uppercase; color: var(--steel); font-weight: 700; }
+  .top h1 { font-size: 20pt; font-weight: 800; }
+  .top .date { margin-left: auto; text-align: right; color: var(--muted); font-size: 8.6pt; }
+  .top .date b { display: block; color: var(--navy); font-size: 11pt; }
+
+  .legend { display: flex; gap: 18px; justify-content: center; margin: 6px 0 0; font-size: 8.6pt; color: var(--muted); }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+
+  .map { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .map svg { width: 100%; height: auto; max-height: 134mm; }
+
+  .strip { display: grid; grid-template-columns: 1.1fr 1fr 1fr; gap: 10px; }
+  .box { border-radius: 10px; padding: 9px 12px; border: 1px solid var(--line); }
+  .box h3 { font-size: 9.6pt; margin-bottom: 3px; }
+  .box p { margin: 0; font-size: 8.8pt; color: var(--ink); }
+  .box.done { background: var(--green-soft); border-color: #bfe6d3; }
+  .box.now { background: #e8efff; border-color: #bcd0ff; }
+  .box.need { background: var(--gold-soft); border-color: #f1d98a; }
+
+  /* page 2 */
+  .grid2 { display: grid; grid-template-columns: 1.55fr 1fr; gap: 14px; margin-top: 10px; flex: 1; }
+  table.stages { width: 100%; border-collapse: collapse; font-size: 8.7pt; }
+  table.stages th { text-align: left; font-size: 7.6pt; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 4px 6px; border-bottom: 1.5px solid var(--navy); }
+  table.stages td { padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.stages td.n { width: 22px; }
+  .num { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; font-weight: 700; font-size: 8.5pt; color: #fff; }
+  .num.done { background: var(--green); } .num.now { background: var(--blue); } .num.next { background: var(--grey); }
+  .stname { font-weight: 700; color: var(--navy); }
+  .chip { display: inline-block; font-size: 7.4pt; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 7px; border-radius: 20px; white-space: nowrap; }
+  .chip.done { background: var(--green-soft); color: var(--green); }
+  .chip.now { background: #e8efff; color: var(--blue); }
+  .chip.next { background: var(--grey-soft); color: var(--muted); }
+  .side h2 { font-size: 11.5pt; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  .panel { border-radius: 10px; padding: 10px 13px; margin-bottom: 10px; }
+  .panel.need { background: var(--gold-soft); border: 1.5px solid var(--gold); }
+  .panel.pedro { background: var(--steel-soft); border: 1px solid var(--line); }
+  .check { list-style: none; margin: 0; padding: 0; }
+  .check li { position: relative; padding-left: 21px; margin: 4px 0; font-size: 8.8pt; }
+  .check li::before { content: ''; position: absolute; left: 0; top: 2px; width: 11px; height: 11px; border: 1.5px solid var(--navy); border-radius: 3px; background: #fff; }
+  .check li small { display: block; color: var(--muted); font-size: 8pt; }
+  .arrow li::before { border: none; content: '→'; color: var(--steel); font-weight: 700; top: 0; width: auto; height: auto; background: none; }
+  .foot { margin-top: auto; padding-top: 6px; border-top: 1px solid var(--line); color: var(--muted); font-size: 8pt; display: flex; justify-content: space-between; }
+</style>
+</head>
+<body>
+
+<!-- ============================ PAGE 1 — THE MAP ============================ -->
+<section class="page">
+  <div class="top">
+    <img src="logo.png" alt="Symanek">
+    <div>
+      <div class="kicker">Symanek Suite · Project roadmap</div>
+      <h1>Where we are, and what comes next</h1>
+    </div>
+    <div class="date">Status as of<b>27 September 2026</b></div>
+  </div>
+
+  <div class="legend">
+    <span><i class="dot" style="background:var(--green)"></i>Done</span>
+    <span><i class="dot" style="background:var(--blue)"></i>We are here</span>
+    <span><i class="dot" style="background:#fff;border:2px solid var(--grey)"></i>Still to come</span>
+    <span><i class="dot" style="background:var(--gold)"></i>Waiting for Symanek</span>
+  </div>
+
+  <div class="map">
+    <svg viewBox="0 0 1000 505" xmlns="http://www.w3.org/2000/svg" font-family="Inter, Arial, sans-serif">
+      <defs>
+        <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#0f2740" flood-opacity=".18"/></filter>
+        <linearGradient id="road" x1="0" x2="1"><stop offset="0" stop-color="#1f9d6b"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient>
+      </defs>
+
+      <!-- start / finish flags -->
+      <g transform="translate(14,96)"><rect x="0" y="0" width="3" height="46" fill="#0f2740"/><path d="M3 2 L30 10 L3 18 Z" fill="#1f9d6b"/><text x="-6" y="-8" font-size="11" font-weight="700" fill="#5b6b7d">START</text></g>
+      <g transform="translate(14,316)"><rect x="0" y="0" width="3" height="46" fill="#0f2740"/>
+        <g fill="#0f2740"><rect x="3" y="2" width="7" height="6"/><rect x="17" y="2" width="7" height="6"/><rect x="10" y="8" width="7" height="6"/><rect x="24" y="8" width="4" height="6"/><rect x="3" y="14" width="7" height="6"/><rect x="17" y="14" width="7" height="6"/></g>
+        <rect x="3" y="2" width="25" height="18" fill="none" stroke="#0f2740"/>
+        <text x="-4" y="-8" font-size="11" font-weight="700" fill="#5b6b7d">GOAL</text></g>
+
+      <!-- road: travelled (solid) and ahead (dashed) -->
+      <path d="M 60 140 L 800 140 C 950 140 950 360 800 360 L 770 360" fill="none" stroke="#dfe7ef" stroke-width="30" stroke-linecap="round"/>
+      <path d="M 770 360 L 60 360" fill="none" stroke="#eef2f6" stroke-width="30" stroke-linecap="round"/>
+      <path d="M 60 140 L 800 140 C 950 140 950 360 800 360 L 770 360" fill="none" stroke="url(#road)" stroke-width="8" stroke-linecap="round"/>
+      <path d="M 770 360 L 60 360" fill="none" stroke="#a9b6c4" stroke-width="5" stroke-linecap="round" stroke-dasharray="3 14"/>
+
+      <!-- ===== row 1: stations 1–4 (done) ===== -->
+      <!-- 1 -->
+      <g transform="translate(130,140)">
+        <circle r="30" fill="#1f9d6b" filter="url(#sh)"/>
+        <!-- globe icon -->
+        <g stroke="#fff" stroke-width="2.4" fill="none"><circle r="12"/><ellipse rx="5" ry="12"/><path d="M-12 0 H12"/></g>
+        <circle cx="22" cy="-22" r="10" fill="#fff" stroke="#1f9d6b" stroke-width="2"/><path d="M17 -22 l3.5 3.5 l6 -7" stroke="#1f9d6b" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+        <text y="-44" text-anchor="middle" font-size="11" font-weight="800" fill="#1f9d6b">STAGE 1</text>
+        <text y="56" text-anchor="middle" font-size="13.5" font-weight="700" fill="#0f2740">Public website</text>
+        <text y="73" text-anchor="middle" font-size="11" fill="#5b6b7d">&amp; online applications</text>
+      </g>
+      <!-- 2 -->
+      <g transform="translate(340,140)">
+        <circle r="30" fill="#1f9d6b" filter="url(#sh)"/>
+        <!-- shield/lock icon -->
+        <g stroke="#fff" stroke-width="2.4" fill="none" stroke-linejoin="round"><path d="M0 -14 L11 -9 V1 C11 8 5 12 0 14 C-5 12 -11 8 -11 1 V-9 Z"/><path d="M-4 1 l3 3 l6 -7" stroke-linecap="round"/></g>
+        <circle cx="22" cy="-22" r="10" fill="#fff" stroke="#1f9d6b" stroke-width="2"/><path d="M17 -22 l3.5 3.5 l6 -7" stroke="#1f9d6b" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+        <text y="-44" text-anchor="middle" font-size="11" font-weight="800" fill="#1f9d6b">STAGE 2</text>
+        <text y="56" text-anchor="middle" font-size="13.5" font-weight="700" fill="#0f2740">Secure system</text>
+        <text y="73" text-anchor="middle" font-size="11" fill="#5b6b7d">cloud, logins, access rights</text>
+      </g>
+      <!-- 3 -->
+      <g transform="translate(550,140)">
+        <circle r="30" fill="#1f9d6b" filter="url(#sh)"/>
+        <!-- database icon -->
+        <g stroke="#fff" stroke-width="2.4" fill="none"><ellipse cy="-8" rx="11" ry="4.5"/><path d="M-11 -8 V8 C-11 11 -6 13 0 13 C6 13 11 11 11 8 V-8"/><path d="M-11 0 C-11 3 -6 5 0 5 C6 5 11 3 11 0"/></g>
+        <circle cx="22" cy="-22" r="10" fill="#fff" stroke="#1f9d6b" stroke-width="2"/><path d="M17 -22 l3.5 3.5 l6 -7" stroke="#1f9d6b" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+        <text y="-44" text-anchor="middle" font-size="11" font-weight="800" fill="#1f9d6b">STAGE 3</text>
+        <text y="56" text-anchor="middle" font-size="13.5" font-weight="700" fill="#0f2740">College data loaded</text>
+        <text y="73" text-anchor="middle" font-size="11" fill="#5b6b7d">programmes, modules, people</text>
+      </g>
+      <!-- 4 -->
+      <g transform="translate(760,140)">
+        <circle r="30" fill="#1f9d6b" filter="url(#sh)"/>
+        <!-- book/classroom icon -->
+        <g stroke="#fff" stroke-width="2.4" fill="none" stroke-linejoin="round"><path d="M0 -8 C-4 -12 -9 -12 -13 -11 V10 C-9 9 -4 9 0 12 C4 9 9 9 13 10 V-11 C9 -12 4 -12 0 -8 Z"/><path d="M0 -8 V12"/></g>
+        <circle cx="22" cy="-22" r="10" fill="#fff" stroke="#1f9d6b" stroke-width="2"/><path d="M17 -22 l3.5 3.5 l6 -7" stroke="#1f9d6b" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+        <text y="-44" text-anchor="middle" font-size="11" font-weight="800" fill="#1f9d6b">STAGE 4</text>
+        <text y="56" text-anchor="middle" font-size="13.5" font-weight="700" fill="#0f2740">Classroom tools</text>
+        <text y="73" text-anchor="middle" font-size="11" fill="#5b6b7d">built &amp; fully tested</text>
+      </g>
+
+      <!-- ===== row 2: stations 5–8 ===== -->
+      <!-- 5 — WE ARE HERE -->
+      <g transform="translate(760,360)">
+        <circle r="44" fill="#1d4ed8" opacity=".12"/>
+        <circle r="36" fill="#1d4ed8" opacity=".18"/>
+        <circle r="30" fill="#1d4ed8" filter="url(#sh)"/>
+        <!-- people icon -->
+        <g stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"><circle cx="-6" cy="-6" r="5"/><path d="M-16 11 C-16 3 -11 0 -6 0 C-1 0 4 3 4 11"/><circle cx="9" cy="-4" r="4"/><path d="M6 3 C12 2 16 6 16 11"/></g>
+        <!-- pin -->
+        <g transform="translate(0,-86)">
+          <path d="M0 34 C-6 22 -22 14 -22 0 A22 22 0 0 1 22 0 C22 14 6 22 0 34 Z" fill="#f2b705" stroke="#0f2740" stroke-width="2"/>
+          <circle r="8" fill="#0f2740"/>
+        </g>
+        <rect x="-78" y="-138" width="156" height="26" rx="13" fill="#0f2740"/>
+        <text y="-120" text-anchor="middle" font-size="12" font-weight="800" fill="#fff" letter-spacing="1.2">WE ARE HERE</text>
+        <text y="58" text-anchor="middle" font-size="11" font-weight="800" fill="#1d4ed8">STAGE 5</text>
+        <text y="75" text-anchor="middle" font-size="13.5" font-weight="700" fill="#0f2740">Pilot with one class</text>
+        <text y="91" text-anchor="middle" font-size="11" fill="#5b6b7d">1 lecturer · 3–5 students · 5 days</text>
+        <rect x="-70" y="100" width="140" height="20" rx="10" fill="#fff7dc" stroke="#f2b705"/>
+        <text y="114" text-anchor="middle" font-size="10" font-weight="700" fill="#8a6500">Waiting for your 5 answers</text>
+      </g>
+      <!-- 6 -->
+      <g transform="translate(550,360)">
+        <circle r="30" fill="#fff" stroke="#a9b6c4" stroke-width="3" filter="url(#sh)"/>
+        <!-- rocket icon -->
+        <g stroke="#316591" stroke-width="2.4" fill="none" stroke-linejoin="round"><path d="M0 -15 C7 -9 9 -1 7 8 H-7 C-9 -1 -7 -9 0 -15 Z"/><circle cy="-3" r="3"/><path d="M-7 3 L-12 10 H-7 M7 3 L12 10 H7 M-3 11 L0 16 L3 11"/></g>
+        <text y="-44" text-anchor="middle" font-size="11" font-weight="800" fill="#5b6b7d">STAGE 6</text>
+        <text y="58" text-anchor="middle" font-size="13.5" font-weight="700" fill="#0f2740">Launch to everyone</text>
+        <text y="75" text-anchor="middle" font-size="11" fill="#5b6b7d">all lecturers &amp; students</text>
+        <rect x="-66" y="84" width="132" height="20" rx="10" fill="#fff7dc" stroke="#f2b705"/>
+        <text y="98" text-anchor="middle" font-size="10" font-weight="700" fill="#8a6500">Needs 4 emails + 1 lecturer</text>
+      </g>
+      <!-- 7 -->
+      <g transform="translate(340,360)">
+        <circle r="30" fill="#fff" stroke="#a9b6c4" stroke-width="3" filter="url(#sh)"/>
+        <!-- swap/transfer icon -->
+        <g stroke="#316591" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M-12 -5 H10 M4 -11 L10 -5 L4 1"/><path d="M12 6 H-10 M-4 0 L-10 6 L-4 12"/></g>
+        <text y="-44" text-anchor="middle" font-size="11" font-weight="800" fill="#5b6b7d">STAGE 7</text>
+        <text y="58" text-anchor="middle" font-size="13.5" font-weight="700" fill="#0f2740">Replace EduCIMS</text>
+        <text y="75" text-anchor="middle" font-size="11" fill="#5b6b7d">history, finance, documents</text>
+        <rect x="-66" y="84" width="132" height="20" rx="10" fill="#fff7dc" stroke="#f2b705"/>
+        <text y="98" text-anchor="middle" font-size="10" font-weight="700" fill="#8a6500">Needs export + decisions</text>
+      </g>
+      <!-- 8 -->
+      <g transform="translate(130,360)">
+        <circle r="30" fill="#fff" stroke="#a9b6c4" stroke-width="3" filter="url(#sh)"/>
+        <!-- star/extras icon -->
+        <path d="M0 -14 L4 -4 L14 -4 L6 3 L9 13 L0 7 L-9 13 L-6 3 L-14 -4 L-4 -4 Z" fill="none" stroke="#316591" stroke-width="2.4" stroke-linejoin="round"/>
+        <text y="-44" text-anchor="middle" font-size="11" font-weight="800" fill="#5b6b7d">STAGE 8</text>
+        <text y="58" text-anchor="middle" font-size="13.5" font-weight="700" fill="#0f2740">Extras</text>
+        <text y="75" text-anchor="middle" font-size="11" fill="#5b6b7d">notifications &amp; more modules</text>
+      </g>
+    </svg>
+  </div>
+
+  <div class="strip">
+    <div class="box done"><h3>4 of 8 stages done</h3><p>The website and online applications are live on symanekacademy.com. The Suite is secure, loaded with the college's data, and the lecturer/student tools passed a full end-to-end test.</p></div>
+    <div class="box now"><h3>Now: pilot with one class</h3><p>One lecturer and 3–5 students use the portal for about 5 days, then tell us what to improve. Guide: “Pilot Test Guide” (PDF).</p></div>
+    <div class="box need"><h3>What we need from Symanek</h3><p>The 5 pilot answers · emails of 4 lecturers · who teaches Nutrition &amp; Dietetics · EduCIMS export and decisions · letterhead and signature for official letters.</p></div>
+  </div>
+</section>
+
+<!-- ============================ PAGE 2 — DETAIL ============================ -->
+<section class="page">
+  <div class="top">
+    <img src="logo.png" alt="Symanek">
+    <div>
+      <div class="kicker">Symanek Suite · Project roadmap</div>
+      <h1>Stage by stage</h1>
+    </div>
+    <div class="date">Status as of<b>27 September 2026</b></div>
+  </div>
+
+  <div class="grid2">
+    <table class="stages">
+      <thead><tr><th></th><th>Stage</th><th>What it includes</th><th>Status</th></tr></thead>
+      <tbody>
+        <tr><td class="n"><span class="num done">1</span></td><td class="stname">Public website &amp; online applications</td>
+          <td>New website on symanekacademy.com; online application with documents and school results; approval letter; upload of proof of payment (EFT).</td><td><span class="chip done">Done</span></td></tr>
+        <tr><td class="n"><span class="num done">2</span></td><td class="stname">Secure system</td>
+          <td>Cloud database; personal logins with a forced password change; each role sees only its own area; a lecturer sees only their own modules and students.</td><td><span class="chip done">Done</span></td></tr>
+        <tr><td class="n"><span class="num done">3</span></td><td class="stname">College data loaded</td>
+          <td>Programmes and 173 modules; 117 students; 11 staff; 142 modules already linked to their lecturer.</td><td><span class="chip done">Done</span></td></tr>
+        <tr><td class="n"><span class="num done">4</span></td><td class="stname">Classroom tools</td>
+          <td>Attendance (80% rule), class notices, study materials, assignments with file upload, marks and feedback, questions to the lecturer, provisional marks. Admin: add students and lecturers, give access, enrol a whole class. Tested end to end.</td><td><span class="chip done">Done</span></td></tr>
+        <tr><td class="n"><span class="num now">5</span></td><td class="stname">Pilot with one class</td>
+          <td>1 lecturer, 3–5 students and the school administrator use the Suite for about 5 days and complete a short feedback form.</td><td><span class="chip now">Now</span></td></tr>
+        <tr><td class="n"><span class="num next">6</span></td><td class="stname">Launch to everyone</td>
+          <td>Improvements from the pilot; enrol the 2026 classes on their modules; logins for all lecturers and students.</td><td><span class="chip next">Next</span></td></tr>
+        <tr><td class="n"><span class="num next">7</span></td><td class="stname">Replace EduCIMS</td>
+          <td>Bring over student history and results; office payments, receipts, statements, instalments and memos; assessment rules per module; official PDFs (letters, transcripts, certificates).</td><td><span class="chip next">Later</span></td></tr>
+        <tr><td class="n"><span class="num next">8</span></td><td class="stname">Extras</td>
+          <td>Automatic email / WhatsApp notifications; the optional modules the college chooses (accommodation, library, canteen, HR &amp; payroll, timetables).</td><td><span class="chip next">Later</span></td></tr>
+      </tbody>
+    </table>
+
+    <div class="side">
+      <div class="panel need">
+        <h2>Waiting for Symanek</h2>
+        <ul class="check">
+          <li><b>Pilot answers</b> (5): class &amp; module, lecturer, 3–5 student volunteers, school administrator, real or practice marks.<small>Unlocks stage 5</small></li>
+          <li><b>Emails</b> of Sithembinkosi Moyo, Julia Abel, Josephine Ipinge and Rakkel.<small>Unlocks stage 6</small></li>
+          <li><b>Nutrition &amp; Dietetics lecturer</b> (Certificate L4 and Diploma L5 modules).<small>Unlocks stage 6</small></li>
+          <li><b>EduCIMS export</b> and the <b>5 decisions</b> in our earlier message (marks weighting, payments, documents, emails, extra modules).<small>Unlocks stages 7 and 8</small></li>
+          <li><b>Letterhead, name, title and signature</b> (and stamp) for official letters.<small>Unlocks official PDFs in stage 7</small></li>
+        </ul>
+      </div>
+      <div class="panel pedro">
+        <h2>Pedro's next steps</h2>
+        <ul class="check arrow">
+          <li>Set up the pilot accounts as soon as the answers arrive.</li>
+          <li>Support the pilot and fix what comes up.</li>
+          <li>Open the Suite to all lecturers and students.</li>
+          <li>Build the EduCIMS replacement in order of priority.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="foot"><span>Symanek Specialized College · Symanek Suite — symanek-suite.vercel.app</span><span>Questions: Pedro (WhatsApp)</span></div>
+</section>
+
+</body>
+</html>
