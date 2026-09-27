@@ -6,7 +6,9 @@
 | `2-HOW-TO-ADD-NEW-STUDENTS.txt` | Instruções simples para a escola preencher os alunos novos | ✅ anexar |
 | `NEW-STUDENTS-TEMPLATE.csv` | O modelo que a escola preenche (1 linha por aluno) | ✅ anexar |
 | `PROGRAMME-NAMES.txt` | Os 58 nomes de curso aceites na coluna `programme` | ✅ anexar |
-| `3-PILOT-TEST-GUIDE.txt` | Guião do teste-piloto: o que o admin da escola, a professora e os alunos fazem, dia a dia, + formulário final | ✅ enviar antes do piloto |
+| `4-MESSAGE-PILOT-TEST.txt` | Mensagem a pedir o piloto (5 decisões + emails dos 4 professores + professor de Nutrition) | ✅ copiar e colar (email/WhatsApp) |
+| `3-PILOT-TEST-GUIDE.pdf` | Guião do teste-piloto em PDF (4 págs.) — anexar à mensagem acima | ✅ anexar |
+| `3-PILOT-TEST-GUIDE.txt` | O mesmo guião em texto simples | opcional |
 | `0-LEIA-PRIMEIRO-PEDRO.md` | Este ficheiro | ❌ é só para ti |
 
 ---
