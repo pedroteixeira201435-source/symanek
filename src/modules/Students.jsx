@@ -167,7 +167,7 @@ function StudentForm({ student, programmes, onClose, onSaved, showToast }) {
       <form onSubmit={save}>
         <div className="field"><label>Full name</label><input name="name" defaultValue={student.name || ''} required /></div>
         <div className="grid2" style={{ gap: 12 }}>
-          <div className="field"><label>Student no.</label><input name="student_no" defaultValue={student.id || ''} required /></div>
+          <div className="field"><label>Student no.</label><input name="student_no" defaultValue={student.id || ''} placeholder={student._uuid ? '' : 'Leave empty to generate'} /></div>
           <div className="field"><label>Reference</label><input name="reference" defaultValue={student.reference || student.id || ''} /></div>
         </div>
         <div className="grid2" style={{ gap: 12 }}>
