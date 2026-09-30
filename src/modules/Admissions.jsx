@@ -7,6 +7,28 @@ const STAGE_TONE = { Applied: 'gray', 'Under Review': 'blue', 'Offer Sent': 'amb
 
 const SCHOOL_LEVEL_LABEL = { grade_11_nssco: 'Grade 11 / NSSCO', grade_12_nsscas: 'Grade 12 / NSSCAS', nssc_higher: 'NSSC Higher', other: 'Other / equivalent' }
 const DOC_CATEGORY_LABEL = { identity_document: 'ID / Passport', grade_11_or_12_certificate: 'Grade 11/12 certificate', proof_of_residence: 'Proof of residence', previous_qualification: 'Previous qualification', other: 'Other document' }
+const MODE_LABEL = { full_time: 'Full-time', part_time: 'Part-time', distance: 'Distance' }
+
+// Namibian numbers are often typed as 081...; wa.me needs the country code.
+function waNumber(phone) {
+  const d = String(phone || '').trim().replace(/^[oO]/, '0').replace(/\D/g, '')
+  if (!d) return ''
+  if (d.startsWith('0')) return '264' + d.slice(1)
+  return d.length === 9 ? '264' + d : d
+}
+
+function csvCell(v) { return '"' + String(v ?? '').replace(/"/g, '""') + '"' }
+
+function exportContacts(apps, progName) {
+  const rows = [['Reference', 'Name', 'Phone', 'Email', 'Programme', 'Stage', 'Applied']]
+    .concat(apps.map((a) => [a.id, a.name, a.phone, a.email, progName(a.prog), a.stage, a.applied]))
+  const blob = new Blob([rows.map((r) => r.map(csvCell).join(',')).join('\r\n')], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url; link.download = `applicants-contacts-${new Date().toISOString().slice(0, 10)}.csv`
+  link.click(); URL.revokeObjectURL(url)
+}
+
 const DOC_STATUS_TONE = { submitted: 'gray', verified: 'green', rejected: 'red', needs_resubmission: 'amber' }
 
 function ApplicantReview({ app, reload, showToast }) {
@@ -24,8 +46,13 @@ function ApplicantReview({ app, reload, showToast }) {
     try { await setApplicationDocumentStatus(id, status); await reload(); showToast(`Document marked ${status.replace('_', ' ')}`) }
     catch (err) { showToast('Could not update document: ' + (err?.message || err)) }
   }
+  const wa = waNumber(app.phone)
   return (
     <div style={{ marginTop: 14 }}>
+      <div className="cf-row"><span>Phone</span><span>{app.phone ? <><a href={`tel:${app.phone}`}>{app.phone}</a>{wa && <> · <a href={`https://wa.me/${wa}`} target="_blank" rel="noopener noreferrer">WhatsApp</a></>}</> : '—'}</span></div>
+      <div className="cf-row"><span>Email</span><span>{app.email ? <a href={`mailto:${app.email}`}>{app.email}</a> : '—'}</span></div>
+      <div className="cf-row"><span>Study mode</span><span>{MODE_LABEL[app.mode] || app.mode || '—'}{app.intake ? ` · ${app.intake[0].toUpperCase()}${app.intake.slice(1)} intake` : ''}</span></div>
+      {app.message ? <div className="cf-row"><span>Message</span><span style={{ whiteSpace: 'pre-wrap', textAlign: 'right' }}>{app.message}</span></div> : null}
       <div className="cf-row"><span>School level</span><span>{SCHOOL_LEVEL_LABEL[academic.level] || academic.level || '—'}</span></div>
       <div className="cf-row"><span>School</span><span>{academic.school || '—'}{academic.year ? ` · ${academic.year}` : ''}</span></div>
       <div className="cf-row"><span>English symbol</span><span className="mono">{academic.englishSymbol || '—'}</span></div>
@@ -69,8 +96,10 @@ export default function Admissions({ go }) {
   const [apps, setApps] = useState([])
   const [programmes, setProgrammes] = useState([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
   const reload = useCallback(() => Promise.all([
-    listApplicants().then(setApps).catch(() => setApps([])),
+    listApplicants().then((rows) => { setApps(rows); setLoadError('') })
+      .catch((err) => { setApps([]); setLoadError(err?.message || String(err)) }),
     listProgrammes().then(setProgrammes).catch(() => setProgrammes([])),
   ]), [])
   useEffect(() => { reload().finally(() => setLoading(false)) }, [reload])
@@ -80,6 +109,11 @@ export default function Admissions({ go }) {
   return (
     <>
       <Tabs tabs={['Pipeline', 'Manual Admission', '2027 Intake']} active={tab} onChange={setTab} />
+      {loadError && (
+        <div style={{ margin: '0 0 12px', padding: '8px 12px', borderRadius: 8, background: 'var(--warn-soft, #fef3c7)', color: '#92400e', fontSize: 13 }}>
+          Could not load applications: {loadError}. Please sign out and sign in again; if it persists, send Pedro a screenshot.
+        </div>
+      )}
       {tab === 'Pipeline' && <Pipeline {...ctx} />}
       {tab === 'Manual Admission' && <ManualAdmission {...ctx} />}
       {tab === '2027 Intake' && <Intake apps={apps} programmes={programmes} progName={progName} />}
@@ -109,11 +143,13 @@ function ManualAdmission({ apps, progName, loading, go, reload }) {
   if (loading) return <Panel title="All applications" flush><Empty>Loading...</Empty></Panel>
   return (
     <>
-      <Panel title="All applications" subtitle={`${apps.length} applications`} flush>
+      <Panel title="All applications" subtitle={`${apps.length} applications`} flush
+        actions={apps.length > 0 && <button className="btn ghost sm" onClick={() => exportContacts(apps, progName)}>Export contacts (CSV)</button>}>
         {apps.length === 0 ? <Empty>No applications yet.</Empty> : (
-          <table className="data"><thead><tr><th>Applicant</th><th>ID</th><th>Programme</th><th className="num">Points</th><th>Status</th><th>Action</th></tr></thead>
+          <table className="data"><thead><tr><th>Applicant</th><th>Contact</th><th>ID</th><th>Programme</th><th className="num">Points</th><th>Status</th><th>Action</th></tr></thead>
             <tbody>{apps.map((a) => <tr key={a.id}>
               <td><div className="emp-cell"><Avatar name={a.name} size={26} /><span className="en">{a.name}</span></div></td>
+              <td>{a.phone ? <a href={`tel:${a.phone}`} className="mono">{a.phone}</a> : '—'}{a.email ? <div className="di-sub">{a.email}</div> : null}</td>
               <td className="mono">{a.id}</td><td>{progName(a.prog)}</td><td className="num">{a.points || '-'}</td>
               <td><Badge tone={STAGE_TONE[a.stage] || 'gray'}>{a.stage}</Badge></td>
               <td>{a.stage === 'Enrolled' ? <button className="btn ghost sm" onClick={() => go && go('students', a.name)}>View student</button> : <button className="btn primary sm" onClick={() => setSel(a)}>Process</button>}</td>
@@ -174,7 +210,7 @@ function Pipeline({ apps, progName, loading, reload }) {
             <div className="pipe-col-head"><Badge tone={STAGE_TONE[stage]}>{stage}</Badge><span className="mono">{col.length}</span></div>
             {col.length === 0 && <div className="pipe-empty">No applicants</div>}
             {col.map((a) => <div key={a.id} className="pipe-card" onClick={() => setSel(a)}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Avatar name={a.name} size={28} /><div><div style={{ fontWeight: 600, fontSize: 13 }}>{a.name}</div><div className="di-sub">{a.id} · {progName(a.prog)}</div></div></div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Avatar name={a.name} size={28} /><div><div style={{ fontWeight: 600, fontSize: 13 }}>{a.name}</div><div className="di-sub">{a.id} · {progName(a.prog)}</div>{a.phone ? <div className="di-sub mono">{a.phone}</div> : null}</div></div>
             </div>)}
           </div>
         })}

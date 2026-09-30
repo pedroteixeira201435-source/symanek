@@ -366,7 +366,7 @@ const APP_STAGE_LABEL = {
 export async function listApplicants() {
   if (useHttp()) {
     const { data, error } = await supabase.from('applications')
-      .select('id,reference,full_name,programme_slug,stage,amount_due,created_at,highest_school_level,school_name,year_completed,english_symbol,application_documents(id,category,file_name,file_type,file_size,storage_path,status,review_note),application_academic_results(subject,level,symbol,is_english)')
+      .select('id,reference,full_name,email,phone,mode,intake,message,programme_slug,stage,amount_due,created_at,highest_school_level,school_name,year_completed,english_symbol,application_documents(id,category,file_name,file_type,file_size,storage_path,status,review_note),application_academic_results(subject,level,symbol,is_english)')
       .order('created_at', { ascending: false })
     if (error) throw error
     return (data ?? []).map((a) => {
@@ -377,6 +377,8 @@ export async function listApplicants() {
         !documents.some((d) => d.status === 'rejected')
       return {
         id: a.reference || a.id, _uuid: a.id, name: a.full_name,
+        email: a.email || '', phone: a.phone || '',
+        mode: a.mode || null, intake: a.intake || null, message: a.message || '',
         prog: (a.programme_slug || '').toUpperCase(), points: 0,
         stage: APP_STAGE_LABEL[a.stage] || a.stage,
         amountDue: Number(a.amount_due || 0),
