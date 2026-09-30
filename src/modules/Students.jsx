@@ -86,7 +86,7 @@ function Student360({ student, students, programmes, onSelect, reload }) {
     <>
       <Panel title="Student 360" subtitle="Select a student to inspect their file">
         <div className="field" style={{ maxWidth: 380 }}><label>Student</label><select value={student?._uuid || ''} onChange={(e) => onSelect(students.find((s) => (s._uuid || s.id) === e.target.value) || null)}><option value="">Select student</option>{students.map((s) => <option key={s._uuid || s.id} value={s._uuid || s.id}>{s.name}</option>)}</select></div>
-        {!student ? <Empty>No student selected.</Empty> : <><StudentSummary student={student} /><div style={{ display: 'flex', gap: 8, marginTop: 12 }}><button className="btn ghost sm" onClick={() => setEditing(true)}>Edit student</button><button className="btn primary sm" disabled={granting} onClick={grant}>{granting ? 'Granting…' : 'Grant portal access'}</button></div></>}
+        {!student ? <Empty>No student selected.</Empty> : <><StudentSummary student={student} /><div style={{ display: 'flex', gap: 8, marginTop: 12 }}><button className="btn ghost sm" onClick={() => setEditing(true)}>Edit student</button><button className="btn primary sm" disabled={granting} onClick={() => grant()}>{granting ? 'Granting…' : 'Grant portal access'}</button></div></>}
       </Panel>
       {editing && <StudentForm student={student} programmes={programmes} onClose={() => setEditing(false)} onSaved={async () => { setEditing(false); await reload(); showToast('Student saved') }} showToast={showToast} />}
       {granted && <PortalCredentials data={granted} onClose={() => setGranted(null)} showToast={showToast} />}
