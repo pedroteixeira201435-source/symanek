@@ -102,6 +102,15 @@ begin
   -- submit as anon
   v_app := (public.submit_application('Test Applicant','tester@example.com','0810000000', v_slug, 'full_time', null));
   perform pg_temp.ok(v_app is not null, 'submit_application (anon) creates an application');
+  -- approve_application requires the academic background + ID and Grade 11/12
+  -- documents (20260914120000); the public form collects them after submitting.
+  update public.applications
+     set highest_school_level = 'grade_12_nsscas', school_name = 'Test Secondary School',
+         year_completed = 2024, english_symbol = 'C'
+   where id = v_app;
+  insert into public.application_documents (application_id, category, file_name, storage_path)
+  values (v_app, 'identity_document', 'id.pdf', 'test/' || v_app || '/id.pdf'),
+         (v_app, 'grade_11_or_12_certificate', 'grade12.pdf', 'test/' || v_app || '/grade12.pdf');
 
   -- approve as admin
   perform set_config('request.jwt.claims',
