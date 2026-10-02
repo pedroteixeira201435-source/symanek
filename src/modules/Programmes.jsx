@@ -364,27 +364,28 @@ function ModuleAllocation() {
   )
 }
 
-// Cohort enrolment: put every enrolled student of an intake on their
-// programme's modules (Bachelor "Y1/Y2…" modules follow the student's year).
+// Cohort enrolment: register every enrolled student of an intake on their
+// programme's modules for ONE semester (+ year-long modules); Bachelor "Y1/Y2…"
+// modules follow the student's year. Students only see their latest semester.
 // Preview first; running it twice never duplicates. No fees are charged here.
 function CohortEnrolment() {
   const [toast, showToast] = useToast()
   const [cohorts, setCohorts] = useState([])
   const [loading, setLoading] = useState(true)
-  const [preview, setPreview] = useState(null) // { cohort, res }
+  const [preview, setPreview] = useState(null) // { cohort, semester, res }
   const [busy, setBusy] = useState(false)
   const reload = useCallback(() => listEnrolmentCohorts().then(setCohorts).catch((e) => { setCohorts([]); showToast('Could not load cohorts: ' + (e?.message || e)) }), [])
   useEffect(() => { reload().finally(() => setLoading(false)) }, [reload])
 
   const args = (c) => ({ programmeId: c.programme_id, academicYear: c.academic_year, intake: c.intake })
-  const doPreview = async (c) => {
-    try { setPreview({ cohort: c, res: await enrolCohort({ ...args(c), dryRun: true }) }) }
+  const doPreview = async (c, semester = 1) => {
+    try { setPreview({ cohort: c, semester, res: await enrolCohort({ ...args(c), semester, dryRun: true }) }) }
     catch (e) { showToast('Could not preview: ' + (e?.message || e)) }
   }
   const run = async () => {
     setBusy(true)
     try {
-      const res = await enrolCohort({ ...args(preview.cohort), dryRun: false })
+      const res = await enrolCohort({ ...args(preview.cohort), semester: preview.semester, dryRun: false })
       showToast(`Enrolled: ${res?.created ?? 0} new module registrations`); setPreview(null); await reload()
     } catch (e) { showToast('Could not enrol: ' + (e?.message || e)) }
     finally { setBusy(false) }
@@ -394,15 +395,15 @@ function CohortEnrolment() {
   if (loading) return <Panel title="Cohort enrolment" flush><Empty>Loading...</Empty></Panel>
   return (
     <>
-      <div className="note-banner"><Icon name="info" size={16} /><div>Enrols every <strong>enrolled</strong> student of a cohort on the modules of their programme, so lecturers see them in their registers and students see their modules. Bachelor modules follow the student's year of study. Safe to run again — nothing is duplicated and no fees are charged.</div></div>
+      <div className="note-banner"><Icon name="info" size={16} /><div>Registers every <strong>enrolled</strong> student of a cohort on the modules of their programme for <strong>one semester</strong> (year-long modules are included in both). Bachelor modules follow the student's year of study. Students see only their latest semester; earlier ones stay in their history. To add or remove a module for one student, use <strong>Students → Student 360</strong>. Safe to run again — nothing is duplicated and no fees are charged.</div></div>
       <Panel title="Cohorts" subtitle={`${cohorts.length} cohorts with enrolled students`} flush>
         {cohorts.length === 0 ? <Empty>No cohorts found.</Empty> : (
-          <table className="data"><thead><tr><th>Cohort</th><th className="num">Students</th><th className="num">Modules</th><th className="num">Registrations</th><th></th></tr></thead>
+          <table className="data"><thead><tr><th>Cohort</th><th className="num">Students</th><th className="num">Modules</th><th className="num">Semester 1</th><th className="num">Semester 2</th><th></th></tr></thead>
             <tbody>{cohorts.map((c) => (
               <tr key={`${c.programme_id}-${c.academic_year}-${c.intake}`}>
                 <td style={{ fontWeight: 600 }}>{label(c)}</td>
                 <td className="num">{c.students}</td><td className="num">{c.modules}</td>
-                <td className="num">{Number(c.enrolments) > 0 ? <Badge tone="green">{c.enrolments}</Badge> : <Badge tone="gray">0</Badge>}</td>
+                {[c.s1_enrolments, c.s2_enrolments].map((n, i) => <td key={i} className="num">{Number(n) > 0 ? <Badge tone="green">{n}</Badge> : <Badge tone="gray">0</Badge>}</td>)}
                 <td style={{ textAlign: 'right' }}><button className="btn ghost sm" onClick={() => doPreview(c)} disabled={!c.intake || !c.academic_year} title={!c.intake || !c.academic_year ? 'Set the intake and academic year on these students first' : ''}>Enrol…</button></td>
               </tr>
             ))}</tbody>
@@ -410,12 +411,17 @@ function CohortEnrolment() {
         )}
       </Panel>
       {preview && <Modal title={`Enrol — ${label(preview.cohort)}`} onClose={() => setPreview(null)}>
+        <div className="field"><label>Semester</label>
+          <select value={preview.semester} onChange={(e) => doPreview(preview.cohort, Number(e.target.value))}>
+            <option value={1}>Semester 1</option><option value={2}>Semester 2</option>
+          </select>
+        </div>
         <div className="cf-row"><span>Students</span><strong>{preview.res?.students ?? 0}</strong></div>
         <div className="cf-row"><span>Modules</span><strong>{preview.res?.courses ?? 0}</strong></div>
         <div className="cf-row"><span>Already registered</span><strong>{preview.res?.already ?? 0}</strong></div>
         <div className="cf-row"><span>New registrations</span><strong>{(preview.res?.pairs ?? 0) - (preview.res?.already ?? 0)}</strong></div>
         <div style={{ marginTop: 16 }}>
-          <button className="btn primary" onClick={run} disabled={busy || (preview.res?.pairs ?? 0) - (preview.res?.already ?? 0) <= 0}>{busy ? 'Enrolling…' : 'Confirm enrolment'}</button>
+          <button className="btn primary" onClick={run} disabled={busy || (preview.res?.pairs ?? 0) - (preview.res?.already ?? 0) <= 0}>{busy ? 'Enrolling…' : `Register for semester ${preview.semester}`}</button>
         </div>
       </Modal>}
       <Toast msg={toast} />

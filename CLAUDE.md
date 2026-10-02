@@ -21,7 +21,7 @@ A **monorepo for Symanek Specialized College** (private Namibian higher-ed) with
 
 > **Mock-elimination / "empty-by-default" pass — DONE (2026-08-24).** Production carries ZERO mock data:
 > every module reads/writes the real backend, starting empty and populated through CRUD forms. All the
-> migrations below are **APPLIED to the cloud** (tracker in sync through `20260824234000`).
+> migrations below are **APPLIED to the cloud** (tracker in sync through `20260928130000`).
 > - **`src/data.js` is DELETED.** Import formatting/logic from `src/lib/*`: `format.js` (`fmtN`,
 >   `staffEmail`), `academics.js` (`gradeOf`, editable grade bands via `setGradeBands`), `institution.js`
 >   (`SCHOOL`, `INSTITUTION_HIDE`, `getInstType`). Never reference `data.js` — it no longer exists.
@@ -43,7 +43,8 @@ A **monorepo for Symanek Specialized College** (private Namibian higher-ed) with
 >   PAYE/SSC/VET, VAT, currency) via `get_business_settings()` / `set_business_setting()`; `App.jsx` mirrors
 >   the bands via `setGradeBands()` at boot. Edit in Settings → Business rules.
 > - **`20260824130000_purge_demo_slice.sql`** (applied) deleted the Gabriel !Naruseb / `suite-demo` slice
->   from the cloud. `supabase/seed_golive_enrolments.sql` enrols the 24 real Aux-Nursing students.
+>   from the cloud. `supabase/seed_golive_enrolments.sql` exists but was **not** applied (cloud had 0
+>   enrolments on 2026-09-27) — enrol classes with **Programmes → Cohort Enrolment** (`enrol_cohort`) instead.
 > - **`src/api.js`** has one function per dataset. In **http** they hit the RPC; in **mock** they return
 >   `[]`/`null` (no fabricated data reaches production). Helpers `rows()/one()/call()` wrap the CRUD RPCs.
 > - **All modules migrated** to `useEffect`+`api` with loading/empty-states and Add/Edit/Delete `Modal`
@@ -81,9 +82,11 @@ node supabase/import/import_students.mjs --dry-run --file supabase/import/entrad
 set -a; . ./.env.codex-handoff; set +a
 node supabase/import/import_students.mjs --file supabase/import/entrada/<file>.csv [--no-login]
 
-# Vercel (both apps already deployed; redeploy from the app's dir)
-cd site-publico && npx --yes vercel --prod --token "$VERCEL_TOKEN"   # public site
-npx --yes vercel --prod --token "$VERCEL_TOKEN"                      # Suite (from repo root)
+# Vercel — Suite, from the repo root, using the CLI's own login (`npx vercel login`).
+# Do NOT source .env.codex-handoff first: its VERCEL_TOKEN lost access to the team scope
+# (2026-09-27), and its VERCEL_ORG_ID without VERCEL_PROJECT_ID makes the CLI abort.
+npx --yes vercel --prod --yes
+# confirm the new bundle is live: grep the served /assets/index-*.js for a new identifier
 ```
 
 - The repo path contains a space (`…/symanek college`) — **quote it** in every shell command.
@@ -122,8 +125,11 @@ Reference examples: `Graduation.jsx`, `Library.jsx`, `Accounting.jsx`, `Accommod
     table):** create the user natively in **Supabase → Authentication → Add user** (Auto Confirm); a
     trigger mints an **empty** profile (no access). Then set **`profiles.suite_role`** in the Table
     Editor — a trigger derives `role` from it (`admin`→admin, the staff roles→staff). **Only ever edit
-    `suite_role`, never `role`.** Students/staff are usually provisioned instead via the Suite's "Grant
-    portal access"/"Grant staff access" (the edge functions above). `is_admin()` = `role in (admin,staff)`.
+    `suite_role`, never `role`.** Students/staff are usually provisioned instead via the Suite:
+    **Students → Student 360 → "Grant portal access"** and **Programmes → Lecturers → "Grant Suite access"**
+    (the edge functions below). A login created outside these paths is **not linked** to its
+    `students`/`staff` row (`user_id` null) — a lecturer then sees no modules, and "Grant" refuses with
+    "already registered". `is_admin()` = `role in (admin,staff)`.
   - **Gotcha (fixed): the login role-check must filter to the caller's own profile row.** RLS is
     `profiles: id = auth.uid() OR is_admin()`, so an admin can read *every* profile — an unfiltered
     `.select('role').maybeSingle()` returns multiple rows once a 2nd admin exists and wrongly rejects the
@@ -152,6 +158,48 @@ Reference examples: `Graduation.jsx`, `Library.jsx`, `Accounting.jsx`, `Accommod
   applied directly, NOT in the migration chain), `seed_auth.sh` (9 demo accounts, password `symanek123`).
   `db push` does NOT run seed files — they are bundled into a migration for cloud, or applied directly.
 
+### Classroom loop: lecturer ↔ student (`20260927120000`, `20260928120000`, `20260928130000`, `20261002120000`)
+
+- **Lecturer scoping is server-side.** `my_staff_id()` = the `staff` row whose `user_id = auth.uid()`;
+  `can_teach(course)` = registrar/admin, or `courses.lecturer_staff_id = my_staff_id()`. Every lecturer RPC
+  (`course_marksheet`, `save_course_marks`, `publish_course_results`, `record_attendance_session`,
+  `course_attendance`, `grade_submission`, `courseware_*`, `assignment_*`, `submissions_list`, `reply_query`)
+  and the RLS on `results` (writes: registrar only), `attendance`, `assignments`, `submissions`,
+  `courseware`, `queries`, `announcements` use it. `is_admin()` alone is **not** enough for new
+  course-level features — gate them with `can_teach`. Student side: `my_student_id()`, `is_enrolled(course)`.
+- **Enrolment = `enrolments` rows, one per student + module + academic year** (unique index
+  `enrolments_student_course_year_uq`; `20261002120000`). Each row carries `academic_year`, `intake` and
+  `semester_no` (1 | 2 | null = year-long). A BEFORE INSERT trigger fills them from the course label
+  (`course_semester_no('Y2 S1') = 1`, `'S1&S2'` → null) and from the student, so every insert path agrees.
+  - Whole class: `enrol_cohort(programme, academic_year, intake, semester, dry_run)` (UI: Programmes →
+    Cohort Enrolment, preview with a semester picker; registrar/admin). A cohort is
+    `students.programme_id + academic_year + intake` (status `enrolled`). It registers that semester's
+    modules plus the year-long ones; programmes whose labels start `Y1 …/Y2 …` also filter by the
+    student's `year`. No charge (fees stay on invoices).
+  - One student: `student_enrolments`, `enrol_student_module` (re-activates a dropped row) and
+    `drop_enrolment` (refused once results are published). UI: Students → Student 360 → Modules.
+  - **The student sees only the current period**: `student_courses()` returns their latest academic year
+    and, within it, their latest `semester_no` (plus year-long modules); `student_courses(true)` is the
+    history. So registering semester 2 is what moves a class on: semester 1 drops out of My Studies,
+    Ask Lecturer and Courseware. `is_enrolled()` (file/announcement access) still covers every period.
+- **Who teaches what** = `courses.lecturer_staff_id`, one lecturer per module (no co-teaching or per-intake
+  split). Set in Programmes → Lecturers (allocation table) or Add course. `my_courses()` feeds the
+  Lecturer Portal and Courseware; `student_courses()` feeds My Studies, Ask Lecturer and Courseware.
+- **Attendance is per module**: `attendance_pct(student, course)`, `exam_admission_ok_course` (80%);
+  `record_attendance_session(code, present[], date, hours)` replaces that day's register. The older
+  per-student `attendance_summary` / `exam_admission_ok(student)` still exist (overall %).
+- **Announcements** may carry `course_id`: lecturers can only post to modules they teach (a school-wide
+  post needs registrar/admin); students read general posts plus those of modules they're enrolled on.
+- **LMS**: the cloud `assignments`/`submissions` are the **2026-07-14 shape** (`due`, `max_marks`,
+  `file_url`) plus the columns added in `20260928120000` (`description`, `file_path`, `submitted_at`,
+  `note`, `feedback`, `graded_*`). The `20260729120000` `create table if not exists` definitions (`code`,
+  `due_date`, `points`) were **never applied** — don't write against them. Students may resubmit until graded;
+  `grade_submission` enforces `0..max_marks`.
+- **Files**: private bucket `course-files` (25 MB). Access is decided by the path in `course_file_access()`:
+  `materials/<course_id>/…` and `assignments/<course_id>/…` (lecturer writes; enrolled students read),
+  `submissions/<assignment_id>/<student_id>/…` (that student writes; the module's lecturer reads). Clients
+  upload with `api.uploadCourseFile(prefix, file)` and open with `api.courseFileUrl(path)` (signed URL).
+
 ### Public-site server routes (Next, `nodejs` runtime, service-role)
 
 - `app/api/letter/route.ts` — lazily generates the approval-letter PDF (`lib/letter.ts`, `pdf-lib`) into
@@ -173,7 +221,9 @@ Reference examples: `Graduation.jsx`, `Library.jsx`, `Accounting.jsx`, `Accommod
   `{ reset: true }` to reissue a lost password for an already-linked student (returns code
   `already_granted` otherwise so the UI can offer a confirm-to-reset). Both re-flag
   `must_reset_password`, so the student/staff must choose a new password on first sign-in
-  (`App.jsx` → `ForcePasswordChange`).
+  (`App.jsx` → `ForcePasswordChange`). `grant-staff-access` takes `{ staff_id, suite_role }` to grant and
+  `{ staff_id, action: 'revoke' }` to remove the login (keeps the `staff` row) — any other `action`
+  falls through to the grant path and fails with `invalid suite_role`.
 - **These functions do their own admin check + CORS, so their `verify_jwt` is effectively bypassed for
   the browser preflight.** Their `Access-Control-Allow-Headers` MUST include `x-client-info` and `apikey`
   (supabase-js sends both on `invoke()`); if not, the browser preflight fails and the call dies with
@@ -231,10 +281,11 @@ reuse these; every flow is table/row → `Modal` → state → toast.
     A **production build defaults to `http`** (`config.js`: `API_MODE = VITE_API_MODE || (PROD ? 'http' : 'mock')`)
     with real `EmailLogin` + cloud data — **no Vercel env vars needed** (`supabaseClient.js` has a baked cloud
     fallback). `PRODUCTION_CORE_MODULES` (`config.js`) gates the http nav to the day-one academic core
-    (dashboard/students/academics/admissions/programmes/exams/graduation/finance/teacher/portal); other
+    (dashboard/students/academics/admissions/programmes/exams/graduation/finance/teacher/portal/lms); other
     modules stay hidden until their own UAT. Local `dev` still defaults to `mock` (role-picker).
-- **Vercel CLI works here** (`npx --yes vercel …`, v56): `vercel link --yes --project NAME`,
-  `printf '%s' VALUE | vercel env add NAME production`, `vercel --prod --yes` (all need `--token` or `VERCEL_TOKEN`).
+- **Vercel CLI works here** (`npx --yes vercel …`): `vercel link --yes --project NAME`,
+  `printf '%s' VALUE | vercel env add NAME production`, `vercel --prod --yes` (authenticated by the CLI
+  login; see Commands).
   Both apps build clean on Vercel's Node 20. UAT test scripts + staff runbook are in `UAT-GUIA.md`.
   Deploy runbook is in `PRODUCTION-OPERATIONS.md`. **Neither project auto-deploys from Git — deploy via
   CLI.** Repo root `.vercel` is linked to `symanek-suite`, so `vercel --prod` from the root deploys the
@@ -274,7 +325,23 @@ reuse these; every flow is table/row → `Modal` → state → toast.
 - In Next route handlers on Node 18 the **`File` global is undefined** — duck-type on `Blob`.
 - `supabase db push` connects to cloud via the access token (no DB password needed); a `pg-delta`
   certificate warning is **non-fatal** — the migration still applies. Changing an RPC's return type needs
-  `drop function` first (a bare `create or replace` errors).
+  `drop function` first (a bare `create or replace` errors). **Adding a parameter creates an overload**:
+  `drop function` the old signature in the same migration, or calls become ambiguous when the new
+  parameter has a default (done for `student_upsert`, `submit_assignment`, `courseware_upsert`,
+  `record_attendance_session`). If `db push` lists old migrations that already exist in the DB
+  (applied out of band), `npx supabase migration repair --status applied <version>` them. Don't re-run them.
+- **Test a migration before pushing** in a throwaway container: `docker run -d --name symtest -e
+  POSTGRES_PASSWORD=postgres public.ecr.aws/supabase/postgres:17.6.1.167`, create stub
+  `storage.buckets`/`storage.objects`/`storage.foldername()` **as `supabase_admin`** (the image's
+  `postgres` role can't touch the `storage` schema), then pipe every `supabase/migrations/*.sql` in order
+  with `psql -v ON_ERROR_STOP=1`. To act as a user: `set_config('request.jwt.claims', '{"sub":…}')` **and**
+  `set_config('request.jwt.claim.sub', …)` (both), then `set role authenticated`. Don't call a volatile
+  RPC inside a `WHERE` over an empty table — it never runs.
+- **Production end-to-end checks** are done with `fetch` from Node (not supabase-js): create throwaway
+  `@symanek.test` users via the GoTrue admin API with the service role, sign in with
+  `/auth/v1/token?grant_type=password` using the Suite's publishable key (`src/supabaseClient.js`), call
+  RPCs and the `grant-*` edge functions with the user's JWT, and delete everything in a `finally`. Then
+  verify that nothing was left behind.
 - **Applying SQL/DDL to cloud — simplest path is the Management API** (used 2026-08-24, no DB password):
   `POST https://api.supabase.com/v1/projects/<ref>/database/query` with `Authorization: Bearer <token>`
   (a personal `sbp_…` access token) and body `{"query":"<sql>"}`. Runs as postgres, returns `[]` on DDL

@@ -2,7 +2,10 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { StatCard, Tabs, Panel, Badge, Modal, Avatar, Toast, useToast } from '../ui.jsx'
 import { fmtN } from '../lib/format.js'
 import { gradeOf, evaluateResult } from '../lib/academics.js'
-import { getInstitution, listProgrammes, listStudents, listInvoices, getResultsForStudent, getHoldsForStudent, grantStudentAccess, studentUpsert } from '../api.js'
+import {
+  getInstitution, listProgrammes, listStudents, listInvoices, getResultsForStudent, getHoldsForStudent, grantStudentAccess, studentUpsert,
+  listStudentEnrolments, listProgrammeCourses, enrolStudentModule, dropEnrolment, periodLabel,
+} from '../api.js'
 
 export default function Students({ focus }) {
   const [tab, setTab] = useState('Register')
@@ -88,9 +91,88 @@ function Student360({ student, students, programmes, onSelect, reload }) {
         <div className="field" style={{ maxWidth: 380 }}><label>Student</label><select value={student?._uuid || ''} onChange={(e) => onSelect(students.find((s) => (s._uuid || s.id) === e.target.value) || null)}><option value="">Select student</option>{students.map((s) => <option key={s._uuid || s.id} value={s._uuid || s.id}>{s.name}</option>)}</select></div>
         {!student ? <Empty>No student selected.</Empty> : <><StudentSummary student={student} /><div style={{ display: 'flex', gap: 8, marginTop: 12 }}><button className="btn ghost sm" onClick={() => setEditing(true)}>Edit student</button><button className="btn primary sm" disabled={granting} onClick={() => grant()}>{granting ? 'Granting…' : 'Grant portal access'}</button></div></>}
       </Panel>
+      {student?._uuid && <StudentModules key={student._uuid} student={student} showToast={showToast} />}
       {editing && <StudentForm student={student} programmes={programmes} onClose={() => setEditing(false)} onSaved={async () => { setEditing(false); await reload(); showToast('Student saved') }} showToast={showToast} />}
       {granted && <PortalCredentials data={granted} onClose={() => setGranted(null)} showToast={showToast} />}
       <Toast msg={toast} />
+    </>
+  )
+}
+
+// The student's module registrations per academic year / semester / intake.
+// The portal shows the student only their latest semester, so registering
+// next semester's modules here is what moves them on.
+function StudentModules({ student, showToast }) {
+  const [regs, setRegs] = useState(null)
+  const [courses, setCourses] = useState([])
+  const [adding, setAdding] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const reload = useCallback(() => listStudentEnrolments(student._uuid).then(setRegs).catch((e) => { setRegs([]); showToast('Could not load modules: ' + (e?.message || e)) }), [student._uuid])
+  useEffect(() => { reload() }, [reload])
+  useEffect(() => { listProgrammeCourses(student.programmeId).then(setCourses).catch(() => setCourses([])) }, [student.programmeId])
+
+  const add = async (e) => {
+    e.preventDefault(); const f = e.target
+    setBusy(true)
+    try {
+      const res = await enrolStudentModule({
+        studentId: student._uuid, courseId: f.course.value, academicYear: Number(f.academic_year.value),
+        semester: f.semester.value ? Number(f.semester.value) : null, intake: f.intake.value || null,
+      })
+      setAdding(false); await reload(); showToast(`${res?.code || 'Module'} ${res?.reactivated ? 're-registered' : 'registered'}`)
+    } catch (err) { showToast('Could not register: ' + (err?.message || err)) }
+    finally { setBusy(false) }
+  }
+  const drop = async (r) => {
+    if (!window.confirm(`Remove ${r.code} (${periodLabel(r)}) from ${student.name}?`)) return
+    try { await dropEnrolment(r.id); await reload(); showToast(`${r.code} removed`) }
+    catch (err) { showToast('Could not remove: ' + (err?.message || err)) }
+  }
+
+  // group by period, newest first (the server already orders the rows)
+  const groups = []
+  for (const r of (regs || []).filter((x) => x.status !== 'dropped')) {
+    const key = `${r.academicYear}-${r.semesterNo ?? 0}-${r.intake ?? ''}`
+    const g = groups.find((x) => x.key === key)
+    if (g) g.rows.push(r); else groups.push({ key, label: periodLabel(r) || 'No period', rows: [r] })
+  }
+  const thisYear = new Date().getFullYear()
+  return (
+    <>
+      <Panel title="Modules" subtitle="Registrations per academic year, semester and intake. The student sees only their latest semester."
+        actions={<button className="btn primary sm" disabled={!student.programmeId} title={student.programmeId ? '' : 'Set the programme first'} onClick={() => setAdding(true)}>+ Register module</button>} flush>
+        {regs === null ? <Empty>Loading...</Empty> : groups.length === 0 ? <Empty>No modules registered yet.</Empty> : groups.map((g) => (
+          <div key={g.key}>
+            <div style={{ fontWeight: 600, padding: '10px 12px 4px' }}>{g.label}</div>
+            <table className="data"><thead><tr><th>Module</th><th className="num">Credits</th><th>Status</th><th></th></tr></thead>
+              <tbody>{g.rows.map((r) => (
+                <tr key={r.id}>
+                  <td><span className="mono">{r.code}</span> — {r.title}</td><td className="num">{r.credits ?? '-'}</td>
+                  <td><Badge tone={r.status === 'registered' ? 'green' : 'amber'}>{r.status}</Badge></td>
+                  <td style={{ textAlign: 'right' }}><button className="btn ghost sm" onClick={() => drop(r)}>Remove</button></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        ))}
+      </Panel>
+      {adding && <Modal title={`Register module — ${student.name}`} onClose={() => setAdding(false)}>
+        <form onSubmit={add}>
+          <div className="field"><label>Module</label>
+            <select name="course" required>{courses.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.title}{c.sem ? ` (${c.sem})` : ''}</option>)}</select>
+          </div>
+          <div className="grid2" style={{ gap: 12 }}>
+            <div className="field"><label>Academic year</label><input name="academic_year" type="number" min="2000" max="2100" defaultValue={student.academicYear || thisYear} required /></div>
+            <div className="field"><label>Semester</label>
+              <select name="semester" defaultValue="1"><option value="1">Semester 1</option><option value="2">Semester 2</option><option value="">Year-long</option></select>
+            </div>
+          </div>
+          <div className="field"><label>Intake</label>
+            <select name="intake" defaultValue={student.intake || ''}><option value="">—</option><option value="january">January</option><option value="july">July</option></select>
+          </div>
+          <button className="btn primary" type="submit" disabled={busy || courses.length === 0}>{busy ? 'Registering…' : 'Register'}</button>
+        </form>
+      </Modal>}
     </>
   )
 }

@@ -1347,16 +1347,46 @@ export async function listStaffOptions() {
 // ======================= CLASSROOM (enrolment, attendance, LMS files) =======================
 // Cohort enrolment (registrar/admin): put a whole intake on its programme's modules.
 export const listEnrolmentCohorts = () => rows('enrolment_cohorts')
-export const enrolCohort = ({ programmeId, academicYear, intake, dryRun = true }) =>
-  one('enrol_cohort', { p_programme: programmeId, p_academic_year: academicYear, p_intake: intake, p_dry_run: dryRun })
+// semester: 1 | 2 registers that semester (+ year-long modules); null = every module.
+export const enrolCohort = ({ programmeId, academicYear, intake, semester = null, dryRun = true }) =>
+  one('enrol_cohort', { p_programme: programmeId, p_academic_year: academicYear, p_intake: intake, p_semester: semester, p_dry_run: dryRun })
 
-// The signed-in student's modules (+ lecturer and attendance %).
-export async function listStudentCourses() {
-  const data = await rows('student_courses')
+// One student's registrations, newest period first (registrar/admin).
+export async function listStudentEnrolments(studentUuid) {
+  const data = await rows('student_enrolments', { p_student: studentUuid })
+  return data.map((e) => ({
+    id: e.id, courseId: e.course_id, code: e.code, title: e.title, courseSem: e.course_semester, credits: e.credits,
+    academicYear: e.academic_year, semesterNo: e.semester_no, intake: e.intake, status: e.status, hasResult: !!e.has_result,
+  }))
+}
+export const enrolStudentModule = ({ studentId, courseId, academicYear, semester = null, intake = null }) =>
+  one('enrol_student_module', { p_student: studentId, p_course: courseId, p_academic_year: academicYear, p_semester: semester, p_intake: intake })
+export const dropEnrolment = (id) => one('drop_enrolment', { p_id: id })
+
+// Modules of one programme, by programme uuid (for registering a single student).
+export async function listProgrammeCourses(programmeId) {
+  if (!useHttp() || !programmeId) return []
+  const { data, error } = await supabase.from('courses').select('id,code,title,credits,semester')
+    .eq('programme_id', programmeId).order('code')
+  if (error) throw error
+  return (data ?? []).map((c) => ({ id: c.id, code: c.code, title: c.title, credits: c.credits, sem: c.semester }))
+}
+
+// The signed-in student's modules (+ lecturer and attendance %). By default only
+// the current period (latest academic year + semester); all = true for history.
+export async function listStudentCourses({ all = false } = {}) {
+  const data = await rows('student_courses', { p_all: all })
   return data.map((c) => ({
     id: c.course_id, code: c.code, title: c.title, sem: c.semester, credits: c.credits,
     lecturer: c.lecturer, status: c.status, attendance: Number(c.attendance ?? 0),
+    academicYear: c.academic_year, semesterNo: c.semester_no, intake: c.intake,
   }))
+}
+
+// "2026 · Semester 1 · July intake" (any part may be missing).
+export function periodLabel({ academicYear, semesterNo, intake } = {}) {
+  return [academicYear, semesterNo ? `Semester ${semesterNo}` : null,
+    intake ? `${intake[0].toUpperCase()}${intake.slice(1)} intake` : null].filter(Boolean).join(' · ')
 }
 
 // Attendance register per module (lecturer).

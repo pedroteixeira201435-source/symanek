@@ -6,7 +6,7 @@ import { ATTENDANCE_MIN } from '../lib/controls.js'
 import {
   getDegreeAudit, listProgrammes, getResultsForStudent, getInvoicesForStudent, getSponsorsForStudent,
   getHoldsForStudent, getAttendanceForStudent, listCourses, registerCourse, listTimetable,
-  listAnnouncements, listQueries, createQuery, listStudentCourses, submitInvoiceProof, listDocumentsForStudent,
+  listAnnouncements, listQueries, createQuery, listStudentCourses, periodLabel, submitInvoiceProof, listDocumentsForStudent,
 } from '../api.js'
 import { TimetableGrid } from './Scheduling.jsx'
 
@@ -57,20 +57,52 @@ export default function StudentPortal({ role }) {
   )
 }
 
+// Current period only (the registrar decides what the student is on this
+// semester); earlier semesters load on demand.
 function MyCourses({ myCourses }) {
+  const [history, setHistory] = useState(null)
+  const [showHistory, setShowHistory] = useState(false)
+  const sems = myCourses.map((c) => c.semesterNo).filter(Boolean)
+  const period = periodLabel({
+    academicYear: myCourses[0]?.academicYear, semesterNo: sems.length ? Math.max(...sems) : null,
+    intake: myCourses.find((c) => c.intake)?.intake,
+  })
+  const toggleHistory = () => {
+    if (!showHistory && history === null) {
+      listStudentCourses({ all: true }).then((rows) => {
+        const now = new Set(myCourses.map((c) => `${c.id}-${c.academicYear}`))
+        setHistory(rows.filter((c) => !now.has(`${c.id}-${c.academicYear}`)))
+      }).catch(() => setHistory([]))
+    }
+    setShowHistory((v) => !v)
+  }
   return (
-    <Panel title="My modules" subtitle={myCourses.length ? `${myCourses.length} this year` : undefined} flush>
-      {myCourses.length === 0 ? <Empty>You are not enrolled on any module yet. Contact the registrar if this is wrong.</Empty> : (
-        <table className="data"><thead><tr><th>Module</th><th>Semester</th><th>Lecturer</th><th className="num">Attendance</th></tr></thead>
-          <tbody>{myCourses.map((c) => (
-            <tr key={c.id}>
-              <td><span className="mono">{c.code}</span> — {c.title}</td><td>{c.sem || '-'}</td><td>{c.lecturer || '-'}</td>
-              <td className="num">{c.attendance}% {c.attendance > 0 && c.attendance < ATTENDANCE_MIN && <Badge tone="red" title={`Below ${ATTENDANCE_MIN}% — exam admission at risk`}>At risk</Badge>}</td>
-            </tr>
-          ))}</tbody>
-        </table>
-      )}
-    </Panel>
+    <>
+      <Panel title="My modules" subtitle={myCourses.length ? `${period || 'This semester'} · ${myCourses.length} module${myCourses.length === 1 ? '' : 's'}` : undefined}
+        actions={myCourses.length > 0 && <button className="btn ghost sm" onClick={toggleHistory}>{showHistory ? 'Hide previous semesters' : 'Previous semesters'}</button>} flush>
+        {myCourses.length === 0 ? <Empty>You are not registered on any module this semester. Contact the registrar if this is wrong.</Empty> : (
+          <table className="data"><thead><tr><th>Module</th><th>Semester</th><th>Lecturer</th><th className="num">Attendance</th></tr></thead>
+            <tbody>{myCourses.map((c) => (
+              <tr key={c.id}>
+                <td><span className="mono">{c.code}</span> — {c.title}</td><td>{c.semesterNo ? `Semester ${c.semesterNo}` : 'Year-long'}</td><td>{c.lecturer || '-'}</td>
+                <td className="num">{c.attendance}% {c.attendance > 0 && c.attendance < ATTENDANCE_MIN && <Badge tone="red" title={`Below ${ATTENDANCE_MIN}% — exam admission at risk`}>At risk</Badge>}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        )}
+      </Panel>
+      {showHistory && <Panel title="Previous semesters" flush>
+        {history === null ? <Empty>Loading...</Empty> : history.length === 0 ? <Empty>No earlier modules.</Empty> : (
+          <table className="data"><thead><tr><th>Period</th><th>Module</th><th>Status</th></tr></thead>
+            <tbody>{history.map((c) => (
+              <tr key={`${c.id}-${c.academicYear}`}>
+                <td>{periodLabel(c) || '-'}</td><td><span className="mono">{c.code}</span> — {c.title}</td><td>{c.status}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        )}
+      </Panel>}
+    </>
   )
 }
 
