@@ -25,9 +25,11 @@ const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { ...cors, 'Content-Type': 'application/json' } })
 
 // 12+ chars, cryptographically random, mixed classes.
+// Alphabet without look-alikes (no 0/O, 1/l/I) — admins copy this by eye/WhatsApp.
 function tempPassword(): string {
-  const b = crypto.getRandomValues(new Uint8Array(9))
-  return 'Sy' + btoa(String.fromCharCode(...b)).replace(/[+/=]/g, 'x') + '9!'
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+  const b = crypto.getRandomValues(new Uint8Array(12))
+  return 'Sy' + Array.from(b, (n) => chars[n % chars.length]).join('') + '9!'
 }
 
 Deno.serve(async (req) => {
