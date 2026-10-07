@@ -9,6 +9,8 @@ import {
   listAnnouncements, listQueries, createQuery, listStudentCourses, periodLabel, submitInvoiceProof, listDocumentsForStudent,
 } from '../api.js'
 import { TimetableGrid } from './Scheduling.jsx'
+import { StudentClasses } from './LiveClasses.jsx'
+import { MyAssessments } from './Assessments.jsx'
 
 const CREDIT_RATE = 1150
 const SEM_CREDIT_CAP = 72
@@ -44,10 +46,11 @@ export default function StudentPortal({ role }) {
 
   return (
     <>
-      <Tabs tabs={['My Studies', 'Registration', 'Grades & Transcript', 'My Timetable', 'My Finance', 'Announcements', 'Ask Lecturer', 'Holds & Documents']} active={tab} onChange={setTab} />
+      <Tabs tabs={['My Studies', 'Live Classes', 'Registration', 'Grades & Transcript', 'My Timetable', 'My Finance', 'Announcements', 'Ask Lecturer', 'Holds & Documents']} active={tab} onChange={setTab} />
       {tab === 'My Studies' && <MyStudies {...ctx} />}
+      {tab === 'Live Classes' && <StudentClasses />}
       {tab === 'Registration' && <Registration {...ctx} />}
-      {tab === 'Grades & Transcript' && <Transcript {...ctx} />}
+      {tab === 'Grades & Transcript' && <><Transcript {...ctx} /><MyAssessments /></>}
       {tab === 'My Timetable' && <MyTimetable {...ctx} />}
       {tab === 'My Finance' && <MyFinance {...ctx} />}
       {tab === 'Announcements' && <Announcements />}

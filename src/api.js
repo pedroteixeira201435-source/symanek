@@ -1417,9 +1417,9 @@ export async function uploadCourseFile(prefix, file) {
   if (error) throw error
   return path
 }
-export async function courseFileUrl(path) {
+export async function courseFileUrl(path, ttl = 300) {
   if (!useHttp() || !path) return null
-  const { data, error } = await supabase.storage.from('course-files').createSignedUrl(path, 300)
+  const { data, error } = await supabase.storage.from('course-files').createSignedUrl(path, ttl)
   if (error) throw error
   return data?.signedUrl ?? null
 }
@@ -1445,3 +1445,41 @@ export async function assignmentUpsert({ id = null, courseId, title, description
   })
 }
 export const assignmentDelete = (id) => call('assignment_delete', { p_id: id })
+
+// ======================= ASSESSMENTS (tests/quizzes) & LIVE CLASSES =======================
+// Lecturer gradebook: assessments (+ graded assignments) x students, with a computed CA %.
+export async function getCourseGradebook(courseId) {
+  const d = await one('course_gradebook', { p_course: courseId })
+  return d || { assessments: [], students: [] }
+}
+export const assessmentUpsert = ({ id = null, courseId, title, kind = 'test', max = 100, weight = 1, date = null }) =>
+  one('assessment_upsert', { p_id: id, p_course: courseId, p_title: title, p_kind: kind, p_max: Number(max) || 100, p_weight: Number(weight) || 1, p_date: date || null })
+export const assessmentDelete = (id) => one('assessment_delete', { p_id: id })
+export const assessmentSaveMarks = (assessmentId, marks) =>
+  one('assessment_save_marks', { p_assessment: assessmentId, p_marks: marks.map((m) => ({ student_id: m.studentId, mark: m.mark === '' || m.mark == null ? null : Number(m.mark) })) })
+export const listMyAssessments = () => rows('student_assessments')
+
+// Live classes. Lecturer: their modules; student: modules they are enrolled on.
+export async function listClassSessions(courseId = null) {
+  const data = await rows('class_sessions_list', { p_course: courseId })
+  return data.map((s) => ({
+    id: s.id, courseId: s.course_id, code: s.code, courseTitle: s.course_title, title: s.title, startsAt: s.starts_at,
+    durationMin: s.duration_min, status: s.status, meetingUrl: s.meeting_url, notes: s.notes || '',
+    startedAt: s.started_at, endedAt: s.ended_at, recordingUrl: s.recording_url, recordingPaths: s.recording_paths || [],
+  }))
+}
+export const classSessionUpsert = ({ id = null, courseId, title, startsAt, durationMin = 60, meetingUrl = '', notes = '' }) =>
+  one('class_session_upsert', { p_id: id, p_course: courseId, p_title: title, p_starts_at: startsAt ? new Date(startsAt).toISOString() : null, p_duration: Number(durationMin) || 60, p_meeting_url: meetingUrl || null, p_notes: notes || null })
+export const classSessionSetStatus = (id, status) => one('class_session_set_status', { p_id: id, p_status: status })
+export const classSessionSetRecording = (id, url = null, addPath = null) => one('class_session_set_recording', { p_id: id, p_url: url, p_add_path: addPath })
+export const classSessionDelete = (id) => one('class_session_delete', { p_id: id })
+// One recorded part (webm/mp4 blob) → recordings/<course>/<session>/…, then attached to the session.
+export async function uploadClassRecordingPart(session, blob, partNo) {
+  if (!useHttp()) return null
+  const ext = (blob.type || '').includes('mp4') ? 'mp4' : 'webm'
+  const path = `recordings/${session.courseId}/${session.id}/part-${String(partNo).padStart(3, '0')}-${Date.now()}.${ext}`
+  const { error } = await supabase.storage.from('course-files').upload(path, blob, { contentType: blob.type || 'video/webm', upsert: false })
+  if (error) throw error
+  await classSessionSetRecording(session.id, null, path)
+  return path
+}

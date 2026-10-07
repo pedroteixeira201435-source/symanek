@@ -5,12 +5,14 @@ import { gradeOf } from '../lib/academics.js'
 import { evaluateResult, POLICY_SUMMARY } from '../lib/academics.js'
 import { ATTENDANCE_MIN } from '../lib/controls.js'
 import * as api from '../api.js'
+import { AssessmentsTab } from './Assessments.jsx'
+import { LiveClassesTab } from './LiveClasses.jsx'
 
 // Lecturer workspace — marks capture (CA + exam → final → exam board), the class
 // board (announcements) and student queries. All backed by real RPCs; empty by
 // default until courses and marks exist.
 export default function TeacherPortal() {
-  const [tab, setTab] = useState('Marks')
+  const [tab, setTab] = useState('Live Classes')
   const [courses, setCourses] = useState([])
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(true)
@@ -28,7 +30,9 @@ export default function TeacherPortal() {
       )} flush>
         {courses.length === 0 && <Empty>No modules are allocated to you yet. Ask the registrar to allocate your modules.</Empty>}
       </Panel>
-      <Tabs tabs={['Marks', 'Attendance', 'Class Board', 'Student Queries']} active={tab} onChange={setTab} />
+      <Tabs tabs={['Live Classes', 'Assessments', 'Marks', 'Attendance', 'Class Board', 'Student Queries']} active={tab} onChange={setTab} />
+      {tab === 'Live Classes' && (course ? <LiveClassesTab key={course.id} course={course} /> : <NoCourse />)}
+      {tab === 'Assessments' && (course ? <AssessmentsTab key={course.id} course={course} /> : <NoCourse />)}
       {tab === 'Marks' && (course ? <MarksTab course={course} /> : <NoCourse />)}
       {tab === 'Attendance' && (course ? <AttendanceTab course={course} /> : <NoCourse />)}
       {tab === 'Class Board' && (course ? <ClassBoard course={course} /> : <NoCourse />)}
@@ -132,6 +136,17 @@ function CourseMarks({ course }) {
     catch (e) { showToast('Could not publish' + (e?.message ? `: ${e.message}` : '')) }
   }
 
+  const fillCa = async () => {
+    try {
+      const book = await api.getCourseGradebook(course.id)
+      const byId = Object.fromEntries((book.students || []).map((s) => [s.student_id, s.ca]))
+      let n = 0
+      setRows((rs) => rs.map((r) => { const ca = byId[r.student_id]; if (ca == null) return r; n++; return { ...r, ca: Math.round(ca) } }))
+      if (n) setDirty(true)
+      showToast(n ? `CA filled for ${n} student${n > 1 ? 's' : ''} from the Assessments gradebook — review, then Save marks` : 'No assessment marks recorded yet (see the Assessments tab)')
+    } catch (e) { showToast('Could not read assessments' + (e?.message ? `: ${e.message}` : '')) }
+  }
+
   const evald = rows.map((r) => evaluateResult({ ca: Number(r.ca) || 0, exam: Number(r.exam) || 0 }))
   const avg = rows.length ? Math.round(evald.reduce((s, e) => s + e.final, 0) / rows.length) : 0
   const passRate = rows.length ? Math.round((evald.filter((e) => e.final >= 50).length / rows.length) * 100) : 0
@@ -142,6 +157,7 @@ function CourseMarks({ course }) {
       subtitle={`${rows.length} registered${rows.length ? ` · avg ${avg}% · pass ${passRate}%` : ''}`}
       actions={published ? <Badge tone="green"><Icon name="tick" size={12} /> Published</Badge> : rows.length ? (
         <span style={{ display: 'flex', gap: 8 }}>
+          <button className="btn ghost sm" onClick={fillCa} title="Copy each student's CA % from the tests, quizzes and assignments you recorded">Fill CA from assessments</button>
           <button className="btn ghost sm" onClick={save} disabled={!dirty}>Save marks</button>
           <button className="btn primary sm" onClick={publish}>Submit to exam board</button>
         </span>

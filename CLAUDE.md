@@ -200,6 +200,14 @@ Reference examples: `Graduation.jsx`, `Library.jsx`, `Accounting.jsx`, `Accommod
   `submissions/<assignment_id>/<student_id>/…` (that student writes; the module's lecturer reads). Clients
   upload with `api.uploadCourseFile(prefix, file)` and open with `api.courseFileUrl(path)` (signed URL).
 
+- **Assessments & live classes** (`20261007120000`, applied to cloud 2026-10-07): tables
+  `assessments` / `assessment_marks` (tests, quizzes, practicals; per-module, weighted) with RPCs
+  `assessment_upsert/delete/save_marks`, `course_gradebook(course)` (assessments + graded assignments → CA %),
+  `student_assessments()`; `class_sessions` + `class_session_*` RPCs (schedule/start/end, Jitsi room or pasted link,
+  recording link and/or parts in `course-files/recordings/<course>/<session>/…`, which `course_file_access` now allows).
+  UI: `Assessments.jsx` + `LiveClasses.jsx` (lecturer tabs *Live Classes*/*Assessments*; student tab *Live Classes* and
+  *My test & quiz marks* under Grades). Marks tab has "Fill CA from assessments". In-browser recording uploads ~8-min parts.
+
 ### Public-site server routes (Next, `nodejs` runtime, service-role)
 
 - `app/api/letter/route.ts` — lazily generates the approval-letter PDF (`lib/letter.ts`, `pdf-lib`) into
