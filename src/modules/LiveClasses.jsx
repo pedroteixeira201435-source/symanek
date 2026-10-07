@@ -2,8 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Panel, Badge, Modal, Toast, useToast, Icon } from '../ui.jsx'
 import * as api from '../api.js'
 
-// Online classes. Lecturer: schedule a class (meeting link is a Jitsi room unless
-// they paste Zoom/Meet/Teams), start/end it, and record it — either in the
+// Online classes. Lecturer: schedule a class (meeting link is a Google Meet (or Zoom/Teams)
+// link the lecturer pastes), start/end it, and record it — either in the
 // browser (screen + microphone, uploaded in ~8 minute parts) or by pasting the
 // link of a recording made elsewhere. Student: join live classes, replay recordings.
 
@@ -36,7 +36,7 @@ export function LiveClassesTab({ course }) {
     <>
       <div className="note-banner">
         <Icon name="info" size={16} />
-        <div><strong>1.</strong> Schedule the class — students see it straight away. <strong>2.</strong> Press <strong>Start class</strong>: the video room opens in a new tab and students get a Join button. <strong>3.</strong> Use <strong>Record</strong> to capture it (share the class tab with audio) — recordings appear for the students when the class ends.</div>
+        <div><strong>1.</strong> Create a Google Meet at meet.google.com/new, then schedule the class here with that link — students see it straight away. <strong>2.</strong> Press <strong>Start class</strong>: your Meet opens in a new tab and students get a Join button. <strong>3.</strong> Use <strong>Record</strong> to capture it (share the class tab with audio) — recordings appear for the students when the class ends.</div>
       </div>
       <Panel title={`Live classes — ${course.code}`} actions={<button className="btn primary sm" onClick={() => setEdit({})}>+ Schedule class</button>} flush>
         {items === null ? <Empty>Loading…</Empty> : items.length === 0 ? <Empty>No classes scheduled yet.</Empty> : (
@@ -85,6 +85,7 @@ function SessionModal({ course, item, onClose, onDone, showToast }) {
   const save = async (e) => {
     e.preventDefault()
     if (!f.title.trim()) { showToast('Give the class a title'); return }
+    if (!/^https?:\/\//i.test(f.meetingUrl.trim())) { showToast('Paste the Google Meet link (create it at meet.google.com/new)'); return }
     setBusy(true)
     try { await api.classSessionUpsert({ id: item.id || null, courseId: course.id, ...f }); onDone(item.id ? 'Class updated' : 'Class scheduled') }
     catch (err) { showToast('Could not save: ' + (err?.message || err)); setBusy(false) }
@@ -97,7 +98,7 @@ function SessionModal({ course, item, onClose, onDone, showToast }) {
           <div className="field"><label>Starts</label><input type="datetime-local" value={f.startsAt} onChange={set('startsAt')} /></div>
           <div className="field"><label>Duration (min)</label><input type="number" min="15" step="5" value={f.durationMin} onChange={set('durationMin')} /></div>
         </div>
-        <div className="field"><label>Meeting link <span className="di-sub">(optional)</span></label><input value={f.meetingUrl} onChange={set('meetingUrl')} placeholder="Leave empty for an automatic video room, or paste a Zoom / Meet / Teams link" /></div>
+        <div className="field"><label>Meeting link <span className="di-sub">(Google Meet — open meet.google.com/new, copy the link and paste it here)</span></label><input value={f.meetingUrl} onChange={set('meetingUrl')} placeholder="https://meet.google.com/abc-defg-hij" /></div>
         <div className="field"><label>Notes for students <span className="di-sub">(optional)</span></label><textarea rows={2} value={f.notes} onChange={set('notes')} placeholder="Topics, what to bring…" /></div>
         <button className="btn primary" disabled={busy}>{busy ? 'Saving…' : 'Save'}</button>
       </form>
