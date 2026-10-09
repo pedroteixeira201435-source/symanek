@@ -12,6 +12,8 @@
     "validate:uat-core": "node scripts/validate-uat-core.mjs",
     "apply:course-capacities": "node scripts/apply-course-capacities.mjs",
     "apply:migration": "node scripts/apply-supabase-migration.mjs",
+    "apply:migration-api": "node scripts/apply-migration-via-api.mjs",
+    "issue:student-credentials": "node scripts/issue-student-credentials.mjs",
     "cleanup:codex-test-data": "node scripts/cleanup-codex-test-data.mjs"
   },
   "dependencies": {
