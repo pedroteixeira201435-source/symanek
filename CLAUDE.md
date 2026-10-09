@@ -21,7 +21,7 @@ A **monorepo for Symanek Specialized College** (private Namibian higher-ed) with
 
 > **Mock-elimination / "empty-by-default" pass — DONE (2026-08-24).** Production carries ZERO mock data:
 > every module reads/writes the real backend, starting empty and populated through CRUD forms. All the
-> migrations below are **APPLIED to the cloud** (tracker in sync through `20260928130000`).
+> migrations below are **APPLIED to the cloud** (tracker in sync through `20261007120000`).
 > - **`src/data.js` is DELETED.** Import formatting/logic from `src/lib/*`: `format.js` (`fmtN`,
 >   `staffEmail`), `academics.js` (`gradeOf`, editable grade bands via `setGradeBands`), `institution.js`
 >   (`SCHOOL`, `INSTITUTION_HIDE`, `getInstType`). Never reference `data.js` — it no longer exists.
@@ -74,8 +74,15 @@ npm run validate:supabase        # E2E vs cloud: admission→payment→access→
 npm run validate:uat-core        # core UAT flow + public site
 npm run validate:public-site     # public API routes against the LIVE site
 npm run apply:migration -- <sql> # apply one migration via `pg` + Session pooler (needs SUPABASE_DB_PASSWORD)
+npm run apply:migration-api -- <sql>   # the same, via the Management API (SUPABASE_ACCESS_TOKEN, no DB password)
 npm run apply:course-capacities  # bulk-set capacities from supabase/templates/course-capacities.csv
 npm run cleanup:codex-test-data  # delete codex.* / test rows
+npm run issue:student-credentials -- --like 'BDOHSEM%'   # re-issue portal temp passwords in bulk, prints a CSV
+                                 # also takes bare student numbers; --out FILE writes a CSV instead of stdout;
+                                 # skips anyone who already chose their own password unless --force
+# `scripts/supabase-rest.mjs` resolves .env.codex-handoff RELATIVE TO CWD. Running a script from
+# anywhere but the repo root fails with "Missing environment variable: SUPABASE_URL" — pass an
+# absolute path instead: VALIDATION_ENV="$PWD/.env.codex-handoff" node scripts/<x>.mjs
 
 # Bulk student import (new intake / EduCIMS migration) — CSV template or legacy JSON, no npm deps
 node supabase/import/import_students.mjs --dry-run --file supabase/import/entrada/<file>.csv   # offline check
@@ -130,6 +137,14 @@ Reference examples: `Graduation.jsx`, `Library.jsx`, `Accounting.jsx`, `Accommod
     (the edge functions below). A login created outside these paths is **not linked** to its
     `students`/`staff` row (`user_id` null) — a lecturer then sees no modules, and "Grant" refuses with
     "already registered". `is_admin()` = `role in (admin,staff)`.
+  - **`20260928140000` — two fixes from the school admin, both easy to break again:** (a) the self-write
+    guards `profiles_block_self_staff()`/`sync_profile_role()` now **keep** the role columns on a self
+    UPDATE. The earlier version clamped them to `student`/null, so every admin and lecturer lost their
+    workspace the moment they chose their own password at first sign-in — a user still cannot raise
+    themselves, but never reintroduce a clamp on the UPDATE branch. (b) **`student_upsert` generates a
+    missing `student_no`** via `next_student_no(academic_year)` in the EduCIMS format
+    `<academic year><5 digits>` (e.g. `202610273`), and `reference` defaults to it. Degree cohorts carry
+    the college's own scheme instead (`BDOHSEM202602`) — pass those explicitly.
   - **Gotcha (fixed): the login role-check must filter to the caller's own profile row.** RLS is
     `profiles: id = auth.uid() OR is_admin()`, so an admin can read *every* profile — an unfiltered
     `.select('role').maybeSingle()` returns multiple rows once a 2nd admin exists and wrongly rejects the
@@ -232,6 +247,10 @@ Reference examples: `Graduation.jsx`, `Library.jsx`, `Accounting.jsx`, `Accommod
   (`App.jsx` → `ForcePasswordChange`). `grant-staff-access` takes `{ staff_id, suite_role }` to grant and
   `{ staff_id, action: 'revoke' }` to remove the login (keeps the `staff` row) — any other `action`
   falls through to the grant path and fails with `invalid suite_role`.
+  **The temp password is shown ONCE and stored nowhere** — not in the DB, not in a log. To hand out a
+  whole class, re-issue them with `scripts/issue-student-credentials.mjs` (same thing as `{reset:true}`,
+  in bulk, straight through the GoTrue admin API); for one student the Suite's "Grant portal access"
+  offers the reset. A password that was issued and lost cannot be recovered, only replaced.
 - **These functions do their own admin check + CORS, so their `verify_jwt` is effectively bypassed for
   the browser preflight.** Their `Access-Control-Allow-Headers` MUST include `x-client-info` and `apikey`
   (supabase-js sends both on `invoke()`); if not, the browser preflight fails and the call dies with
@@ -269,6 +288,12 @@ reuse these; every flow is table/row → `Modal` → state → toast.
   `final = 0.6*CA + 0.4*exam` (client rule, 2026; source of truth `src/lib/academics.js`). University
   nomenclature (Student/Programme/Semester/Credit/GPA) — avoid
   reintroducing school terms (learner/grade/guardian/term).
+- **A `students` row is thinner than it looks.** `phone`, `id_number`, `next_of_kin` and `intake` are all
+  nullable and in practice often null — a cohort created by hand or by the import script carries name,
+  email, programme and year and nothing else. `intake` is a check constraint on **lowercase**
+  `'january' | 'july'`, while the college's registration reports say "July Intake"; `academic_year` is an
+  `int`, separate from `year` (the year of study). When a registration report arrives from the college,
+  reconcile against the existing rows before inserting — the students are usually already there.
 - Production is **empty-by-default** (no mock/demo numbers to reconcile — the old `data.js` "476 enrolment"
   figures are gone). Any remaining mock/dev copy anchors "today" around **3 Jul 2026**.
 - **Payments are manual EFT + uploaded proof — no gateway.** Emails are **generated in-app but sent
@@ -320,6 +345,26 @@ reuse these; every flow is table/row → `Modal` → state → toast.
   `supabase/import/saida/` — **both gitignored (PII)**.
 - `PARA-A-CLIENTE/` holds client-facing material (English messages/guides to send to Symanek) plus
   `0-LEIA-PRIMEIRO-PEDRO.md` (Portuguese runbook for Pedro). Keep client copy in English.
+
+## Project docs (read before planning, they carry the client's open decisions)
+
+Written as dated snapshots, newest wins; none of them is generated, so trust the code over the prose.
+
+- `O-QUE-FALTA-NA-SUITE-2026-09-16.md` — the live backlog of parity gaps against EduCIMS (the college's
+  current system), P0 first: migration, staff payments, memos, tuition, per-module assessment rules,
+  PDFs, intakes, letters. **Start here when asked what is left to build.**
+- `EDUCIMS-GAP-ANALYSIS-2026-09-16.md` — how EduCIMS works today and the 5 decisions still pending from
+  the client that block parts of that backlog.
+- `PRODUCTION-PLAN.md` (10 phases to production) and `PRODUCTION-READINESS-2026-08-23.md` — the
+  readiness report is **more optimistic than reality**; verify any "done" claim against the code.
+- `PRODUCTION-OPERATIONS.md` (deploy runbook), `UAT-GUIA.md` (UAT scripts + staff runbook),
+  `BACKEND.md` (**stale** — describes Phase 2 as unbuilt), `CODEX-PLAN-SUITE-MIGRATION.md`,
+  `HANDOFF-MOCK-ELIMINATION.md` (both historical).
+- `CLIENT-*.md` / `RELATORIO-*.txt` / `SYMANEK-STATUS-REPORT-*` — what was actually sent to the client,
+  and the client's answers. `PARA-A-CLIENTE/` is the outgoing pack (English), with
+  `0-LEIA-PRIMEIRO-PEDRO.md` as Pedro's Portuguese runbook.
+
+Several of these are **untracked in git** — check `git status` before assuming a doc is committed.
 
 ## Local-dev gotchas (verified, will bite you)
 

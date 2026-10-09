@@ -1,0 +1,37 @@
+Good morning Jeremia,
+
+Thank you for the registration report. All 7 OHSEM L7 July intake students are
+now captured in the system with their contact numbers and ID numbers, and their
+student portal logins are ready.
+
+Attached is the login sheet. Please send each student only their own line — by
+private WhatsApp or SMS, not in a group — because the sheet carries everyone's
+credentials. The portal asks each student to choose their own password the
+moment they sign in, so the temporary one stops working straight away.
+
+Portal link: https://symanek-suite.vercel.app
+
+Four things I need you to confirm:
+
+1. The report lists 7 students, but the numbering skips BDOHSEM202601, 04, 07,
+   08, 09, 10, 12 and 14. Were those applicants who did not register, or is the
+   report partial?
+
+2. Ferdrika Danela Naris (narisdanielle@gmail.com) is in the system on this same
+   programme, still showing as "admitted" and with no student number. Should she
+   be registered, or removed?
+
+3. Libertine Diriadi's email is sharneldiriardi43@gmail.com, which carries a
+   different first name and surname spelling. Please confirm it is hers.
+
+4. On the spreadsheet Dortea Shimunyengu's email was typed lapakadortea@gmai.com
+   (missing the "l"). I captured it as lapakadortea@gmail.com. Please confirm.
+
+If a student loses their password, open Students in the Suite, find them, and
+click "Grant portal access" — it will offer a reset and show a new temporary
+password.
+
+Any problem, send me a screenshot on WhatsApp.
+
+Thank you,
+Pedro

@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<title>Symanek College — Guia Técnico de Operação, Acessos e Produção</title>
+<style>
+  @page { size: A4; margin: 2cm; }
+  body { font-family: "Arial", "Liberation Sans", sans-serif; font-size: 10.5pt; color: #1c2430; line-height: 1.5; }
+  h1 { font-size: 20pt; color: #143a5e; margin: 0 0 6pt 0; }
+  h2 { font-size: 14.5pt; color: #143a5e; border-bottom: 2px solid #f2b705; padding-bottom: 3pt; margin: 20pt 0 8pt 0; }
+  h3 { font-size: 12pt; color: #1d5a92; margin: 12pt 0 4pt 0; }
+  p { margin: 4pt 0; }
+  a { color: #1d5a92; text-decoration: underline; }
+  ul, ol { margin: 4pt 0; padding-left: 20pt; }
+  li { margin: 2pt 0; }
+  table { border-collapse: collapse; width: 100%; margin: 6pt 0; font-size: 9.5pt; }
+  th { background: #143a5e; color: #ffffff; text-align: left; padding: 5pt 6pt; border: 1px solid #143a5e; }
+  td { border: 1px solid #b7c2ce; padding: 5pt 6pt; vertical-align: top; }
+  tr.alt td { background: #eef3f8; }
+  .muted { color: #5b6b7b; font-size: 9pt; }
+  .cell-fill { background: #fcfcf7; }
+  .note { background: #e8f1fb; border: 1px solid #1d5a92; padding: 8pt 10pt; margin: 8pt 0; }
+  .warn { background: #fdecea; border: 1px solid #e06055; padding: 8pt 10pt; margin: 8pt 0; }
+  .pagebreak { page-break-before: always; }
+  .cover-band { background: #143a5e; color: #ffffff; padding: 26pt 24pt; }
+  .cover-band h1 { color: #ffffff; font-size: 25pt; }
+  .cover-sub { color: #f2b705; font-size: 14pt; font-weight: bold; }
+  .kv td { border: none; padding: 3pt 6pt 3pt 0; }
+  .kv td.k { color: #5b6b7b; width: 34%; }
+  code, .mono { font-family: "Liberation Mono", "Courier New", monospace; font-size: 9.5pt; }
+  pre { font-family: "Liberation Mono", "Courier New", monospace; font-size: 9pt; background: #f4f6f8; border: 1px solid #cdd6df; padding: 8pt 10pt; margin: 6pt 0; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+
+<!-- ============ CAPA ============ -->
+<div class="cover-band">
+  <div class="cover-sub">SYMANEK COLLEGE</div>
+  <h1>Guia Técnico de Operação, Acessos e Produção</h1>
+  <p style="margin-top:10pt; font-size:11pt;">Documento técnico — Supabase, Vercel, permissões, validação, riscos e manutenção</p>
+</div>
+
+<table class="kv" style="margin-top:26pt;">
+  <tr><td class="k">Projeto</td><td><b>Symanek College</b> — Site público (Next.js) + Suite de gestão (Vite/React) + Supabase</td></tr>
+  <tr><td class="k">Documento</td><td>Guia Técnico de Operação, Acessos e Produção</td></tr>
+  <tr><td class="k">Versão</td><td>1.0</td></tr>
+  <tr><td class="k">Data</td><td>29 de agosto de 2026</td></tr>
+  <tr><td class="k">Responsável técnico / aceite</td><td>Pedro Teixeira — <a href="mailto:pedroteixeira201435@gmail.com">pedroteixeira201435@gmail.com</a></td></tr>
+</table>
+
+<div class="warn"><b>Segurança:</b> Este documento <b>não contém</b> tokens, passwords, service role keys nem segredos. Nunca colar segredos aqui.
+Onde forem necessárias credenciais usar marcadores: <span class="mono">[email do admin]</span>, <span class="mono">[email do estudante]</span>, <span class="mono">[password temporária]</span>.</div>
+
+<!-- ============ INDICE ============ -->
+<div class="pagebreak"></div>
+<h2 id="indice">Índice</h2>
+<ol>
+  <li><a href="#s1">Visão geral da arquitetura</a></li>
+  <li><a href="#s2">Links e ambientes</a></li>
+  <li><a href="#s3">Variáveis de ambiente</a></li>
+  <li><a href="#s4">Como criar acessos reais no Supabase</a></li>
+  <li><a href="#s5">Como dar acesso a um estudante</a></li>
+  <li><a href="#s6">Como rever dados antes de produção</a></li>
+  <li><a href="#s7">Capacidades dos cursos</a></li>
+  <li><a href="#s8">Segurança / RLS / RPC</a></li>
+  <li><a href="#s9">Auditoria</a></li>
+  <li><a href="#s10">CI/CD</a></li>
+  <li><a href="#s11">Deploy na Vercel</a></li>
+  <li><a href="#s12">Comandos úteis</a></li>
+  <li><a href="#s13">Rotação de segredos</a></li>
+  <li><a href="#s14">Backup e recuperação</a></li>
+  <li><a href="#s15">Critérios técnicos para produção</a></li>
+  <li><a href="#s16">Anexo — SQL / verificações úteis</a></li>
+</ol>
+
+<!-- ============ 1 ============ -->
+<div class="pagebreak"></div>
+<h2 id="s1">1. Visão geral da arquitetura</h2>
+<ul>
+  <li><b>Site público</b> — aplicação <b>Next.js 14</b>, alojada na <b>Vercel</b> (root directory <span class="mono">site-publico</span>).</li>
+  <li><b>Suite de gestão</b> — aplicação <b>Vite + React</b>, alojada na <b>Vercel</b> (build <span class="mono">vite build</span> → <span class="mono">dist</span>).</li>
+  <li><b>Backend</b> — <b>Supabase</b> (PostgreSQL gerido).</li>
+  <li><b>Auth</b> — Supabase Auth (email/password), perfis em <span class="mono">public.profiles</span>.</li>
+  <li><b>Base de dados</b> — Postgres com tabelas de domínio (students, staff, programmes, courses, applications, invoices, payments, results, …).</li>
+  <li><b>Storage</b> — buckets Supabase para documentos e comprovantes (cartas, EFT).</li>
+  <li><b>RPCs SECURITY DEFINER</b> — escritas sensíveis passam por funções controladas (não DML direto).</li>
+  <li><b>RLS</b> — Row Level Security ativa nas tabelas sensíveis; cada utilizador só vê o que lhe é permitido.</li>
+</ul>
+
+<!-- ============ 2 ============ -->
+<h2 id="s2">2. Links e ambientes</h2>
+<table>
+  <tr><th style="width:34%">Recurso</th><th>Endereço</th></tr>
+  <tr><td>Site público (produção)</td><td><a href="https://symanek-site.vercel.app">https://symanek-site.vercel.app</a></td></tr>
+  <tr class="alt"><td>Suite de gestão (produção)</td><td><a href="https://symanek-suite.vercel.app">https://symanek-suite.vercel.app</a></td></tr>
+  <tr><td>Vercel — dashboard</td><td><a href="https://vercel.com/dashboard">https://vercel.com/dashboard</a> (projetos <span class="mono">symanek-suite</span> e <span class="mono">symanek-site</span>)</td></tr>
+  <tr class="alt"><td>Supabase — dashboard do projeto</td><td><a href="https://supabase.com/dashboard/project/zbtxhyxwtemproeomtzu">https://supabase.com/dashboard/project/zbtxhyxwtemproeomtzu</a></td></tr>
+  <tr><td>GitHub — repositório</td><td><a href="https://github.com/pedroteixeira201435-source/symanek">https://github.com/pedroteixeira201435-source/symanek</a></td></tr>
+</table>
+<div class="note"><b>Nota:</b> segredos (service role key, DB password, Vercel token) <b>nunca</b> devem ser colados neste ou noutro documento. Consultá-los apenas nos painéis Supabase/Vercel ou em variáveis de ambiente do servidor.</div>
+
+<!-- ============ 3 ============ -->
+<h2 id="s3">3. Variáveis de ambiente</h2>
+<h3>Site público (Next.js — <span class="mono">site-publico</span>)</h3>
+<table>
+  <tr><th style="width:44%">Variável</th><th>Descrição / valor</th></tr>
+  <tr><td class="mono">NEXT_PUBLIC_API_MODE</td><td><span class="mono">supabase</span> (usa backend real)</td></tr>
+  <tr class="alt"><td class="mono">NEXT_PUBLIC_SUPABASE_URL</td><td>URL do projeto Supabase (público)</td></tr>
+  <tr><td class="mono">NEXT_PUBLIC_SUPABASE_ANON_KEY</td><td>Chave anónima (público, protegido por RLS)</td></tr>
+  <tr class="alt"><td class="mono">NEXT_PUBLIC_SITE_URL</td><td>URL público do site (para links/cartas)</td></tr>
+  <tr><td class="mono">SUPABASE_SERVICE_ROLE_KEY</td><td><b>Apenas servidor</b> — usada em rotas API server-side; nunca exposta ao browser</td></tr>
+</table>
+
+<h3>Suite de gestão (Vite)</h3>
+<table>
+  <tr><th style="width:44%">Variável</th><th>Descrição / valor</th></tr>
+  <tr><td class="mono">VITE_API_MODE</td><td><span class="mono">http</span> em produção (lê/escreve via Supabase; <span class="mono">mock</span> só para demo local)</td></tr>
+  <tr class="alt"><td class="mono">VITE_SUPABASE_URL</td><td>URL do projeto Supabase (público)</td></tr>
+  <tr><td class="mono">VITE_SUPABASE_ANON_KEY</td><td>Chave anónima (público, protegido por RLS)</td></tr>
+</table>
+
+<div class="warn"><b>Nunca expor no cliente / nunca commitar:</b>
+<ul style="margin:4pt 0;">
+  <li><span class="mono">SUPABASE_SERVICE_ROLE_KEY</span></li>
+  <li><span class="mono">SUPABASE_DB_PASSWORD</span></li>
+  <li><span class="mono">VERCEL_TOKEN</span></li>
+</ul>
+Confirmar que a Suite corre com <span class="mono">VITE_API_MODE=http</span> em produção (não <span class="mono">mock</span>), caso contrário não persiste dados reais.</div>
+
+<!-- ============ 4 ============ -->
+<div class="pagebreak"></div>
+<h2 id="s4">4. Como criar acessos reais no Supabase</h2>
+<ol>
+  <li>Criar o utilizador em <b>Supabase Auth</b> (Authentication → Users → Add user) com <span class="mono">[email do admin]</span>.</li>
+  <li>Confirmar o email (ou marcar como <i>email confirmed</i>).</li>
+  <li>Criar/atualizar o registo correspondente em <span class="mono">public.profiles</span>.</li>
+  <li>Definir <span class="mono">role</span> (papel funcional) e <span class="mono">suite_role</span> (papel na Suite).</li>
+  <li>Para estudante, vincular <span class="mono">students.user_id</span> ao <span class="mono">auth.users.id</span> (ver secção 5).</li>
+  <li>Obrigar troca da password inicial, ou definir um processo manual documentado para entregar a <span class="mono">[password temporária]</span> de forma segura.</li>
+</ol>
+
+<h3>Tabela de roles</h3>
+<table>
+  <tr><th style="width:22%">Role</th><th>Âmbito típico</th></tr>
+  <tr><td class="mono">admin</td><td>Administração geral do sistema</td></tr>
+  <tr class="alt"><td class="mono">registrar</td><td>Admissões, matrículas, estudantes</td></tr>
+  <tr><td class="mono">bursar</td><td>Finanças, faturas, pagamentos</td></tr>
+  <tr class="alt"><td class="mono">hr</td><td>Recursos humanos / staff</td></tr>
+  <tr><td class="mono">teacher</td><td>Docente — cursos e notas atribuídas</td></tr>
+  <tr class="alt"><td class="mono">librarian</td><td>Biblioteca</td></tr>
+  <tr><td class="mono">student</td><td>Portal do estudante (só dados próprios)</td></tr>
+  <tr class="alt"><td class="mono">applicant</td><td>Candidato (consulta de candidatura)</td></tr>
+</table>
+
+<!-- ============ 5 ============ -->
+<h2 id="s5">5. Como dar acesso a um estudante</h2>
+<ol>
+  <li>O estudante tem de existir em <span class="mono">public.students</span>.</li>
+  <li>Tem de existir um <b>auth user</b> associado (Supabase Auth) com <span class="mono">[email do estudante]</span>.</li>
+  <li><span class="mono">students.user_id</span> tem de apontar para <span class="mono">auth.users.id</span> do mesmo utilizador.</li>
+  <li>O portal só deve mostrar dados do <b>próprio</b> estudante (garantido por RLS — validar).</li>
+  <li>Testar o login depois de configurado (ver PDF de UAT, secção I — Student Portal).</li>
+</ol>
+<div class="note">Verificar estudantes sem conta ligada com a query da secção 16 (<span class="mono">students.user_id IS NULL</span>).</div>
+
+<!-- ============ 6 ============ -->
+<h2 id="s6">6. Como rever dados antes de produção</h2>
+<p>Rever cada tabela e confirmar que só existem dados reais (sem resíduo de demo/testes):</p>
+<table>
+  <tr><th style="width:33%">Tabela</th><th>O que confirmar</th></tr>
+  <tr><td class="mono">public.students</td><td>Roster real; remover/arquivar demo</td></tr>
+  <tr class="alt"><td class="mono">public.programmes</td><td>Programas oficiais</td></tr>
+  <tr><td class="mono">public.courses</td><td>Cursos reais</td></tr>
+  <tr class="alt"><td class="mono">courses.capacity</td><td>Capacidade real preenchida (não 0)</td></tr>
+  <tr><td class="mono">courses.enrolled</td><td>Inscritos coerentes</td></tr>
+  <tr class="alt"><td class="mono">applications</td><td>Candidaturas de teste removidas</td></tr>
+  <tr><td class="mono">payments</td><td>Sem pagamentos de teste</td></tr>
+  <tr class="alt"><td class="mono">invoices</td><td>Faturas coerentes com saldos</td></tr>
+  <tr><td class="mono">results</td><td>Sem notas de teste publicadas</td></tr>
+  <tr class="alt"><td class="mono">profiles</td><td>Todos com <span class="mono">suite_role</span> definido</td></tr>
+  <tr><td class="mono">auth.users</td><td>Contas reais; remover contas demo</td></tr>
+</table>
+<div class="warn"><b>Alerta:</b> rever os <b>~116 estudantes existentes na cloud</b>. Confirmar se são roster real ou resíduo/demo. <b>Remover ou arquivar</b> tudo o que não for real antes do go-live.</div>
+
+<!-- ============ 7 ============ -->
+<h2 id="s7">7. Capacidades dos cursos</h2>
+<ul>
+  <li><span class="mono">capacity = 0</span> força <b>lista de espera (waitlist)</b> — matrículas legítimas caem em espera indevidamente.</li>
+  <li>Antes de qualquer matrícula real, <b>preencher a capacidade real</b> de cada curso.</li>
+  <li>Validar <span class="mono">enrolled</span> face à capacidade.</li>
+  <li>Usar o template/importador do projeto:
+    <ul>
+      <li>Template: <span class="mono">supabase/templates/course-capacities.csv</span></li>
+      <li>Aplicar: <span class="mono">APPLY_COURSE_CAPACITIES=1 npm run apply:course-capacities</span></li>
+    </ul>
+  </li>
+</ul>
+
+<!-- ============ 8 ============ -->
+<div class="pagebreak"></div>
+<h2 id="s8">8. Segurança / RLS / RPC</h2>
+<ul>
+  <li>Tabelas sensíveis devem ser <b>RPC-only</b> (sem DML direto pelo cliente).</li>
+  <li>Raw DML bloqueado em: <span class="mono">students</span>, <span class="mono">staff</span>, <span class="mono">payments</span>.</li>
+  <li>Todas as escritas passam por RPCs SECURITY DEFINER:</li>
+</ul>
+<table>
+  <tr><th style="width:38%">RPC</th><th>Ação</th></tr>
+  <tr><td class="mono">approve_application</td><td>Aprovar candidatura</td></tr>
+  <tr class="alt"><td class="mono">reject_application</td><td>Rejeitar candidatura</td></tr>
+  <tr><td class="mono">mark_paid</td><td>Marcar como pago</td></tr>
+  <tr class="alt"><td class="mono">student_upsert</td><td>Criar/atualizar estudante</td></tr>
+  <tr><td class="mono">student_archive</td><td>Arquivar estudante</td></tr>
+  <tr class="alt"><td class="mono">hold_place</td><td>Reservar vaga</td></tr>
+  <tr><td class="mono">hold_clear</td><td>Libertar reserva</td></tr>
+  <tr class="alt"><td class="mono">staff_upsert</td><td>Criar/atualizar staff</td></tr>
+  <tr><td class="mono">pay_invoice</td><td>Pagar fatura</td></tr>
+  <tr class="alt"><td class="mono">confirm_invoice_payment</td><td>Confirmar pagamento de fatura</td></tr>
+</table>
+<p class="muted">Confirmar via queries da secção 16 que <span class="mono">authenticated</span>/<span class="mono">anon</span> não têm INSERT/UPDATE/DELETE direto nas tabelas sensíveis.</p>
+
+<!-- ============ 9 ============ -->
+<h2 id="s9">9. Auditoria</h2>
+<ul>
+  <li>Tabela de rasto: <span class="mono">audit_log</span>.</li>
+  <li>Ações críticas que devem gerar rasto: aprovar candidatura, rejeitar candidatura, pagamento, alterações a estudante, alterações a staff, resultados, documentos.</li>
+  <li>Consultar rasto recente com a query da secção 16.</li>
+</ul>
+
+<!-- ============ 10 ============ -->
+<h2 id="s10">10. CI/CD</h2>
+<ul>
+  <li>Workflow do GitHub Actions deve estar <b>ativo</b> (<span class="mono">.github/workflows/ci.yml</span>).</li>
+  <li>Build da <b>Suite</b> deve passar (<span class="mono">npm run build</span>).</li>
+  <li>Build do <b>site público</b> deve passar (<span class="mono">cd site-publico &amp;&amp; npm run build</span>).</li>
+  <li>Validação de <b>RLS/RPC deve ser bloqueante</b> (falha vermelha bloqueia merge).</li>
+  <li><span class="mono">continue-on-error</span> <b>não deve existir</b> nos jobs críticos.</li>
+  <li>Fazer push de <span class="mono">.github/workflows/ci.yml</span> exige um <b>GitHub PAT com scope <span class="mono">workflow</span></b>.</li>
+</ul>
+
+<!-- ============ 11 ============ -->
+<h2 id="s11">11. Deploy na Vercel</h2>
+<ul>
+  <li><b>Site público</b>: root directory <span class="mono">site-publico</span> (framework Next.js).</li>
+  <li><b>Suite</b>: root da app Vite (build <span class="mono">npm run build</span> → <span class="mono">dist</span>, conforme <span class="mono">vercel.json</span>).</li>
+  <li>Confirmar as variáveis de ambiente (secção 3) <b>antes</b> do deploy.</li>
+  <li>Validar endpoints após o deploy (site abre, Suite faz login, dados reais aparecem).</li>
+  <li><b>Cuidado com deploy cruzado</b> — não apontar o projeto do site para o root da Suite (ou vice-versa).</li>
+</ul>
+
+<!-- ============ 12 ============ -->
+<h2 id="s12">12. Comandos úteis</h2>
+<pre>npm run build                         # build da Suite (Vite)
+cd site-publico &amp;&amp; npm run build       # build do site público (Next.js)
+
+npm run validate:supabase             # valida ligação/estado Supabase
+npm run validate:public-site          # valida o site público
+npm run validate:uat-core             # valida o núcleo para UAT
+
+npm run cleanup:codex-test-data       # remove dados de teste (Codex)
+npm run apply:migration -- &lt;arquivo.sql&gt;             # aplica migração SQL
+APPLY_COURSE_CAPACITIES=1 npm run apply:course-capacities   # aplica capacidades</pre>
+
+<!-- ============ 13 ============ -->
+<div class="pagebreak"></div>
+<h2 id="s13">13. Rotação de segredos</h2>
+<table>
+  <tr><th style="width:60%">Ação</th><th style="width:12%">Feito?</th><th>Notas</th></tr>
+  <tr><td>Rotacionar o Vercel token usado no handoff</td><td class="cell-fill"></td><td class="cell-fill"></td></tr>
+  <tr class="alt"><td>Rotacionar a DB password do Supabase</td><td class="cell-fill"></td><td class="cell-fill"></td></tr>
+  <tr><td>Apagar <span class="mono">.env.codex-handoff</span></td><td class="cell-fill"></td><td class="cell-fill"></td></tr>
+  <tr class="alt"><td>Garantir que todos os <span class="mono">.env*</span> estão no <span class="mono">.gitignore</span></td><td class="cell-fill"></td><td class="cell-fill"></td></tr>
+  <tr><td>Confirmar que a service role key <b>não aparece</b> no histórico Git</td><td class="cell-fill"></td><td class="cell-fill"></td></tr>
+</table>
+
+<!-- ============ 14 ============ -->
+<h2 id="s14">14. Backup e recuperação</h2>
+<ul>
+  <li>Ativar <b>PITR</b> (Point-in-Time Recovery) no Supabase.</li>
+  <li>Configurar um <b>backup externo</b> (fora do Supabase) com periodicidade definida.</li>
+  <li>Fazer um <b>restore testado</b> (validar que o backup restaura de facto).</li>
+  <li>Documentar data/hora e responsável de cada backup e teste de restore.</li>
+</ul>
+
+<!-- ============ 15 ============ -->
+<h2 id="s15">15. Critérios técnicos para produção</h2>
+<table>
+  <tr><th style="width:30%">Item</th><th style="width:14%">Estado</th><th>Evidência</th><th style="width:16%">Responsável</th><th style="width:10%">Aprovado?</th></tr>
+  <tr><td>Builds verdes (Suite + site)</td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td></tr>
+  <tr class="alt"><td>CI remoto ativo</td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td></tr>
+  <tr><td>RLS/RPC bloqueante</td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td></tr>
+  <tr class="alt"><td>Dados reais carregados</td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td></tr>
+  <tr><td>Contas reais criadas</td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td></tr>
+  <tr class="alt"><td>Estudantes revisados (~116)</td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td></tr>
+  <tr><td>Capacidades preenchidas</td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td></tr>
+  <tr class="alt"><td>UAT aprovado</td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td></tr>
+  <tr><td>Backup / PITR ativo</td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td></tr>
+  <tr class="alt"><td>Segredos rotacionados</td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td></tr>
+  <tr><td>Demo removido</td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td></tr>
+  <tr class="alt"><td>Monitoramento ativo</td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td><td class="cell-fill"></td></tr>
+</table>
+
+<!-- ============ 16 ============ -->
+<div class="pagebreak"></div>
+<h2 id="s16">16. Anexo — SQL / verificações úteis</h2>
+<p class="muted">Executar no SQL Editor do Supabase. Nenhuma query contém segredos.</p>
+
+<h3>Políticas RLS nas tabelas sensíveis</h3>
+<pre>select tablename, policyname, cmd
+from pg_policies
+where tablename in ('students','staff','payments');</pre>
+
+<h3>Grants diretos a authenticated / anon (devem ser mínimos)</h3>
+<pre>select table_name, grantee, privilege_type
+from information_schema.role_table_grants
+where table_schema='public'
+  and table_name in ('students','staff','payments')
+  and grantee in ('authenticated','anon');</pre>
+
+<h3>Contagem de estudantes</h3>
+<pre>select count(*) from public.students;</pre>
+
+<h3>Cursos com capacidade 0 (causam waitlist)</h3>
+<pre>select code, title, capacity, enrolled
+from public.courses
+where coalesce(capacity, 0) = 0;</pre>
+
+<h3>Perfis sem suite_role</h3>
+<pre>select id, full_name, email, suite_role
+from public.profiles
+where suite_role is null;</pre>
+
+<h3>Estudantes sem conta de utilizador ligada</h3>
+<pre>select id, reference, full_name, email
+from public.students
+where user_id is null;</pre>
+
+<h3>Candidaturas por estágio</h3>
+<pre>select stage, count(*)
+from public.applications
+group by stage
+order by count(*) desc;</pre>
+
+<h3>Rasto de auditoria recente</h3>
+<pre>select created_at, actor, action, entity, entity_id
+from public.audit_log
+order by created_at desc
+limit 50;</pre>
+
+<p class="muted" style="margin-top:22pt;">Symanek College — Guia Técnico de Operação, Acessos e Produção · Versão 1.0 · 29/08/2026 · Responsável: Pedro Teixeira ·
+<a href="mailto:pedroteixeira201435@gmail.com">pedroteixeira201435@gmail.com</a></p>
+
+</body>
+</html>
