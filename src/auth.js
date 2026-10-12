@@ -35,7 +35,7 @@ export async function currentRole() {
 }
 
 export async function signIn(email, password) {
-  const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
+  const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password: password.trim() })
   if (error) return { ok: false, error: error.message }
   const role = await roleFromSession()
   if (!role) {
