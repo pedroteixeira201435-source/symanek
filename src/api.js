@@ -1104,6 +1104,21 @@ export async function grantStudentAccess(studentUuid, { reset = false } = {}) {
   return data // { email, password, reset? }
 }
 
+// After an admin edits a student's email: move their portal login to it too,
+// otherwise they can only sign in with the old address.
+export async function syncStudentLoginEmail(studentUuid) {
+  if (!useHttp()) return mock({ synced: false })
+  const { data, error } = await supabase.functions.invoke('grant-student-access', {
+    body: { student_id: studentUuid, sync_email: true },
+  })
+  if (error) {
+    let msg = error.message
+    try { const j = await error.context?.json(); msg = j?.error || msg } catch { /* keep msg */ }
+    throw new Error(msg)
+  }
+  return data // { synced, email? }
+}
+
 // Staff Suite login (admin only). Creates the auth user with a temporary
 // password and the chosen workspace (suite_role); action 'revoke' removes it.
 async function invokeStaffAccess(body) {
@@ -1458,6 +1473,19 @@ export const assessmentDelete = (id) => one('assessment_delete', { p_id: id })
 export const assessmentSaveMarks = (assessmentId, marks) =>
   one('assessment_save_marks', { p_assessment: assessmentId, p_marks: marks.map((m) => ({ student_id: m.studentId, mark: m.mark === '' || m.mark == null ? null : Number(m.mark) })) })
 export const listMyAssessments = () => rows('student_assessments')
+
+// Live online quizzes (20261018120000). An assessment with questions; marked
+// server-side, the score lands in assessment_marks. Students never get `correct`.
+export const quizGet = (assessmentId) => one('quiz_get', { p_assessment: assessmentId })
+export const quizSaveQuestions = (assessmentId, questions) =>
+  one('quiz_save_questions', { p_assessment: assessmentId, p_questions: questions.map((q) => ({ kind: q.kind, prompt: q.prompt, options: q.kind === 'mcq' ? q.options : [], correct: String(q.correct ?? ''), marks: Number(q.marks) || 1 })) })
+export const quizSetStatus = (assessmentId, status, { timeLimit = null, closesIn = null, showResults = true } = {}) =>
+  one('quiz_set_status', { p_assessment: assessmentId, p_status: status, p_time_limit: timeLimit ? Number(timeLimit) : null, p_closes_in: closesIn ? Number(closesIn) : null, p_show_results: showResults })
+export const quizMonitor = (assessmentId) => one('quiz_monitor', { p_assessment: assessmentId })
+export const listMyQuizzes = async () => (await one('student_quizzes')) || []
+export const quizStart = (assessmentId) => one('quiz_start', { p_assessment: assessmentId })
+export const quizSaveAnswers = (assessmentId, answers) => one('quiz_save_answers', { p_assessment: assessmentId, p_answers: answers })
+export const quizSubmit = (assessmentId, answers) => one('quiz_submit', { p_assessment: assessmentId, p_answers: answers })
 
 // Live classes. Lecturer: their modules; student: modules they are enrolled on.
 export async function listClassSessions(courseId = null) {

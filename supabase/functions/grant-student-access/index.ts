@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
     const isAdmin = !!prof && (prof.role === 'admin' || prof.suite_role === 'admin')
     if (!isAdmin) return json(403, { error: 'admin only' })
 
-    const { student_id, reset } = await req.json().catch(() => ({}))
+    const { student_id, reset, sync_email } = await req.json().catch(() => ({}))
     if (!student_id) return json(400, { error: 'student_id required' })
 
     // service client — bypasses RLS, holds the secret key (never sent to browser).
@@ -62,6 +62,18 @@ Deno.serve(async (req) => {
       .select('id,full_name,email,status,user_id').eq('id', student_id).maybeSingle()
     if (!s) return json(404, { error: 'student not found' })
     if (!s.email) return json(422, { error: 'student has no email on file' })
+    const email = String(s.email).trim().toLowerCase()
+
+    // The admin corrected the student's email in the Suite. students.email is
+    // only the record; sign-in checks auth.users.email, so move the login too
+    // (password untouched). No login yet → nothing to move.
+    if (sync_email) {
+      if (!s.user_id) return json(200, { synced: false })
+      const { error: eErr } = await admin.auth.admin.updateUserById(s.user_id, { email, email_confirm: true })
+      if (eErr) return json(400, { error: eErr.message })
+      return json(200, { synced: true, email })
+    }
+
     if (s.status !== 'enrolled') return json(409, { error: 'student is not enrolled yet' })
 
     // Already has a login: refuse unless the admin explicitly asked to reset it
@@ -70,17 +82,19 @@ Deno.serve(async (req) => {
     if (s.user_id && !reset) return json(409, { error: 'portal access already granted', code: 'already_granted' })
     if (s.user_id && reset) {
       const password = tempPassword()
-      const { error: rErr } = await admin.auth.admin.updateUserById(s.user_id, { password, email_confirm: true })
+      // also carry the email over: the credentials we hand back must be the
+      // ones that actually sign in, even if the email was edited since grant.
+      const { error: rErr } = await admin.auth.admin.updateUserById(s.user_id, { email, password, email_confirm: true })
       if (rErr) return json(400, { error: rErr.message })
       // force the student to choose a new password again on next sign-in
       await admin.from('profiles').update({ must_reset_password: true }).eq('id', s.user_id)
-      return json(200, { email: s.email, password, reset: true })
+      return json(200, { email, password, reset: true })
     }
 
     // (c) create the auth user with a temporary password, email pre-confirmed.
     const password = tempPassword()
     const { data: created, error: cErr } = await admin.auth.admin.createUser({
-      email: s.email, password, email_confirm: true,
+      email, password, email_confirm: true,
       user_metadata: { full_name: s.full_name },
     })
     if (cErr || !created?.user) return json(400, { error: cErr?.message ?? 'createUser failed' })

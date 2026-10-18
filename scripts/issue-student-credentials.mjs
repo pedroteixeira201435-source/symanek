@@ -69,7 +69,7 @@ for (const s of students) {
   }
 
   const password = tempPassword();
-  await authAdmin(cfg, `/users/${s.user_id}`, { method: "PUT", body: { password, email_confirm: true } });
+  await authAdmin(cfg, `/users/${s.user_id}`, { method: "PUT", body: { email: s.email.trim().toLowerCase(), password, email_confirm: true } });
   await rest(cfg, `profiles?id=eq.${s.user_id}`, { method: "PATCH", body: { must_reset_password: true } });
   issued.push({ student_no: s.student_no, full_name: s.full_name, email: s.email, password });
   console.error(`ok    ${label}`);

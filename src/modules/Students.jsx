@@ -3,7 +3,7 @@ import { StatCard, Tabs, Panel, Badge, Modal, Avatar, Toast, useToast } from '..
 import { fmtN } from '../lib/format.js'
 import { gradeOf, evaluateResult } from '../lib/academics.js'
 import {
-  getInstitution, listProgrammes, listStudents, listInvoices, getResultsForStudent, getHoldsForStudent, grantStudentAccess, studentUpsert,
+  getInstitution, listProgrammes, listStudents, listInvoices, getResultsForStudent, getHoldsForStudent, grantStudentAccess, syncStudentLoginEmail, studentUpsert,
   listStudentEnrolments, listProgrammeCourses, enrolStudentModule, dropEnrolment, periodLabel,
 } from '../api.js'
 
@@ -241,6 +241,11 @@ function StudentForm({ student, programmes, onClose, onSaved, showToast }) {
         idNumber: f.id_number.value.trim(),
         campus: f.campus.value.trim(),
       })
+      const newEmail = f.email.value.trim().toLowerCase()
+      if (student._uuid && newEmail !== (student.email || '').trim().toLowerCase()) {
+        try { await syncStudentLoginEmail(student._uuid) }
+        catch (err) { showToast('Saved, but the portal login still uses the old email: ' + (err?.message || err)) }
+      }
       await onSaved()
     } catch (err) { showToast('Could not save student: ' + (err?.message || err)) }
   }

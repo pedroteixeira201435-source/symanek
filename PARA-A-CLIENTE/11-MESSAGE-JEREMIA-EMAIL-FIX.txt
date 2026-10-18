@@ -1,0 +1,28 @@
+Good morning Jeremia,
+
+Thank you, you found the exact cause.
+
+When a student's email was corrected in the Suite, the change was saved on the
+student's record, but their portal login kept the old email underneath. That
+is why the new email gave "invalid login credentials" and the old one worked.
+
+It is fixed now:
+- From now on, when you correct a student's email, their login moves to the
+  new email automatically. Their password stays the same.
+- I have also moved the two students whose emails you corrected:
+    Ruth Nduviteko Shoombe     -> ruthunshoombe@gmail.com
+    Dortea Lapaka Shimunyengu  -> lapakadortea3@gmail.com
+  They should now sign in with the NEW email and the password they already use.
+
+New: live online quizzes
+Lecturers can now run quizzes online, inside the Suite:
+1. Assessments tab -> "+ New test / quiz" -> then "Questions" to write the
+   questions (multiple choice, true/false or short answer).
+2. "Go live" -> choose the time per student and when it closes.
+3. Students open the "Quizzes" tab in their portal and write it against a
+   countdown. Answers save automatically.
+4. The lecturer watches who has started and submitted on the live monitor.
+   The quiz marks itself, and the score goes straight into the gradebook and CA.
+
+Thank you,
+Pedro

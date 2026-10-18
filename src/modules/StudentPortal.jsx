@@ -11,6 +11,7 @@ import {
 import { TimetableGrid } from './Scheduling.jsx'
 import { StudentClasses } from './LiveClasses.jsx'
 import { MyAssessments } from './Assessments.jsx'
+import { StudentQuizzes } from './Quizzes.jsx'
 
 const CREDIT_RATE = 1150
 const SEM_CREDIT_CAP = 72
@@ -46,9 +47,10 @@ export default function StudentPortal({ role }) {
 
   return (
     <>
-      <Tabs tabs={['My Studies', 'Live Classes', 'Registration', 'Grades & Transcript', 'My Timetable', 'My Finance', 'Announcements', 'Ask Lecturer', 'Holds & Documents']} active={tab} onChange={setTab} />
+      <Tabs tabs={['My Studies', 'Live Classes', 'Quizzes', 'Registration', 'Grades & Transcript', 'My Timetable', 'My Finance', 'Announcements', 'Ask Lecturer', 'Holds & Documents']} active={tab} onChange={setTab} />
       {tab === 'My Studies' && <MyStudies {...ctx} />}
       {tab === 'Live Classes' && <StudentClasses />}
+      {tab === 'Quizzes' && <StudentQuizzes />}
       {tab === 'Registration' && <Registration {...ctx} />}
       {tab === 'Grades & Transcript' && <><Transcript {...ctx} /><MyAssessments /></>}
       {tab === 'My Timetable' && <MyTimetable {...ctx} />}

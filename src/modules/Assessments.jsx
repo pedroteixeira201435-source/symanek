@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Panel, Badge, Modal, Toast, useToast, Icon } from '../ui.jsx'
 import * as api from '../api.js'
+import { QuizBuilder, QuizGoLive, QuizMonitor, QUIZ_STATUS } from './Quizzes.jsx'
 
 // Tests, quizzes & other assessments per module. The lecturer defines each
 // assessment (out of N marks, with a weight) and records one mark per student.
@@ -15,6 +16,7 @@ export function AssessmentsTab({ course }) {
   const [book, setBook] = useState({ assessments: [], students: [] })
   const [edit, setEdit] = useState(null)      // assessment being created/edited
   const [marksFor, setMarksFor] = useState(null)
+  const [quizFor, setQuizFor] = useState(null)   // { a, mode: 'questions' | 'live' | 'monitor' }
   const [loading, setLoading] = useState(true)
   const load = useCallback(() => api.getCourseGradebook(course.id).then(setBook).catch(() => setBook({ assessments: [], students: [] })).finally(() => setLoading(false)), [course.id])
   useEffect(() => { setLoading(true); load() }, [load])
@@ -29,26 +31,30 @@ export function AssessmentsTab({ course }) {
     <>
       <div className="note-banner">
         <Icon name="info" size={16} />
-        <div>Create each <strong>test, quiz or practical</strong> here, then enter the students' marks. Graded assignments appear automatically. The <strong>CA %</strong> is the weighted average of everything marked so far — copy it into the Marks tab with “Fill CA from assessments”.</div>
+        <div>Create each <strong>test, quiz or practical</strong> here, then enter the students' marks — or add <strong>Questions</strong> and run it as a <strong>live online quiz</strong> that marks itself. Graded assignments appear automatically. The <strong>CA %</strong> is the weighted average of everything marked so far — copy it into the Marks tab with “Fill CA from assessments”.</div>
       </div>
       <Panel title={`Assessments — ${course.code}`} subtitle={cols.length ? `${cols.length} in the gradebook` : undefined}
         actions={<button className="btn primary sm" onClick={() => setEdit({})}>+ New test / quiz</button>} flush>
         {loading ? <Empty>Loading…</Empty> : cols.length === 0 ? <Empty>No assessments yet. Click “New test / quiz” to create the first one.</Empty> : (
           <table className="data">
-            <thead><tr><th>Assessment</th><th>Type</th><th>Date</th><th className="num">Out of</th><th className="num">Weight</th><th className="num">Marked</th><th style={{ width: 210 }}>Action</th></tr></thead>
+            <thead><tr><th>Assessment</th><th>Type</th><th>Date</th><th className="num">Out of</th><th className="num">Weight</th><th className="num">Marked</th><th style={{ width: 330 }}>Action</th></tr></thead>
             <tbody>{cols.map((a) => {
               const marked = book.students.filter((s) => s.marks && s.marks[a.id] != null).length
               return (
                 <tr key={a.id}>
                   <td style={{ fontWeight: 600 }}>{a.title}</td>
-                  <td>{a.source === 'assignment' ? <Badge tone="blue">Assignment</Badge> : <Badge tone="gray">{KINDS[a.kind] || a.kind}</Badge>}</td>
+                  <td>{a.source === 'assignment' ? <Badge tone="blue">Assignment</Badge> : <Badge tone="gray">{KINDS[a.kind] || a.kind}</Badge>}
+                    {a.online && <> <Badge tone={QUIZ_STATUS[a.quiz_status]?.[0]}>{a.quiz_status === 'draft' ? 'Online · draft' : QUIZ_STATUS[a.quiz_status]?.[1]}</Badge></>}</td>
                   <td className="mono">{a.date || '—'}</td>
                   <td className="num">{a.max}</td>
                   <td className="num">{a.weight}</td>
                   <td className="num">{marked}/{book.students.length}</td>
                   <td>{a.source === 'assessment'
                     ? <span style={{ display: 'flex', gap: 6 }}>
-                        <button className="btn primary sm" onClick={() => setMarksFor(a)}>Enter marks</button>
+                        {a.online && a.quiz_status === 'draft' && <button className="btn primary sm" onClick={() => setQuizFor({ a, mode: 'live' })}>Go live</button>}
+                        {a.online && a.quiz_status !== 'draft' && <button className="btn primary sm" onClick={() => setQuizFor({ a, mode: 'monitor' })}>{a.quiz_status === 'open' ? 'Monitor' : 'Results'}</button>}
+                        <button className="btn ghost sm" onClick={() => setQuizFor({ a, mode: 'questions' })}>Questions</button>
+                        <button className={a.online ? 'btn ghost sm' : 'btn primary sm'} onClick={() => setMarksFor(a)}>Enter marks</button>
                         <button className="btn ghost sm" onClick={() => setEdit(a)}>Edit</button>
                         <button className="btn ghost sm" onClick={() => remove(a)}>Delete</button>
                       </span>
@@ -79,6 +85,9 @@ export function AssessmentsTab({ course }) {
 
       {edit && <AssessmentModal course={course} item={edit} onClose={() => setEdit(null)} onDone={(msg) => { setEdit(null); showToast(msg); load() }} showToast={showToast} />}
       {marksFor && <MarksModal assessment={marksFor} students={book.students} onClose={() => setMarksFor(null)} onDone={(msg) => { setMarksFor(null); showToast(msg); load() }} showToast={showToast} />}
+      {quizFor?.mode === 'questions' && <QuizBuilder assessment={quizFor.a} onClose={() => setQuizFor(null)} onDone={(msg) => { setQuizFor(null); showToast(msg); load() }} showToast={showToast} />}
+      {quizFor?.mode === 'live' && <QuizGoLive assessment={quizFor.a} onClose={() => setQuizFor(null)} onDone={(msg) => { setQuizFor({ a: { ...quizFor.a, quiz_status: 'open' }, mode: 'monitor' }); showToast(msg); load() }} showToast={showToast} />}
+      {quizFor?.mode === 'monitor' && <QuizMonitor assessment={quizFor.a} onClose={() => { setQuizFor(null); load() }} onChanged={load} showToast={showToast} />}
       <Toast msg={toast} />
     </>
   )
