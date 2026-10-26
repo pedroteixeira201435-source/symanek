@@ -1,15 +1,37 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { StatCard, Panel, Badge, Toast, useToast, Icon } from '../ui.jsx'
-import { listExamSchedule } from '../api.js'
+import { StatCard, Panel, Badge, Modal, Toast, useToast, Icon } from '../ui.jsx'
+import { listExamSchedule, listCourses, listStaffAccounts, examSittingUpsert, examSittingDelete } from '../api.js'
 import { SUBJECT_TYPES, EXAM_CONFIG, PASS, WEIGHTS, POLICY_SUMMARY } from '../lib/academics.js'
 
 export default function Exams() {
   const [toast, showToast] = useToast()
   const [schedule, setSchedule] = useState([])
   const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState(null) // null = closed, {} = new, sitting = edit
+  const [courses, setCourses] = useState([])
+  const [staff, setStaff] = useState([])
 
   const reload = useCallback(() => listExamSchedule().then(setSchedule).catch(() => setSchedule([])), [])
   useEffect(() => { reload().finally(() => setLoading(false)) }, [reload])
+  useEffect(() => {
+    listCourses().then((cs) => setCourses([...cs].sort((a, b) => a.code.localeCompare(b.code)))).catch(() => setCourses([]))
+    listStaffAccounts().then(setStaff).catch(() => setStaff([]))
+  }, [])
+
+  // datetime-local values are Windhoek wall time (UTC+2, no DST)
+  const toLocalInput = (iso) => iso ? new Date(new Date(iso).getTime() + 2 * 3600e3).toISOString().slice(0, 16) : ''
+  const save = async (ev) => {
+    ev.preventDefault(); const f = ev.target
+    try {
+      await examSittingUpsert({ id: editing.id ?? null, courseId: f.course.value, at: f.at.value ? `${f.at.value}:00+02:00` : null, venue: f.venue.value, seats: Number(f.seats.value) || 0, invigilatorId: f.invigilator.value || null })
+      setEditing(null); await reload(); showToast('Sitting saved')
+    } catch (err) { showToast('Could not save: ' + (err?.message || err)) }
+  }
+  const remove = async (e) => {
+    if (!window.confirm(`Delete the ${e.code} sitting?`)) return
+    try { await examSittingDelete(e.id); await reload(); showToast('Sitting deleted') }
+    catch (err) { showToast('Could not delete: ' + (err?.message || err)) }
+  }
 
   const totalSeats = schedule.reduce((s, e) => s + (e.seats || 0), 0)
   const totalSat = schedule.reduce((s, e) => s + (e.sat || 0), 0)
@@ -58,7 +80,7 @@ export default function Exams() {
         </div>
       </Panel>
 
-      <Panel title="Exam timetable & venues" subtitle="Seat allocation and invigilation roster" actions={<button className="btn primary sm" onClick={() => showToast('Exam timetable published')}>Publish timetable</button>} flush>
+      <Panel title="Exam timetable & venues" subtitle="Seat allocation and invigilation roster" actions={<button className="btn primary sm" onClick={() => setEditing({})}>+ Add sitting</button>} flush>
         {schedule.length === 0 ? <Empty>No examination sittings yet.</Empty> : (
           <table className="data">
             <thead><tr><th>Course</th><th>Date</th><th>Time</th><th>Venue</th><th className="num">Seats</th><th>Invigilator</th><th></th></tr></thead>
@@ -71,13 +93,29 @@ export default function Exams() {
                   <td>{e.venue || '-'}</td>
                   <td className="num">{e.sat || 0}/{e.seats || 0}</td>
                   <td>{e.invigilator || '-'}</td>
-                  <td><button className="btn ghost sm" onClick={() => showToast(`Seating plan generated for ${e.code}`)}>Seating</button></td>
+                  <td><button className="btn ghost sm" onClick={() => setEditing(e)}>Edit</button> <button className="btn ghost sm" onClick={() => remove(e)}>Delete</button></td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </Panel>
+      {editing && <Modal title={editing.id ? 'Edit sitting' : 'Add sitting'} onClose={() => setEditing(null)}>
+        <form onSubmit={save}>
+          <div className="field"><label>Course</label>
+            <select name="course" required defaultValue={editing.courseId || ''}><option value="">Select a course…</option>{courses.map((c) => <option key={c.id} value={c.id}>{c.code} — {c.title}</option>)}</select></div>
+          <div className="grid2" style={{ gap: 12 }}>
+            <div className="field"><label>Date & time</label><input name="at" type="datetime-local" required defaultValue={toLocalInput(editing.at)} /></div>
+            <div className="field"><label>Seats</label><input name="seats" type="number" min="0" defaultValue={editing.seats} /></div>
+          </div>
+          <div className="grid2" style={{ gap: 12 }}>
+            <div className="field"><label>Venue</label><input name="venue" placeholder="Hall A" defaultValue={editing.venue} /></div>
+            <div className="field"><label>Invigilator</label>
+              <select name="invigilator" defaultValue={editing.invigilatorId || ''}><option value="">— None —</option>{staff.map((s) => <option key={s.uuid} value={s.uuid}>{s.name}</option>)}</select></div>
+          </div>
+          <button className="btn primary" type="submit">Save</button>
+        </form>
+      </Modal>}
       <Toast msg={toast} />
     </>
   )

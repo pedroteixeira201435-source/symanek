@@ -329,6 +329,7 @@ export async function listExamSchedule() {
     return (data ?? []).map((r) => {
       const d = r.at ? new Date(r.at) : null
       return {
+        id: r.id, courseId: r.course_id, invigilatorId: r.invigilator_id, at: r.at,
         code: r.code, title: r.title,
         date: d ? d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '',
         time: d ? d.toTimeString().slice(0, 5) : '',
@@ -1344,6 +1345,8 @@ export async function holdClear(id) {
 export const programmeUpsert    = (p) => call('programme_upsert', { p_id: p.id ?? null, p_slug: p.slug ?? null, p_name: p.name, p_category: p.category ?? null, p_level: p.level ?? null, p_duration: p.duration ?? null, p_fee: p.fee ?? null, p_modes: p.modes ?? null, p_description: p.description ?? null })
 export const programmeSetActive = (id, active) => call('programme_set_active', { p_id: id, p_active: active })
 export const courseUpsert       = (c) => call('course_upsert', { p_id: c.id ?? null, p_code: c.code, p_title: c.title, p_programme: c.programmeId ?? null, p_credits: c.credits ?? 0, p_semester: c.semester ?? null, p_capacity: c.capacity ?? 0, p_lecturer: c.lecturerId ?? null })
+export const examSittingUpsert  = (x) => call('exam_sitting_upsert', { p_id: x.id ?? null, p_course: x.courseId, p_at: x.at, p_venue: x.venue ?? null, p_seats: x.seats ?? 0, p_invigilator: x.invigilatorId ?? null })
+export const examSittingDelete  = (id) => call('exam_sitting_delete', { p_id: id })
 export const courseDelete       = (id) => call('course_delete', { p_id: id })
 export const courseSetCapacity  = (id, capacity) => call('course_set_capacity', { p_id: id, p_capacity: capacity })
 export const listCourseware     = (courseId) => rows('courseware_list', { p_course: courseId })
