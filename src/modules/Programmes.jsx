@@ -91,6 +91,7 @@ function Catalogue() {
   const [programmes, setProgrammes] = useState([])
   const [loading, setLoading] = useState(true)
   const [showNew, setShowNew] = useState(false)
+  const [editing, setEditing] = useState(null)
   const [filterProg, setFilterProg] = useState('')
   const [query, setQuery] = useState('')
   const [edits, setEdits] = useState({})
@@ -106,8 +107,8 @@ function Catalogue() {
   const save = async (e) => {
     e.preventDefault(); const f = e.target
     try {
-      await courseUpsert({ code: f.code.value.trim().toUpperCase(), title: f.title.value.trim(), programmeId: f.programme.value || null, credits: Number(f.credits.value) || 0, semester: f.semester.value, capacity: Number(f.capacity.value) || 0, lecturerId: f.lecturer.value || null })
-      setShowNew(false); await reload(); showToast('Course saved')
+      await courseUpsert({ id: editing?.id ?? null, code: f.code.value.trim().toUpperCase(), title: f.title.value.trim(), programmeId: f.programme.value || null, credits: Number(f.credits.value) || 0, semester: f.semester.value, capacity: Number(f.capacity.value) || 0, lecturerId: f.lecturer.value || null })
+      setShowNew(false); setEditing(null); await reload(); showToast('Course saved')
     } catch (err) { showToast('Could not save: ' + (err?.message || err)) }
   }
   const remove = async (c) => {
@@ -145,7 +146,7 @@ function Catalogue() {
         subtitle={`${shown.length} of ${courses.length} courses`}
         actions={<>
           {changed.length > 0 && <button className="btn primary sm" onClick={saveCaps} disabled={saving} style={{ marginRight: 8 }}>{saving ? 'Saving…' : `Save capacities (${changed.length})`}</button>}
-          <button className="btn ghost sm" onClick={() => setShowNew(true)}>+ Add course</button>
+          <button className="btn ghost sm" onClick={() => { setEditing(null); setShowNew(true) }}>+ Add course</button>
         </>}
         flush
       >
@@ -167,24 +168,24 @@ function Catalogue() {
                   <td>{c.id
                     ? <input type="number" min="0" value={editedCap(c)} onChange={(e) => setCap(c.id, e.target.value)} style={{ width: 84 }} />
                     : <span className="mono">{cap}</span>}</td>
-                  <td>{c.id && <button className="btn ghost sm" onClick={() => remove(c)}>Delete</button>}</td>
+                  <td>{c.id && <><button className="btn ghost sm" onClick={() => { setEditing(c); setShowNew(true) }}>Edit</button> <button className="btn ghost sm" onClick={() => remove(c)}>Delete</button></>}</td>
                 </tr>
               )
             })}</tbody>
           </table>
         )}
       </Panel>
-      {showNew && <Modal title="Add course" onClose={() => setShowNew(false)}>
+      {showNew && <Modal title={editing ? 'Edit course' : 'Add course'} onClose={() => { setShowNew(false); setEditing(null) }}>
         <form onSubmit={save}>
-          <div className="grid2" style={{ gap: 12 }}><div className="field"><label>Code</label><input name="code" required /></div><div className="field"><label>Credits</label><input name="credits" type="number" min="0" /></div></div>
-          <div className="field"><label>Course title</label><input name="title" required /></div>
+          <div className="grid2" style={{ gap: 12 }}><div className="field"><label>Code</label><input name="code" required defaultValue={editing?.code} /></div><div className="field"><label>Credits</label><input name="credits" type="number" min="0" defaultValue={editing?.credits} /></div></div>
+          <div className="field"><label>Course title</label><input name="title" required defaultValue={editing?.title} /></div>
           <div className="grid2" style={{ gap: 12 }}>
-            <div className="field"><label>Programme</label><select name="programme"><option value="">Unassigned</option>{programmes.map((p) => <option key={p.id || p.code} value={p.id || ''}>{p.code || p.slug} - {p.name}</option>)}</select></div>
-            <div className="field"><label>Semester</label><input name="semester" placeholder="S1" /></div>
+            <div className="field"><label>Programme</label><select name="programme" defaultValue={programmes.find((p) => (p.code || p.slug || '').toUpperCase() === editing?.prog)?.id || ''}><option value="">Unassigned</option>{programmes.map((p) => <option key={p.id || p.code} value={p.id || ''}>{p.code || p.slug} - {p.name}</option>)}</select></div>
+            <div className="field"><label>Semester</label><input name="semester" placeholder="S1" defaultValue={editing?.sem} /></div>
           </div>
           <div className="grid2" style={{ gap: 12 }}>
-            <div className="field"><label>Capacity</label><input name="capacity" type="number" min="0" /></div>
-            <div className="field"><label>Lecturer</label><select name="lecturer"><option value="">— No lecturer —</option>{staff.map((s) => <option key={s.uuid} value={s.uuid}>{s.name}</option>)}</select></div>
+            <div className="field"><label>Capacity</label><input name="capacity" type="number" min="0" defaultValue={editing?.cap} /></div>
+            <div className="field"><label>Lecturer</label><select name="lecturer" defaultValue={editing?.lecturerId || ''}><option value="">— No lecturer —</option>{staff.map((s) => <option key={s.uuid} value={s.uuid}>{s.name}</option>)}</select></div>
           </div>
           <button className="btn primary" type="submit">Save</button>
         </form>
