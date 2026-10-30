@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { categories } from "@/lib/content";
+import { categories, college } from "@/lib/content";
 
 const nav = [
   { href: "/", label: "Home" },
@@ -12,6 +12,7 @@ const nav = [
   { href: "/programmes", label: "Programmes", mega: true },
   { href: "/gallery", label: "Gallery" },
   { href: "/contact", label: "Contact" },
+  { href: college.studentPortalUrl, label: "Sign In", external: true },
 ];
 
 export function SiteHeader() {
@@ -57,16 +58,27 @@ export function SiteHeader() {
         <nav className="hidden items-center gap-1 md:flex">
           {nav.map((item) => (
             <div key={item.href} className="group relative">
-              <Link
-                href={item.href}
-                className={`rounded-full px-3.5 py-2 text-sm font-medium transition-colors duration-150 ${
-                  pathname === item.href
-                    ? "text-petrol-900"
-                    : "text-petrol-600 hover:text-petrol-900"
-                }`}
-              >
-                {item.label}
-              </Link>
+              {item.external ? (
+                <a
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="rounded-full px-3.5 py-2 text-sm font-medium text-petrol-600 transition-colors duration-150 hover:text-petrol-900"
+                >
+                  {item.label}
+                </a>
+              ) : (
+                <Link
+                  href={item.href}
+                  className={`rounded-full px-3.5 py-2 text-sm font-medium transition-colors duration-150 ${
+                    pathname === item.href
+                      ? "text-petrol-900"
+                      : "text-petrol-600 hover:text-petrol-900"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              )}
               {item.mega && (
                 <div className="invisible absolute left-1/2 top-full w-72 -translate-x-1/2 pt-2 opacity-0 transition-[opacity,transform] duration-200 ease-out-strong group-hover:visible group-hover:opacity-100 [transform:translate(-50%,4px)] group-hover:[transform:translate(-50%,0)]">
                   <div className="rounded-2xl bg-white p-2 shadow-card-hover ring-1 ring-petrol-100">
@@ -114,11 +126,23 @@ export function SiteHeader() {
         } transition-[max-height] duration-300 ease-drawer`}
       >
         <div className="container-max flex flex-col gap-1 py-3">
-          {nav.map((item) => (
-            <Link key={item.href} href={item.href} className="rounded-xl px-3 py-2.5 text-[15px] font-medium text-petrol-700 hover:bg-petrol-50">
-              {item.label}
-            </Link>
-          ))}
+          {nav.map((item) =>
+            item.external ? (
+              <a
+                key={item.href}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-xl px-3 py-2.5 text-[15px] font-medium text-petrol-700 hover:bg-petrol-50"
+              >
+                {item.label}
+              </a>
+            ) : (
+              <Link key={item.href} href={item.href} className="rounded-xl px-3 py-2.5 text-[15px] font-medium text-petrol-700 hover:bg-petrol-50">
+                {item.label}
+              </Link>
+            )
+          )}
           <div className="mt-2 flex gap-2">
             <Link href="/portal" className="btn btn-ghost btn-md flex-1">Student Portal</Link>
             <Link href="/apply" className="btn btn-accent btn-md flex-1">Apply Now</Link>
