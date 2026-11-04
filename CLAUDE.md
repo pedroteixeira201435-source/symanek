@@ -21,7 +21,7 @@ A **monorepo for Symanek Specialized College** (private Namibian higher-ed) with
 
 > **Mock-elimination / "empty-by-default" pass — DONE (2026-08-24).** Production carries ZERO mock data:
 > every module reads/writes the real backend, starting empty and populated through CRUD forms. All the
-> migrations below are **APPLIED to the cloud** (tracker in sync through `20261007120000`).
+> migrations below are **APPLIED to the cloud** (tracker in sync through `20261104130000`).
 > - **`src/data.js` is DELETED.** Import formatting/logic from `src/lib/*`: `format.js` (`fmtN`,
 >   `staffEmail`), `academics.js` (`gradeOf`, editable grade bands via `setGradeBands`), `institution.js`
 >   (`SCHOOL`, `INSTITUTION_HIDE`, `getInstType`). Never reference `data.js` — it no longer exists.
@@ -212,8 +212,12 @@ Reference examples: `Graduation.jsx`, `Library.jsx`, `Accounting.jsx`, `Accommod
   `grade_submission` enforces `0..max_marks`.
 - **Files**: private bucket `course-files` (25 MB). Access is decided by the path in `course_file_access()`:
   `materials/<course_id>/…` and `assignments/<course_id>/…` (lecturer writes; enrolled students read),
-  `submissions/<assignment_id>/<student_id>/…` (that student writes; the module's lecturer reads). Clients
-  upload with `api.uploadCourseFile(prefix, file)` and open with `api.courseFileUrl(path)` (signed URL).
+  `submissions/<assignment_id>/<student_id>/…` (that student writes; the module's lecturer reads),
+  `papers/<assessment_id>/…` (quiz question paper: lecturer writes; enrolled students read once the quiz is
+  not a draft) and `answers/<assessment_id>/<student_id>/…` (scanned answer sheets: that student writes while
+  the quiz is open; the lecturer reads). Clients upload with `api.uploadCourseFile(prefix, file)` and open
+  with `api.courseFileUrl(path)` (signed URL). Adding a prefix = `create or replace course_file_access` with
+  **every** existing branch kept.
 
 - **Assessments & live classes** (`20261007120000`, applied to cloud 2026-10-07): tables
   `assessments` / `assessment_marks` (tests, quizzes, practicals; per-module, weighted) with RPCs
@@ -222,6 +226,19 @@ Reference examples: `Graduation.jsx`, `Library.jsx`, `Accounting.jsx`, `Accommod
   recording link and/or parts in `course-files/recordings/<course>/<session>/…`, which `course_file_access` now allows).
   UI: `Assessments.jsx` + `LiveClasses.jsx` (lecturer tabs *Live Classes*/*Assessments*; student tab *Live Classes* and
   *My test & quiz marks* under Grades). Marks tab has "Fill CA from assessments". In-browser recording uploads ~8-min parts.
+- **Live online quizzes** (`20261018120000`, `20261104120000`, `20261104130000`; UI `src/modules/Quizzes.jsx`,
+  student tab *Quizzes*): an `assessments` row with `assessment_questions` becomes an online quiz/test
+  (`kind` is kept as `test` if set). Question kinds: `mcq`, `tf`, `short`, `match` (options = left items,
+  `correct` = JSON array of right items; students get `choices` shuffled by `md5(question id || item)`),
+  and the lecturer-marked `essay` / `upload` (`correct` = private marking guide; an upload answer is a JSON
+  array of `answers/…` paths, validated in `quiz_save_answers`). Lecturer: `quiz_save_questions` (draft only),
+  `quiz_set_paper`, `quiz_set_status` (open/closed/draft), `quiz_monitor`, `quiz_attempt_review`,
+  `quiz_mark_attempt`. Student: `student_quizzes`, `quiz_start`, `quiz_save_answers` (autosave), `quiz_submit`.
+  Marking is server-side in `_quiz_grade`: per question, `quiz_attempts.manual[qid]` (lecturer) overrides
+  `_quiz_auto_mark`; the total is written to `assessment_marks`, so the gradebook/CA pick it up.
+  `_quiz_pending` counts answered essay/upload questions not yet marked (drives "to mark" / "Being marked").
+  **Correct answers and marking guides must never reach a student** — keep them out of `quiz_start`.
+  Time limits are server-side (deadline + 30 s grace); an open quiz past `closes_at` closes itself on the next read.
 
 ### Public-site server routes (Next, `nodejs` runtime, service-role)
 
@@ -307,7 +324,7 @@ reuse these; every flow is table/row → `Modal` → state → toast.
   `site-publico/.env.production.local` → **cloud**; `next build` (production) prefers it over `.env.local`,
   so `dev` stays local and `build`/`start` hit cloud. `.env*.local` are gitignored — never commit secrets.
 - **Live on Vercel (two projects, one GitHub repo `pedroteixeira201435-source/symanek`):**
-  - **`https://symanek-site.vercel.app`** — public site, Root Directory `site-publico`. Needs 6 env vars
+  - **`https://symanek-site.vercel.app`** (production alias **`https://symanekacademy.com`**) — public site, Root Directory `site-publico`. Needs 6 env vars
     incl. server-only `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` (for `/api/letter`, `/api/payment-proof`)
     and `NEXT_PUBLIC_SITE_URL` (absolute portal link in the generated email). See `site-publico/VERCEL-DEPLOY.md`.
   - **`https://symanek-suite.vercel.app`** — Suite, Root Directory `.` (repo root `vercel.json`, Vite→`dist`).
@@ -328,6 +345,14 @@ reuse these; every flow is table/row → `Modal` → state → toast.
   with the root `.vercel` moved aside. `site-publico/vercel.json` (`{"framework":"nextjs"}`) is required
   so the root Vite `vercel.json` doesn't force a `dist` output on the Next build. Add a temporary
   `.vercelignore` for `fotos graduation/` (74 MB of source photos) to keep uploads lean.
+  - **Before any deploy, `cat .vercel/project.json`.** A previous site deploy may have left the root linked
+    to `symanek-site` plus a root `.vercelignore` of `/*` + `!/site-publico` — in that state `vercel --prod`
+    from the root deploys the **site**, and a Suite deploy needs `vercel link --yes --project symanek-suite`
+    and that `.vercelignore` removed. **`vercel link` rewrites the root `.env.local`** (it pulls the
+    project's env) — back it up first.
+  - The CLI uploads the **working tree**, uncommitted edits included. If the tree holds unrelated WIP,
+    `git stash push -- <paths>` it for the deploy and pop it after; confirm what went live by grepping the
+    served `/assets/index-*.js`.
 - **CI** — `.github/workflows/ci.yml` runs on push to `main` and PRs: **suite** (`npm run build`), **site**
   (`tsc --noEmit` + build), and **rls-rpc** (`supabase start` + `seed_auth.sh` + `tests/run.sh`). The
   rls-rpc job is **blocking** (as of `20260824235000` — the suite now matches the enforced RPC-only write
@@ -390,6 +415,17 @@ Several of these are **untracked in git** — check `git status` before assuming
   with `psql -v ON_ERROR_STOP=1`. To act as a user: `set_config('request.jwt.claims', '{"sub":…}')` **and**
   `set_config('request.jwt.claim.sub', …)` (both), then `set role authenticated`. Don't call a volatile
   RPC inside a `WHERE` over an empty table — it never runs.
+- **No Docker on the machine? Dry-run against cloud instead** through the Management API: send
+  `begin;` + the migration + a `do $t$ … $t$` test block (insert throwaway rows, `set_config` the JWT claims
+  for each actor, call the RPCs, collect results in a text) that ends with `raise exception 'DRYRUN:%', out;`.
+  The error rolls everything back (DDL included) and the message carries the results. Check afterwards
+  that the new column/rows are absent, then apply for real.
+- **UI end-to-end against cloud without typing a password**: create throwaway users + rows as above, run
+  Vite with env overrides (`env VITE_API_MODE=http VITE_SUPABASE_URL=… VITE_SUPABASE_ANON_KEY=… npx vite`
+  — process env beats `.env.local`), and put each user's session JSON from `/auth/v1/token` into
+  `localStorage['sb-zbtxhyxwtemproeomtzu-auth-token']`, then reload. In the dev page,
+  `await import('/src/api.js')` gives the real seam for checks (signed URLs, RPC payloads). File inputs
+  can be fed with a `DataTransfer` + a dispatched `change` event.
 - **Production end-to-end checks** are done with `fetch` from Node (not supabase-js): create throwaway
   `@symanek.test` users via the GoTrue admin API with the service role, sign in with
   `/auth/v1/token?grant_type=password` using the Suite's publishable key (`src/supabaseClient.js`), call
@@ -407,4 +443,7 @@ Several of these are **untracked in git** — check `git status` before assuming
   The DB password is a secret — keep it out of committed files and have the user rotate it after.
 - **Sensitive tokens** (`sbp_…`, GitHub PAT, DB password) live only in the gitignored `.env.codex-handoff`
   (the validation/apply scripts read it via `loadEnv`); never commit them, and have the user rotate any
-  token that passed through chat.
+  token that passed through chat. Scripts can use it without anyone reading the file: import `loadEnv` /
+  `requireEnv` from `scripts/supabase-rest.mjs` by absolute path.
+- **Git push**: `gh` is not installed; HTTPS pushes authenticate from `~/.git-credentials`
+  (`credential.helper store`, the user's GitHub PAT).
