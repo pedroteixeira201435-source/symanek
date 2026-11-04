@@ -289,7 +289,7 @@ begin
 end $$;
 
 -- Start (or resume) my attempt. Returns the questions WITHOUT answers; matching
--- questions carry their right-hand items as `choices`, sorted alphabetically.
+-- questions carry their right-hand items as `choices`, shuffled (20261104130000).
 create or replace function public.quiz_start(p_assessment uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare v_sid uuid := public.my_student_id(); a record; t record;

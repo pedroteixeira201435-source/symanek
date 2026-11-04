@@ -135,7 +135,7 @@ export function QuizBuilder({ assessment, onClose, onDone, showToast }) {
                   </div>
                 ))}
                 {!locked && q.pairs.length < 12 && <button className="btn ghost sm" onClick={() => upd(i, { pairs: [...q.pairs, { l: '', r: '' }] })}>+ Pair</button>}
-                <div className="di-sub">Students see the matches mixed up (alphabetical) and pick one for each item. The marks are shared out per correct pair.</div>
+                <div className="di-sub">Students see the matches in a mixed-up order and pick one for each item. The marks are shared out per correct pair.</div>
               </div>}
               {q.kind === 'short' && <div style={{ marginTop: 6 }}>
                 <input value={q.correct} disabled={locked} onChange={(e) => upd(i, { correct: e.target.value })} placeholder="Accepted answer(s), separated by |  e.g. green|light green" style={{ width: '100%' }} />
