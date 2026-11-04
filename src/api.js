@@ -1481,7 +1481,14 @@ export const listMyAssessments = () => rows('student_assessments')
 // server-side, the score lands in assessment_marks. Students never get `correct`.
 export const quizGet = (assessmentId) => one('quiz_get', { p_assessment: assessmentId })
 export const quizSaveQuestions = (assessmentId, questions) =>
-  one('quiz_save_questions', { p_assessment: assessmentId, p_questions: questions.map((q) => ({ kind: q.kind, prompt: q.prompt, options: q.kind === 'mcq' ? q.options : [], correct: String(q.correct ?? ''), marks: Number(q.marks) || 1 })) })
+  one('quiz_save_questions', { p_assessment: assessmentId, p_questions: questions.map((q) => ({ kind: q.kind, prompt: q.prompt, options: ['mcq', 'match'].includes(q.kind) ? q.options : [], correct: String(q.correct ?? ''), marks: Number(q.marks) || 1 })) })
+// Question paper PDF (course-files papers/<assessment>/…); pass file = null to remove it.
+export async function quizSetPaper(assessmentId, file) {
+  const path = file ? await uploadCourseFile(`papers/${assessmentId}`, file) : null
+  return one('quiz_set_paper', { p_assessment: assessmentId, p_path: path })
+}
+export const quizAttemptReview = (assessmentId, studentId) => one('quiz_attempt_review', { p_assessment: assessmentId, p_student: studentId })
+export const quizMarkAttempt = (assessmentId, studentId, marks) => one('quiz_mark_attempt', { p_assessment: assessmentId, p_student: studentId, p_marks: marks })
 export const quizSetStatus = (assessmentId, status, { timeLimit = null, closesIn = null, showResults = true } = {}) =>
   one('quiz_set_status', { p_assessment: assessmentId, p_status: status, p_time_limit: timeLimit ? Number(timeLimit) : null, p_closes_in: closesIn ? Number(closesIn) : null, p_show_results: showResults })
 export const quizMonitor = (assessmentId) => one('quiz_monitor', { p_assessment: assessmentId })

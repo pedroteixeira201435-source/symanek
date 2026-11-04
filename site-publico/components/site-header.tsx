@@ -12,7 +12,7 @@ const nav = [
   { href: "/programmes", label: "Programmes", mega: true },
   { href: "/gallery", label: "Gallery" },
   { href: "/contact", label: "Contact" },
-  { href: college.studentPortalUrl, label: "Sign In", external: true },
+  { href: college.studentPortalUrl, label: "Symanek Suite", external: true },
 ];
 
 export function SiteHeader() {

@@ -31,7 +31,7 @@ export function AssessmentsTab({ course }) {
     <>
       <div className="note-banner">
         <Icon name="info" size={16} />
-        <div>Create each <strong>test, quiz or practical</strong> here, then enter the students' marks — or add <strong>Questions</strong> and run it as a <strong>live online quiz</strong> that marks itself. Graded assignments appear automatically. The <strong>CA %</strong> is the weighted average of everything marked so far — copy it into the Marks tab with “Fill CA from assessments”.</div>
+        <div>Create each <strong>test, quiz or practical</strong> here, then enter the students' marks — or add <strong>Questions</strong> (multiple choice, true/false, matching, short answer, paragraph, or a PDF question paper with scanned answer sheets) and run it as a <strong>live online quiz</strong>. Objective questions mark themselves; you mark paragraphs and answer sheets from the monitor. Graded assignments appear automatically. The <strong>CA %</strong> is the weighted average of everything marked so far — copy it into the Marks tab with “Fill CA from assessments”.</div>
       </div>
       <Panel title={`Assessments — ${course.code}`} subtitle={cols.length ? `${cols.length} in the gradebook` : undefined}
         actions={<button className="btn primary sm" onClick={() => setEdit({})}>+ New test / quiz</button>} flush>
