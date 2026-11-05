@@ -492,6 +492,7 @@ function QuizTaker({ quiz, onClose }) {
                   onChange={(e) => { const fs = [...(e.target.files || [])]; e.target.value = ''; addSheets(q, fs) }} />
                 <div className="di-sub">{uploading === q.id ? 'Uploading…' : 'Photos (one per page) or a PDF, up to 25 MB each · marked by your lecturer'}</div>
               </>}
+              {!QTYPES[q.kind] && <div className="note-banner" style={{ margin: 0 }}><Icon name="refresh" size={16} /><div>This question needs the latest version of the Suite. Your answers are saved — <button className="btn ghost sm" onClick={() => { flush(); window.location.reload() }}>reload the page</button> and click Continue.</div></div>}
             </div>
           ))}
         </div>
