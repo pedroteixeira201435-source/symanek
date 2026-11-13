@@ -1,0 +1,183 @@
+// Printable student documents: proof of registration, academic record and
+// examination permit. The data (and the rules: holds, 80% attendance) come
+// from the student_document / exam_permits RPCs (20261113120000); this file
+// only lays them out on an A4 letterhead and opens the browser's print dialog,
+// where the user can also "Save as PDF".
+import { getStudentDocument, getExamPermits } from '../api.js'
+
+export const DOC_TITLES = {
+  proof_of_registration: 'Proof of Registration',
+  academic_record: 'Academic Record',
+  exam_permit: 'Examination Permit',
+}
+
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
+const day = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Windhoek' }) : '')
+const when = (d) => (d ? new Date(d).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Windhoek' }) : 'To be announced')
+const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : '')
+const semLabel = (n) => (n == null ? 'Year-long' : `Semester ${n}`)
+
+const CSS = `
+  @page { size: A4; margin: 16mm 16mm 18mm; }
+  * { box-sizing: border-box; }
+  body { font: 11pt/1.45 "Segoe UI", Arial, sans-serif; color: #1d2a33; margin: 0; }
+  @media screen { body { max-width: 210mm; margin: 0 auto; padding: 16mm; } }
+  .page { page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  .head { display: flex; justify-content: space-between; gap: 16px; border-bottom: 3px solid #2f4f63; padding-bottom: 10px; }
+  .head h1 { font-size: 17pt; margin: 0; color: #2f4f63; letter-spacing: .3px; }
+  .head .sub { font-size: 9pt; color: #51636f; }
+  .head .right { text-align: right; font-size: 9pt; color: #51636f; }
+  h2 { text-align: center; font-size: 14pt; letter-spacing: 2px; margin: 18px 0 4px; }
+  .ref { text-align: center; font-size: 9pt; color: #51636f; margin-bottom: 14px; }
+  .facts { width: 100%; border-collapse: collapse; margin: 6px 0 14px; }
+  .facts td { padding: 3px 6px; vertical-align: top; }
+  .facts td:nth-child(odd) { color: #51636f; width: 18%; white-space: nowrap; }
+  .facts td:nth-child(even) { font-weight: 600; width: 32%; }
+  table.data { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 10pt; }
+  table.data th { background: #e8eef2; text-align: left; padding: 6px; border: 1px solid #c9d4db; }
+  table.data td { padding: 5px 6px; border: 1px solid #c9d4db; }
+  table.data td.num, table.data th.num { text-align: right; }
+  h3 { font-size: 11pt; margin: 14px 0 2px; color: #2f4f63; }
+  .ok { color: #1c6b3a; font-weight: 700; }
+  .no { color: #a12a2a; font-weight: 700; }
+  .note { font-size: 9.5pt; color: #51636f; margin: 8px 0; }
+  .alert { border: 2px solid #a12a2a; color: #a12a2a; padding: 8px 10px; font-weight: 600; margin: 8px 0; }
+  .sign { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 34px; }
+  .sign .line { border-top: 1px solid #1d2a33; padding-top: 4px; min-width: 240px; }
+  .sign img { height: 110px; opacity: .9; }
+  .foot { margin-top: 18px; font-size: 8pt; color: #7a8a95; text-align: center; border-top: 1px solid #c9d4db; padding-top: 6px; }
+`
+
+function letterhead(c = {}) {
+  return `<div class="head">
+    <div><h1>${esc(c.name || 'Symanek Specialized College')}</h1>
+      <div class="sub">${esc(c.address || '')}${c.po_box ? ' · ' + esc(c.po_box) : ''}</div>
+      <div class="sub">${[c.reg_no && 'Reg. ' + c.reg_no].filter(Boolean).map(esc).join('')}</div></div>
+    <div class="right">${[c.phone && 'Tel ' + c.phone, c.cell && 'Cell ' + c.cell, c.email, c.website].filter(Boolean).map(esc).join('<br>')}</div>
+  </div>`
+}
+
+function studentFacts(s = {}) {
+  return `<table class="facts">
+    <tr><td>Student</td><td>${esc(s.full_name)}</td><td>Student no.</td><td>${esc(s.student_no || '—')}</td></tr>
+    <tr><td>Programme</td><td>${esc(s.programme || '—')}${s.nqf ? ` (${/nqf/i.test(s.nqf) ? esc(s.nqf) : 'NQF ' + esc(s.nqf)})` : ''}</td><td>ID / passport</td><td>${esc(s.id_number || '—')}</td></tr>
+    <tr><td>Year of study</td><td>${s.year >= 1 && s.year <= 10 ? esc(s.year) : '—'}</td><td>Intake</td><td>${esc(cap(s.intake) || '—')}${s.academic_year ? ' ' + esc(s.academic_year) : ''}</td></tr>
+  </table>`
+}
+
+function signature(d, origin) {
+  const stamp = d.college?.stamp_path && /^https?:/.test(d.college.stamp_path) ? d.college.stamp_path : `${origin}/stamp.png`
+  const sig = d.signatory || { name: 'Office of the Registrar', title: '' }
+  return `<div class="sign">
+    <div class="line"><strong>${esc(sig.name)}</strong><br>${esc(sig.title)}<br>Date: ${esc(day(d.issued_at))}</div>
+    <img src="${esc(stamp)}" alt="College stamp" onerror="this.style.display='none'">
+  </div>`
+}
+
+function footer(d) {
+  return `<div class="foot">Generated by the Symanek Suite on ${esc(day(d.issued_at))} · Ref ${esc(ref(d))} · Queries: ${esc(d.college?.email || '')}</div>`
+}
+
+const ref = (d) => {
+  const code = { proof_of_registration: 'POR', academic_record: 'AR', exam_permit: 'EP' }[d.type] || 'DOC'
+  return `${code}-${d.student?.student_no || ''}-${String(d.issued_at || '').slice(0, 10).replace(/-/g, '')}`
+}
+
+function proofBody(d) {
+  const s = d.student || {}; const p = d.period || {}
+  const mods = d.modules || []
+  const credits = mods.reduce((t, m) => t + (Number(m.credits) || 0), 0)
+  return `${studentFacts(s)}
+    <p>This is to confirm that <strong>${esc(s.full_name)}</strong> (student no. ${esc(s.student_no || '—')}) is a registered student of
+    ${esc(d.college?.name || 'Symanek Specialized College')} for the <strong>${esc(p.academic_year || s.academic_year || '')}</strong> academic year
+    (${esc(semLabel(p.semester_no))}${p.intake ? ', ' + esc(cap(p.intake)) + ' intake' : ''}), in the programme
+    <strong>${esc(s.programme || '—')}</strong>.</p>
+    ${mods.length ? `<table class="data"><thead><tr><th>Code</th><th>Module</th><th>Period</th><th class="num">Credits</th></tr></thead><tbody>
+      ${mods.map((m) => `<tr><td>${esc(m.code)}</td><td>${esc(m.title)}</td><td>${esc(m.semester || semLabel(m.semester_no))}</td><td class="num">${esc(m.credits ?? '')}</td></tr>`).join('')}
+      <tr><td colspan="3"><strong>Total credits</strong></td><td class="num"><strong>${credits}</strong></td></tr></tbody></table>`
+      : '<p class="alert">No modules are registered for the current period.</p>'}
+    <p class="note">Student status: ${esc(cap(s.status) || '—')}. This letter is issued at the student's request for whatever purpose it may serve.</p>`
+}
+
+function recordBody(d) {
+  const rs = d.results || []
+  const groups = []
+  for (const r of rs) {
+    const k = `${r.academic_year ?? ''}|${r.semester_no ?? ''}`
+    let g = groups.find((x) => x.k === k)
+    if (!g) groups.push((g = { k, year: r.academic_year, sem: r.semester_no, rows: [] }))
+    g.rows.push(r)
+  }
+  return `${studentFacts(d.student)}
+    ${groups.length ? groups.map((g) => `<h3>${esc(g.year || '')} · ${esc(semLabel(g.sem))}</h3>
+      <table class="data"><thead><tr><th>Code</th><th>Module</th><th class="num">Credits</th><th class="num">Final %</th><th>Grade</th><th>Outcome</th></tr></thead><tbody>
+      ${g.rows.map((r) => `<tr><td>${esc(r.code)}</td><td>${esc(r.title)}</td><td class="num">${esc(r.credits ?? '')}</td><td class="num">${r.final == null ? '' : esc(Number(r.final).toFixed(1))}</td><td>${esc(r.grade || '')}</td><td>${esc(cap(r.outcome) || (Number(r.final) >= 50 ? 'Pass' : 'Fail'))}</td></tr>`).join('')}
+      </tbody></table>`).join('')
+      : '<p class="alert">No results have been published for this student yet.</p>'}
+    <table class="facts"><tr><td>Cumulative GPA</td><td>${esc(Number(d.gpa ?? 0).toFixed(2))}</td><td>Credits earned</td><td>${esc(d.credits_earned ?? 0)}</td></tr></table>
+    <p class="note">Only results published by the Examinations Board are shown. Final mark = 60% continuous assessment + 40% examination.</p>`
+}
+
+function permitBody(d) {
+  const ss = d.sittings || []
+  return `${studentFacts(d.student)}
+    ${d.hold ? '<p class="alert">A hold on this account blocks examination admission. Please contact the college before the examinations.</p>' : ''}
+    ${ss.length ? `<table class="data"><thead><tr><th>Date &amp; time</th><th>Module</th><th>Venue</th><th class="num">Attendance</th><th>Status</th></tr></thead><tbody>
+      ${ss.map((x) => `<tr><td>${esc(when(x.at))}</td><td><strong>${esc(x.code)}</strong> ${esc(x.title)}</td><td>${esc(x.venue || 'TBA')}</td>
+        <td class="num">${x.attendance == null ? '—' : esc(Number(x.attendance).toFixed(0)) + '%'}</td>
+        <td>${x.admitted ? '<span class="ok">ADMITTED</span>' : `<span class="no">NOT ADMITTED</span><br><small>${esc(x.reason || '')}</small>`}</td></tr>`).join('')}
+      </tbody></table>`
+      : '<p class="alert">No examinations are scheduled for this student\'s current modules.</p>'}
+    <p class="note">Bring this permit and your ID card to every examination. You may only write the examinations marked ADMITTED (at least 80% class attendance on the module and no hold on your account).</p>`
+}
+
+const BODY = { proof_of_registration: proofBody, academic_record: recordBody, exam_permit: permitBody }
+
+function page(d, origin) {
+  return `<section class="page">${letterhead(d.college)}
+    <h2>${esc(DOC_TITLES[d.type].toUpperCase())}</h2><div class="ref">Ref ${esc(ref(d))} · Issued ${esc(day(d.issued_at))}</div>
+    ${BODY[d.type](d)}${signature(d, origin)}${footer(d)}</section>`
+}
+
+// The full printable page for one document's data, without printing it.
+export const documentHtml = (d, origin = window.location.origin) => html(DOC_TITLES[d.type] || 'Document', [page(d, origin)], false)
+
+function html(title, pages, autoPrint = true) {
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>${CSS}</style></head>
+    <body>${pages.join('')}${autoPrint ? '<script>window.onload=function(){setTimeout(function(){window.focus();window.print()},300)}</script>' : ''}</body></html>`
+}
+
+// Opens the window synchronously (inside the click, so it is not blocked as a
+// popup), then fills it once the data has arrived.
+function printWindow(title) {
+  const w = window.open('', '_blank')
+  if (w) w.document.write(`<!doctype html><title>${esc(title)}</title><p style="font:14px Arial;padding:24px">Preparing ${esc(title)}…</p>`)
+  return w
+}
+function fill(w, title, pages) {
+  if (!w) throw new Error('Allow pop-ups for this site to print documents')
+  w.document.open(); w.document.write(html(title, pages)); w.document.close()
+}
+
+export async function printStudentDocument(type, studentId = null) {
+  const title = DOC_TITLES[type] || 'Document'
+  const w = printWindow(title)
+  try {
+    const d = await getStudentDocument(type, studentId)
+    if (!d) throw new Error('Documents are only available with the live backend')
+    fill(w, `${title} — ${d.student?.full_name || ''}`, [page(d, window.location.origin)])
+  } catch (e) { if (w) w.close(); throw e }
+}
+
+// Every examination permit (registrar), one per page; `only` filters by student id.
+export async function printExamPermits(only = null) {
+  const w = printWindow('Examination permits')
+  try {
+    const d = await getExamPermits()
+    const list = (d?.permits || []).filter((p) => !only || only.includes(p.student?.id))
+    if (!list.length) throw new Error('No examination permits to print')
+    const pages = list.map((p) => page({ ...p, type: 'exam_permit', college: d.college, signatory: d.signatory, issued_at: d.issued_at }, window.location.origin))
+    fill(w, 'Examination permits', pages)
+  } catch (e) { if (w) w.close(); throw e }
+}

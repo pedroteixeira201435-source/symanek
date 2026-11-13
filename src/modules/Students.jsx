@@ -6,6 +6,7 @@ import {
   getInstitution, listProgrammes, listStudents, listInvoices, getResultsForStudent, getHoldsForStudent, grantStudentAccess, syncStudentLoginEmail, studentUpsert,
   listStudentEnrolments, listProgrammeCourses, enrolStudentModule, dropEnrolment, periodLabel,
 } from '../api.js'
+import { DOC_TITLES, printStudentDocument } from '../lib/documents.js'
 
 export default function Students({ focus }) {
   const [tab, setTab] = useState('Register')
@@ -89,7 +90,13 @@ function Student360({ student, students, programmes, onSelect, reload }) {
     <>
       <Panel title="Student 360" subtitle="Select a student to inspect their file">
         <div className="field" style={{ maxWidth: 380 }}><label>Student</label><select value={student?._uuid || ''} onChange={(e) => onSelect(students.find((s) => (s._uuid || s.id) === e.target.value) || null)}><option value="">Select student</option>{students.map((s) => <option key={s._uuid || s.id} value={s._uuid || s.id}>{s.name}</option>)}</select></div>
-        {!student ? <Empty>No student selected.</Empty> : <><StudentSummary student={student} /><div style={{ display: 'flex', gap: 8, marginTop: 12 }}><button className="btn ghost sm" onClick={() => setEditing(true)}>Edit student</button><button className="btn primary sm" disabled={granting} onClick={() => grant()}>{granting ? 'Granting…' : 'Grant portal access'}</button></div></>}
+        {!student ? <Empty>No student selected.</Empty> : <><StudentSummary student={student} /><div style={{ display: 'flex', gap: 8, marginTop: 12 }}><button className="btn ghost sm" onClick={() => setEditing(true)}>Edit student</button><button className="btn primary sm" disabled={granting} onClick={() => grant()}>{granting ? 'Granting…' : 'Grant portal access'}</button></div>
+          <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span className="di-sub">Print:</span>
+            {Object.entries(DOC_TITLES).map(([type, label]) => (
+              <button key={type} className="btn ghost sm" onClick={() => printStudentDocument(type, student._uuid).catch((e) => showToast('Could not print: ' + (e?.message || e)))}>{label}</button>
+            ))}
+          </div></>}
       </Panel>
       {student?._uuid && <StudentModules key={student._uuid} student={student} showToast={showToast} />}
       {editing && <StudentForm student={student} programmes={programmes} onClose={() => setEditing(false)} onSaved={async () => { setEditing(false); await reload(); showToast('Student saved') }} showToast={showToast} />}

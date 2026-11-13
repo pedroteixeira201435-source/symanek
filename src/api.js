@@ -1081,6 +1081,12 @@ export async function getSignatories() {
   return mock(SIGNATORIES_DEFAULT)
 }
 
+// Printable documents (20261113120000): type = proof_of_registration |
+// academic_record | exam_permit; studentId null = the signed-in student.
+// The server applies the rules (holds, 80% attendance); src/lib/documents.js prints.
+export const getStudentDocument = (type, studentId = null) => one('student_document', { p_type: type, p_student: studentId })
+export const getExamPermits = () => one('exam_permits')
+
 // ============================ AUTH / SESSION ============================
 // Phase 1: pick a role card (no password). Phase 2: real credentials + JWT/session,
 // with RBAC enforced server-side (see BACKEND.md), not by hiding nav items.
@@ -1413,6 +1419,12 @@ export async function getCourseRegister(code) {
   return data.map((r) => ({ studentId: r.student_id, student: r.student, percent: Number(r.percent ?? 0) }))
 }
 export const listAttendanceSessions = (code) => rows('course_attendance_sessions', { p_course_code: code })
+// One recorded day's register (present = null: no entry that day), and deleting a day (20261113120000).
+export async function getAttendanceRegister(code, date) {
+  const data = await rows('attendance_register', { p_course_code: code, p_date: date })
+  return data.map((r) => ({ studentId: r.student_id, student: r.student, present: r.present, hours: r.hours == null ? null : Number(r.hours) }))
+}
+export const deleteAttendanceSession = (code, date) => one('delete_attendance_session', { p_course_code: code, p_date: date })
 export async function saveAttendance({ code, date, hours = 1, present }) {
   if (!useHttp()) return mock({ ok: true })
   const { data, error } = await supabase.rpc('record_attendance_session', {

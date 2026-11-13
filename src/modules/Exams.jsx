@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { StatCard, Panel, Badge, Modal, Toast, useToast, Icon } from '../ui.jsx'
-import { listExamSchedule, listCourses, listStaffAccounts, examSittingUpsert, examSittingDelete } from '../api.js'
+import { listExamSchedule, listCourses, listStaffAccounts, examSittingUpsert, examSittingDelete, getExamPermits } from '../api.js'
 import { SUBJECT_TYPES, EXAM_CONFIG, PASS, WEIGHTS, POLICY_SUMMARY } from '../lib/academics.js'
+import { printExamPermits } from '../lib/documents.js'
 
 export default function Exams() {
   const [toast, showToast] = useToast()
@@ -100,6 +101,7 @@ export default function Exams() {
           </table>
         )}
       </Panel>
+      {schedule.length > 0 && <ExamPermits key={schedule.length} showToast={showToast} />}
       {editing && <Modal title={editing.id ? 'Edit sitting' : 'Add sitting'} onClose={() => setEditing(null)}>
         <form onSubmit={save}>
           <div className="field"><label>Course</label>
@@ -123,4 +125,40 @@ export default function Exams() {
 
 function Empty({ children }) {
   return <div style={{ padding: 40, textAlign: 'center', color: 'var(--ink-faint)' }}>{children}</div>
+}
+
+// Examination permits: one per student with a sitting this period. Admission per
+// module (80% attendance, no hold) is decided server-side by exam_permits().
+function ExamPermits({ showToast }) {
+  const [list, setList] = useState(null)
+  const [q, setQ] = useState('')
+  useEffect(() => { getExamPermits().then((d) => setList(d?.permits || [])).catch(() => setList([])) }, [])
+  const print = (ids) => printExamPermits(ids).catch((e) => showToast('Could not print: ' + (e?.message || e)))
+  const shown = (list || []).filter((p) => !q || `${p.student?.full_name} ${p.student?.student_no} ${p.student?.programme}`.toLowerCase().includes(q.toLowerCase()))
+  return (
+    <Panel title="Exam permits" subtitle="Printable per student — each exam is marked ADMITTED only with 80% attendance on the module and no hold"
+      actions={list?.length > 0 && <span style={{ display: 'flex', gap: 8 }}>
+        <input placeholder="Search student…" value={q} onChange={(e) => setQ(e.target.value)} style={{ width: 180 }} />
+        <button className="btn primary sm" onClick={() => print(shown.map((p) => p.student.id))}>Print {q ? 'shown' : 'all'} ({shown.length})</button>
+      </span>} flush>
+      {list === null ? <Empty>Loading…</Empty> : list.length === 0 ? <Empty>No student is registered on a module with an exam sitting.</Empty> : (
+        <table className="data">
+          <thead><tr><th>Student</th><th>No.</th><th>Programme</th><th className="num">Exams</th><th>Admission</th><th /></tr></thead>
+          <tbody>{shown.map((p) => {
+            const out = (p.sittings || []).filter((x) => !x.admitted).length
+            return (
+              <tr key={p.student.id}>
+                <td style={{ fontWeight: 600 }}>{p.student.full_name}</td>
+                <td className="mono">{p.student.student_no || '—'}</td>
+                <td>{p.student.programme || '—'}</td>
+                <td className="num">{(p.sittings || []).length}</td>
+                <td>{p.hold ? <Badge tone="red">Hold on account</Badge> : out ? <Badge tone="amber">{out} not admitted</Badge> : <Badge tone="green">Admitted to all</Badge>}</td>
+                <td><button className="btn ghost sm" onClick={() => print([p.student.id])}>Print</button></td>
+              </tr>
+            )
+          })}</tbody>
+        </table>
+      )}
+    </Panel>
+  )
 }

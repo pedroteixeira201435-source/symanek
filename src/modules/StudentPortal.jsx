@@ -12,6 +12,7 @@ import { TimetableGrid } from './Scheduling.jsx'
 import { StudentClasses } from './LiveClasses.jsx'
 import { MyAssessments } from './Assessments.jsx'
 import { StudentQuizzes } from './Quizzes.jsx'
+import { DOC_TITLES, printStudentDocument } from '../lib/documents.js'
 
 const CREDIT_RATE = 1150
 const SEM_CREDIT_CAP = 72
@@ -287,13 +288,24 @@ function AskLecturer({ me, myCourses = [] }) {
 function HoldsDocs({ myHolds, attendance }) {
   const [docs, setDocs] = useState([])
   useEffect(() => { listDocumentsForStudent().then(setDocs).catch(() => setDocs([])) }, [])
-  const att = attendance?.percent ?? 0
+  const [toast, showToast] = useToast()
   return (
     <>
       {myHolds.length === 0 ? <div className="note-banner" style={{ background: 'var(--green-soft)', borderColor: '#cfe6d4' }}><Icon name="check" size={16} /><div>No active holds on your record.</div></div> : myHolds.map((h, i) => <div key={i} className="note-banner" style={{ background: 'var(--red-soft)', borderColor: '#eccfc9' }}><Icon name="ban" size={16} /><div><strong>{h.type} hold</strong> - {h.reason}</div></div>)}
-      <Panel title="Documents" subtitle={`Attendance ${att}% · minimum ${ATTENDANCE_MIN}% for exam permits`} flush>
-        {docs.length === 0 ? <Empty>No official documents have been issued yet.</Empty> : <table className="data"><thead><tr><th>Type</th><th>Issued</th><th>Path</th></tr></thead><tbody>{docs.map((d) => <tr key={d.id}><td>{d.type}</td><td>{d.issued_at || '-'}</td><td>{d.path || '-'}</td></tr>)}</tbody></table>}
+      <Panel title="Print my documents" subtitle="Opens a printable page — use your browser's Print or Save as PDF">
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {Object.entries(DOC_TITLES).map(([type, label]) => (
+            <button key={type} className="btn primary sm" onClick={() => printStudentDocument(type).catch((e) => showToast('Could not open: ' + (e?.message || e)))}>{label}</button>
+          ))}
+        </div>
+        <div className="di-sub" style={{ marginTop: 8 }}>The examination permit shows each exam you are admitted to: at least {ATTENDANCE_MIN}% attendance on the module and no hold on your account. A hold may also block the other documents — contact the college if it does.</div>
       </Panel>
+      {docs.length > 0 && (
+        <Panel title="Issued documents" flush>
+          <table className="data"><thead><tr><th>Type</th><th>Issued</th><th>Path</th></tr></thead><tbody>{docs.map((d) => <tr key={d.id}><td>{d.type}</td><td>{d.issued_at || '-'}</td><td>{d.path || '-'}</td></tr>)}</tbody></table>
+        </Panel>
+      )}
+      <Toast msg={toast} />
     </>
   )
 }

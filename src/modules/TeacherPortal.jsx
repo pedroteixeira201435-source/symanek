@@ -65,16 +65,33 @@ function AttendanceTab({ course }) {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
   const [hours, setHours] = useState(1)
   const [busy, setBusy] = useState(false)
+  const [editing, setEditing] = useState(null)   // date of a recorded session being corrected
   const load = useCallback(() => Promise.all([
     api.getCourseRegister(course.code).then((rs) => { setRows(rs); setPresent(Object.fromEntries(rs.map((r) => [r.studentId, true]))) }).catch(() => setRows([])),
     api.listAttendanceSessions(course.code).then(setSessions).catch(() => setSessions([])),
   ]), [course.code])
-  useEffect(() => { load() }, [load])
+  useEffect(() => { setEditing(null); load() }, [load])
+  const newRegister = () => { setEditing(null); setDate(new Date().toISOString().slice(0, 10)); setHours(1); setPresent(Object.fromEntries(rows.map((r) => [r.studentId, true]))) }
+  // Load what was recorded that day, so the lecturer corrects the real ticks.
+  const openSession = async (d) => {
+    try {
+      const reg = await api.getAttendanceRegister(course.code, d)
+      setPresent(Object.fromEntries(reg.map((r) => [r.studentId, r.present !== false])))
+      setHours(reg.find((r) => r.hours != null)?.hours ?? 1)
+      setDate(d); setEditing(d)
+    } catch (e) { showToast('Could not open that register' + (e?.message ? `: ${e.message}` : '')) }
+  }
+  const removeSession = async (d) => {
+    if (!window.confirm(`Delete the attendance register of ${d}? Every student's attendance % is recalculated without it.`)) return
+    try { await api.deleteAttendanceSession(course.code, d); showToast(`Register of ${d} deleted`); if (editing === d) newRegister(); await load() }
+    catch (e) { showToast('Could not delete' + (e?.message ? `: ${e.message}` : '')) }
+  }
   const save = async () => {
     setBusy(true)
     try {
       const res = await api.saveAttendance({ code: course.code, date, hours: Number(hours) || 1, present: rows.map((r) => ({ studentId: r.studentId, present: present[r.studentId] })) })
-      showToast(`Register saved for ${res?.date || date} (${res?.recorded ?? rows.length} students)`); await load()
+      showToast(`Register ${editing ? 'updated' : 'saved'} for ${res?.date || date} (${res?.recorded ?? rows.length} students)`)
+      await load(); await openSession(res?.date || date)   // show what was stored
     } catch (e) { showToast('Could not save' + (e?.message ? `: ${e.message}` : '')) }
     finally { setBusy(false) }
   }
@@ -83,11 +100,12 @@ function AttendanceTab({ course }) {
   return (
     <>
       <div className="grid2">
-        <Panel title={`Register — ${course.code}`} subtitle={rows.length ? `${nPresent} of ${rows.length} present` : undefined} actions={rows.length > 0 && (
+        <Panel title={`Register — ${course.code}`} subtitle={rows.length ? `${editing ? `Editing ${editing} · ` : ''}${nPresent} of ${rows.length} present` : undefined} actions={rows.length > 0 && (
           <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)} />
             <input type="number" min="0.5" step="0.5" value={hours} onChange={(e) => setHours(e.target.value)} style={{ width: 64 }} title="Contact hours" />
-            <button className="btn primary sm" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save register'}</button>
+            {editing && <button className="btn ghost sm" onClick={newRegister}>New register</button>}
+            <button className="btn primary sm" onClick={save} disabled={busy}>{busy ? 'Saving…' : editing ? 'Save changes' : 'Save register'}</button>
           </span>
         )} flush>
           {rows.length === 0 ? <Empty>No students are enrolled on this module yet.</Empty> : (
@@ -103,10 +121,18 @@ function AttendanceTab({ course }) {
             </table>
           )}
         </Panel>
-        <Panel title="Sessions recorded" subtitle={`${ATTENDANCE_MIN}% attendance is required for exam admission`} flush>
+        <Panel title="Sessions recorded" subtitle={`Click a date to correct it · ${ATTENDANCE_MIN}% attendance is required for exam admission`} flush>
           {sessions.length === 0 ? <Empty>No sessions yet.</Empty> : (
-            <table className="data"><thead><tr><th>Date</th><th className="num">Present</th></tr></thead>
-              <tbody>{sessions.map((s) => <tr key={s.session_date} style={{ cursor: 'pointer' }} onClick={() => setDate(s.session_date)}><td className="mono">{s.session_date}</td><td className="num">{s.present}/{s.total}</td></tr>)}</tbody>
+            <table className="data"><thead><tr><th>Date</th><th className="num">Present</th><th style={{ width: 130 }} /></tr></thead>
+              <tbody>{sessions.map((s) => (
+                <tr key={s.session_date} style={editing === s.session_date ? { background: 'var(--amber-soft)' } : undefined}>
+                  <td className="mono">{s.session_date}</td><td className="num">{s.present}/{s.total}</td>
+                  <td><span style={{ display: 'flex', gap: 6 }}>
+                    <button className="btn ghost sm" onClick={() => openSession(s.session_date)}>Edit</button>
+                    <button className="btn ghost sm" onClick={() => removeSession(s.session_date)}>Delete</button>
+                  </span></td>
+                </tr>
+              ))}</tbody>
             </table>
           )}
         </Panel>

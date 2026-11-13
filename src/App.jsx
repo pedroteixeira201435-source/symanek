@@ -74,7 +74,7 @@ function EmailLogin({ onLogin }) {
           </div>
         </div>
         <div className="login-form">
-          <div className="login-eyebrow">{SCHOOL.term} · Windhoek, Namibia</div>
+          <div className="login-eyebrow">{SCHOOL.term} · Okahandja, Namibia</div>
           <h1>Sign in</h1>
           <div className="sub">Use your Symanek account. Access is limited to your role.</div>
           <form onSubmit={submit} className="role-grid" style={{ gridTemplateColumns: '1fr' }}>
@@ -180,7 +180,7 @@ function Login({ onPick }) {
           </div>
         </div>
         <div className="login-form">
-          <div className="login-eyebrow">{SCHOOL.term} · Windhoek, Namibia</div>
+          <div className="login-eyebrow">{SCHOOL.term} · Okahandja, Namibia</div>
           <h1>Welcome back</h1>
           <div className="sub">Select your workspace to sign in — access is limited to your role.</div>
           <div className="role-grid">

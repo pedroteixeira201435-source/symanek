@@ -21,7 +21,7 @@ A **monorepo for Symanek Specialized College** (private Namibian higher-ed) with
 
 > **Mock-elimination / "empty-by-default" pass — DONE (2026-08-24).** Production carries ZERO mock data:
 > every module reads/writes the real backend, starting empty and populated through CRUD forms. All the
-> migrations below are **APPLIED to the cloud** (tracker in sync through `20261104130000`).
+> migrations below are **APPLIED to the cloud** (tracker in sync through `20261113120000`).
 > - **`src/data.js` is DELETED.** Import formatting/logic from `src/lib/*`: `format.js` (`fmtN`,
 >   `staffEmail`), `academics.js` (`gradeOf`, editable grade bands via `setGradeBands`), `institution.js`
 >   (`SCHOOL`, `INSTITUTION_HIDE`, `getInstType`). Never reference `data.js` — it no longer exists.
@@ -239,14 +239,25 @@ Reference examples: `Graduation.jsx`, `Library.jsx`, `Accounting.jsx`, `Accommod
   `_quiz_pending` counts answered essay/upload questions not yet marked (drives "to mark" / "Being marked").
   **Correct answers and marking guides must never reach a student** — keep them out of `quiz_start`.
   Time limits are server-side (deadline + 30 s grace); an open quiz past `closes_at` closes itself on the next read.
+- **Attendance editing + printable documents** (`20261113120000`): `attendance_register(code, date)` loads one
+  day's real ticks (Lecturer Portal → Attendance → Edit) and `delete_attendance_session(code, date)` removes a day;
+  `course_attendance` returns the % for **that module** (`attendance_pct`), not the overall %.
+  `student_document(type, student)` (`proof_of_registration` | `academic_record` | `exam_permit`; `student` null =
+  self) and `exam_permits()` (registrar, all students with a sitting) return the data; `src/lib/documents.js` lays it
+  out on an A4 letterhead and opens the print dialog (Save as PDF). Entry points: Students → Student 360 "Print:",
+  Exams → Exam permits, student portal Holds & Documents. Rules live server-side: a student only gets their own,
+  a hold blocking `registration` / `results` blocks the proof / record; a permit marks a sitting admitted only with
+  ≥ 80% attendance on the module (a module with no register ever taken does not block) and no such hold. The period
+  shown is the student's current one (`_current_enrolments`, same logic as `student_courses`).
 
 ### Public-site server routes (Next, `nodejs` runtime, service-role)
 
 - `app/api/letter/route.ts` — lazily generates the approval-letter PDF (`lib/letter.ts`, `pdf-lib`) into
   `approval-letters` and redirects to a signed URL. Portal links here via `/api/letter?ref=…`. The
   **official stamp** is `public/stamp.png` (extracted from the 18 Aug 2026 scan; a light provisional
-  image — swap when the cleaner one arrives): `letter.ts` embeds it via `embedPng`, and the Suite letters
-  (`src/modules/Students.jsx`) use `college_settings.stamp_path` with a `${origin}/stamp.png` fallback.
+  image — swap when the cleaner one arrives): `letter.ts` embeds it via `embedPng`, and the Suite's printable
+  documents (`src/lib/documents.js`) use `college_settings.stamp_path` (when it is a URL) with a
+  `${origin}/stamp.png` fallback (the Suite has its own `public/stamp.png`).
   Signatures are printed name + title only (client declined scanned signatures — forgery risk).
 - `app/api/payment-proof/route.ts` — applicant uploads EFT proof (file + amount); validates the ref is
   approved, stores it, flags the application. Admin reviews it in `/admin` and records the payment.
