@@ -38,10 +38,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Letter not available" }, { status: 404 });
   }
 
-  const objectPath = (app.approval_letter_path ?? `${BUCKET}/${app.reference}.pdf`).replace(
-    new RegExp(`^${BUCKET}/`),
-    ""
-  );
+  // Versioned key: letters made before the letterhead change (stamp image, no logo) stay in the
+  // bucket untouched; every letter is regenerated once under v2/ with the current design.
+  const objectPath = `v2/${app.reference}.pdf`;
 
   const sign = () => supabaseAdmin!.storage.from(BUCKET).createSignedUrl(objectPath, 300);
 

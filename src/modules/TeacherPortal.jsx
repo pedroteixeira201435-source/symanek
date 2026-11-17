@@ -156,9 +156,17 @@ function CourseMarks({ course }) {
 
   const setMark = (learner, k, v) => { setRows((rs) => rs.map((r) => (r.learner === learner ? { ...r, [k]: v === '' ? '' : Number(v) } : r))); setDirty(true) }
   const payload = () => rows.map((r) => ({ learner: r.learner, student_id: r.student_id, ca: Number(r.ca) || 0, exam: Number(r.exam) || 0 }))
-  const save = async () => { try { await api.saveCourseMarks(course.code, payload()); setDirty(false); showToast(`${course.code} marks saved (provisional)`) } catch (e) { showToast('Could not save' + (e?.message ? `: ${e.message}` : '')) } }
+  // Save, then read the marks back from the server so what is on screen is what is stored.
+  const save = async () => {
+    try {
+      const res = await api.saveCourseMarks(course.code, payload())
+      await load(); setDirty(false)
+      showToast(`${course.code} marks saved (provisional)${res?.saved != null ? ` — ${res.saved} student${res.saved === 1 ? '' : 's'}` : ''}`)
+    } catch (e) { showToast('Could not save' + (e?.message ? `: ${e.message}` : '')) }
+  }
+  // Always save what is on screen first, so the exam board gets exactly these marks.
   const publish = async () => {
-    try { if (dirty) await api.saveCourseMarks(course.code, payload()); await api.publishCourseResults(course.code); setPublished(true); setDirty(false); showToast(`${course.code} published`) }
+    try { await api.saveCourseMarks(course.code, payload()); await api.publishCourseResults(course.code); setPublished(true); setDirty(false); showToast(`${course.code} published`) }
     catch (e) { showToast('Could not publish' + (e?.message ? `: ${e.message}` : '')) }
   }
 
@@ -166,9 +174,13 @@ function CourseMarks({ course }) {
     try {
       const book = await api.getCourseGradebook(course.id)
       const byId = Object.fromEntries((book.students || []).map((s) => [s.student_id, s.ca]))
-      let n = 0
-      setRows((rs) => rs.map((r) => { const ca = byId[r.student_id]; if (ca == null) return r; n++; return { ...r, ca: Math.round(ca) } }))
-      if (n) setDirty(true)
+      // Count here, not inside the setRows updater: React runs updaters later, so a counter
+      // bumped inside one is still 0 on the next line — which left "Save marks" disabled.
+      const n = rows.filter((r) => byId[r.student_id] != null).length
+      if (n) {
+        setRows((rs) => rs.map((r) => { const ca = byId[r.student_id]; return ca == null ? r : { ...r, ca: Math.round(ca) } }))
+        setDirty(true)
+      }
       showToast(n ? `CA filled for ${n} student${n > 1 ? 's' : ''} from the Assessments gradebook — review, then Save marks` : 'No assessment marks recorded yet (see the Assessments tab)')
     } catch (e) { showToast('Could not read assessments' + (e?.message ? `: ${e.message}` : '')) }
   }

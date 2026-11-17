@@ -1,14 +1,11 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { promises as fs } from "fs";
-import path from "path";
 import { college, formatN } from "./content";
+import { LOGO_PNG_BASE64 } from "./logo-data";
 
-// The official stamp — extracted from the college's 18 Aug 2026 stamp scan
-// (transparent PNG in /public). Swap for the cleaner image when it arrives.
-async function loadStamp(doc: PDFDocument) {
+// The college crest, drawn at the top right of the letterhead.
+async function loadLogo(doc: PDFDocument) {
   try {
-    const bytes = await fs.readFile(path.join(process.cwd(), "public", "stamp.png"));
-    return await doc.embedPng(bytes);
+    return await doc.embedPng(Buffer.from(LOGO_PNG_BASE64, "base64"));
   } catch {
     return null;
   }
@@ -38,7 +35,13 @@ export async function buildApprovalLetter(opts: {
   const text = (s: string, x: number, yy: number, size: number, f = font, color = ink) =>
     page.drawText(s, { x, y: yy, size, font: f, color });
 
-  // Header
+  // Header: address on the left, logo on the right
+  const logo = await loadLogo(doc);
+  if (logo) {
+    const lh = 68;
+    const lw = (logo.width / logo.height) * lh;
+    page.drawImage(logo, { x: width - M - lw, y: height - 36 - lh, width: lw, height: lh });
+  }
   text(college.name, M, y, 20, bold, petrol);
   y -= 20;
   text(college.location, M, y, 10, font, muted);
@@ -127,13 +130,14 @@ export async function buildApprovalLetter(opts: {
   y -= 15;
   text(college.name, M, y, 11, font, muted);
 
-  // Official stamp, placed to the right of the signature block.
-  const stamp = await loadStamp(doc);
-  if (stamp) {
-    const sw = 150;
-    const sh = (stamp.height / stamp.width) * sw;
-    page.drawImage(stamp, { x: width - M - sw, y: sigY - sh + 10, width: sw, height: sh });
-  }
+  // No stamp image: the college stamps and signs the printed letter at school.
+  const bw = 140;
+  const bh = 64;
+  page.drawRectangle({
+    x: width - M - bw, y: sigY - bh + 10, width: bw, height: bh,
+    borderColor: rgb(0.6, 0.66, 0.7), borderWidth: 0.8, borderDashArray: [3, 3],
+  });
+  text("Official stamp", width - M - bw + 8, sigY - bh + 16, 8, font, muted);
 
   return doc.save();
 }

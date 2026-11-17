@@ -21,7 +21,7 @@ A **monorepo for Symanek Specialized College** (private Namibian higher-ed) with
 
 > **Mock-elimination / "empty-by-default" pass — DONE (2026-08-24).** Production carries ZERO mock data:
 > every module reads/writes the real backend, starting empty and populated through CRUD forms. All the
-> migrations below are **APPLIED to the cloud** (tracker in sync through `20261113120000`).
+> migrations below are **APPLIED to the cloud** (tracker in sync through `20261117120000`).
 > - **`src/data.js` is DELETED.** Import formatting/logic from `src/lib/*`: `format.js` (`fmtN`,
 >   `staffEmail`), `academics.js` (`gradeOf`, editable grade bands via `setGradeBands`), `institution.js`
 >   (`SCHOOL`, `INSTITUTION_HIDE`, `getInstType`). Never reference `data.js` — it no longer exists.
@@ -249,16 +249,29 @@ Reference examples: `Graduation.jsx`, `Library.jsx`, `Accounting.jsx`, `Accommod
   a hold blocking `registration` / `results` blocks the proof / record; a permit marks a sitting admitted only with
   ≥ 80% attendance on the module (a module with no register ever taken does not block) and no such hold. The period
   shown is the student's current one (`_current_enrolments`, same logic as `student_courses`).
+  The **exam permit** follows the college's own template (EduCIMS): student block, study period, a table with
+  CA mark / attendance % / Qualified / exam type / date / time / venue, the outstanding-balance notice and the
+  6-line "IMPORTANT DISCLAIMER" (`20261117120000`). CA mark = the saved `results.ca`, else the CA % computed from the
+  module's assessments by `_student_ca` (same formula as `course_gradebook`, rounded to a whole number like "Fill CA
+  from assessments"). Balance = open `invoices` (`_student_balance`); a student with no invoice shows "—", not N$ 0.
+  "Qualified" = ≥ 80% attendance and no hold (the only admission rule in the system; there is no CA threshold).
+  Keep one student on one A4 page: the layout was measured at ~245 mm of the 271 mm available for 6–8 sittings.
+- **React gotcha that broke the Marks tab**: never count inside a `setState` updater (`n++` in `setRows(rs => …)`) and
+  read `n` afterwards — React runs updaters later, so `n` was 0, `setDirty(true)` never ran and "Save marks"
+  (`disabled={!dirty}`) stayed greyed after "Fill CA from assessments". Compute from the current state, then set it.
+  "Submit to exam board" now always saves the on-screen marks first.
 
 ### Public-site server routes (Next, `nodejs` runtime, service-role)
 
 - `app/api/letter/route.ts` — lazily generates the approval-letter PDF (`lib/letter.ts`, `pdf-lib`) into
-  `approval-letters` and redirects to a signed URL. Portal links here via `/api/letter?ref=…`. The
-  **official stamp** is `public/stamp.png` (extracted from the 18 Aug 2026 scan; a light provisional
-  image — swap when the cleaner one arrives): `letter.ts` embeds it via `embedPng`, and the Suite's printable
-  documents (`src/lib/documents.js`) use `college_settings.stamp_path` (when it is a URL) with a
-  `${origin}/stamp.png` fallback (the Suite has its own `public/stamp.png`).
-  Signatures are printed name + title only (client declined scanned signatures — forgery risk).
+  `approval-letters` and redirects to a signed URL. Portal links here via `/api/letter?ref=…`. The object key is
+  versioned (`v2/<ref>.pdf`; `applications.approval_letter_path` is no longer used) — bump it when the design
+  changes, so old cached letters stay untouched and new ones regenerate. **No stamp image on any generated
+  document** (the college stamps and signs printouts by hand at school, client request 2026-11-16): the letter and the
+  Suite's printable documents (`src/lib/documents.js`) leave an empty "Official stamp" box instead. Letterhead =
+  address on the left, logo on the right: the Suite serves `public/logo.png`, the letter embeds the crest from
+  `lib/logo-data.ts` (base64, so it does not depend on `/public` being readable from the serverless function).
+  `public/stamp.png` is now unused. Signatures are printed name + title only (client declined scanned signatures).
 - `app/api/payment-proof/route.ts` — applicant uploads EFT proof (file + amount); validates the ref is
   approved, stores it, flags the application. Admin reviews it in `/admin` and records the payment.
 - `app/api/public/{application,application-status,contact}/route.ts` — the applicant/contact write path,

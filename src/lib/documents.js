@@ -1,9 +1,14 @@
 // Printable student documents: proof of registration, academic record and
-// examination permit. The data (and the rules: holds, 80% attendance) come
-// from the student_document / exam_permits RPCs (20261113120000); this file
-// only lays them out on an A4 letterhead and opens the browser's print dialog,
-// where the user can also "Save as PDF".
+// examination permit. The data (and the rules: holds, 80% attendance, CA marks,
+// balance) come from the student_document / exam_permits RPCs (20261113120000,
+// 20261117120000); this file only lays them out on an A4 letterhead and opens
+// the browser's print dialog, where the user can also "Save as PDF".
+//
+// The college stamps and signs each printout by hand at school, so there is NO
+// stamp image here — only an empty box for it. Letterhead: address on the left,
+// logo (public/logo.png) on the right.
 import { getStudentDocument, getExamPermits } from '../api.js'
+import { fmtN } from './format.js'
 
 export const DOC_TITLES = {
   proof_of_registration: 'Proof of Registration',
@@ -13,25 +18,26 @@ export const DOC_TITLES = {
 
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]))
 const day = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Africa/Windhoek' }) : '')
-const when = (d) => (d ? new Date(d).toLocaleString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Africa/Windhoek' }) : 'To be announced')
+const examDay = (d) => (d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Africa/Windhoek' }) : 'TBA')
+const examTime = (d) => (d ? new Date(d).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Africa/Windhoek' }) : 'TBA')
 const cap = (s) => (s ? s[0].toUpperCase() + s.slice(1) : '')
 const semLabel = (n) => (n == null ? 'Year-long' : `Semester ${n}`)
 
 const CSS = `
-  @page { size: A4; margin: 16mm 16mm 18mm; }
+  @page { size: A4; margin: 12mm 16mm 14mm; }
   * { box-sizing: border-box; }
   body { font: 11pt/1.45 "Segoe UI", Arial, sans-serif; color: #1d2a33; margin: 0; }
   @media screen { body { max-width: 210mm; margin: 0 auto; padding: 16mm; } }
   .page { page-break-after: always; }
   .page:last-child { page-break-after: auto; }
-  .head { display: flex; justify-content: space-between; gap: 16px; border-bottom: 3px solid #2f4f63; padding-bottom: 10px; }
-  .head h1 { font-size: 17pt; margin: 0; color: #2f4f63; letter-spacing: .3px; }
-  .head .sub { font-size: 9pt; color: #51636f; }
-  .head .right { text-align: right; font-size: 9pt; color: #51636f; }
-  h2 { text-align: center; font-size: 14pt; letter-spacing: 2px; margin: 18px 0 4px; }
-  .ref { text-align: center; font-size: 9pt; color: #51636f; margin-bottom: 14px; }
-  .facts { width: 100%; border-collapse: collapse; margin: 6px 0 14px; }
-  .facts td { padding: 3px 6px; vertical-align: top; }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 3px solid #2f4f63; padding-bottom: 8px; }
+  .head h1 { font-size: 15pt; margin: 0 0 2px; color: #2f4f63; letter-spacing: .3px; }
+  .head .sub { font-size: 8.5pt; color: #51636f; line-height: 1.4; }
+  .head .logo { height: 22mm; width: auto; flex: none; }
+  h2 { text-align: center; font-size: 13pt; letter-spacing: 2px; margin: 10px 0 2px; }
+  .ref { text-align: center; font-size: 8.5pt; color: #51636f; margin-bottom: 8px; }
+  .facts { width: 100%; border-collapse: collapse; margin: 4px 0 10px; }
+  .facts td { padding: 2px 6px; vertical-align: top; }
   .facts td:nth-child(odd) { color: #51636f; width: 18%; white-space: nowrap; }
   .facts td:nth-child(even) { font-weight: 600; width: 32%; }
   table.data { width: 100%; border-collapse: collapse; margin: 6px 0 10px; font-size: 10pt; }
@@ -42,19 +48,35 @@ const CSS = `
   .ok { color: #1c6b3a; font-weight: 700; }
   .no { color: #a12a2a; font-weight: 700; }
   .note { font-size: 9.5pt; color: #51636f; margin: 8px 0; }
-  .alert { border: 2px solid #a12a2a; color: #a12a2a; padding: 8px 10px; font-weight: 600; margin: 8px 0; }
-  .sign { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 34px; }
-  .sign .line { border-top: 1px solid #1d2a33; padding-top: 4px; min-width: 240px; }
-  .sign img { height: 110px; opacity: .9; }
-  .foot { margin-top: 18px; font-size: 8pt; color: #7a8a95; text-align: center; border-top: 1px solid #c9d4db; padding-top: 6px; }
+  .alert { border: 2px solid #a12a2a; color: #a12a2a; padding: 6px 10px; font-weight: 600; margin: 6px 0; }
+  .sign { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-top: 10px; page-break-inside: avoid; }
+  .sign .sig { flex: 1; max-width: 95mm; }
+  .sign .sig .space { height: 10mm; }
+  .sign .sig .line { border-top: 1px solid #1d2a33; padding-top: 3px; font-size: 9.5pt; }
+  .sign .stampbox { width: 48mm; height: 20mm; border: 1px dashed #9aa8b2; color: #9aa8b2; font-size: 8pt; text-align: center; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px; }
+  .period { text-align: center; font-weight: 700; margin: 2px 0 0; }
+  .subtitle { text-align: center; font-weight: 700; font-size: 10pt; letter-spacing: 1px; margin: 4px 0 3px; }
+  table.permit { font-size: 8pt; }
+  table.permit th, table.permit td { padding: 2px 4px; line-height: 1.3; }
+  table.permit .nw { white-space: nowrap; }
+  table.permit small { color: #7a8a95; }
+  .bal { color: #a12a2a; font-weight: 700; }
+  .disclaimer { border: 1px solid #c9d4db; padding: 5px 10px; margin: 6px 0 0; font-size: 8pt; page-break-inside: avoid; }
+  .disclaimer ul { margin: 2px 0 0; padding-left: 16px; line-height: 1.3; }
+  .foot { margin-top: 10px; font-size: 8pt; color: #7a8a95; text-align: center; border-top: 1px solid #c9d4db; padding-top: 6px; }
 `
 
-function letterhead(c = {}) {
+function letterhead(c = {}, origin = '') {
+  const logo = /^https?:/.test(c.logo_path || '') ? c.logo_path : `${origin}/logo.png`
+  const lines = [
+    [c.address, c.po_box].filter(Boolean).join(' · '),
+    [c.phone && 'Tel ' + c.phone, c.cell && 'Cell ' + c.cell].filter(Boolean).join(' · '),
+    [c.email, c.website].filter(Boolean).join(' · '),
+    c.reg_no && 'Reg. ' + c.reg_no,
+  ].filter(Boolean)
   return `<div class="head">
-    <div><h1>${esc(c.name || 'Symanek Specialized College')}</h1>
-      <div class="sub">${esc(c.address || '')}${c.po_box ? ' · ' + esc(c.po_box) : ''}</div>
-      <div class="sub">${[c.reg_no && 'Reg. ' + c.reg_no].filter(Boolean).map(esc).join('')}</div></div>
-    <div class="right">${[c.phone && 'Tel ' + c.phone, c.cell && 'Cell ' + c.cell, c.email, c.website].filter(Boolean).map(esc).join('<br>')}</div>
+    <div><h1>${esc(c.name || 'Symanek Specialized College')}</h1>${lines.map((l) => `<div class="sub">${esc(l)}</div>`).join('')}</div>
+    <img class="logo" src="${esc(logo)}" alt="Symanek Specialized College" onerror="this.style.display='none'">
   </div>`
 }
 
@@ -66,17 +88,17 @@ function studentFacts(s = {}) {
   </table>`
 }
 
-function signature(d, origin) {
-  const stamp = d.college?.stamp_path && /^https?:/.test(d.college.stamp_path) ? d.college.stamp_path : `${origin}/stamp.png`
+// No stamp image: the college stamps and signs the printout by hand at school.
+function signature(d) {
   const sig = d.signatory || { name: 'Office of the Registrar', title: '' }
   return `<div class="sign">
-    <div class="line"><strong>${esc(sig.name)}</strong><br>${esc(sig.title)}<br>Date: ${esc(day(d.issued_at))}</div>
-    <img src="${esc(stamp)}" alt="College stamp" onerror="this.style.display='none'">
+    <div class="sig"><div class="space"></div><div class="line">Signature<br><strong>${esc(sig.name)}</strong>${sig.title ? '<br>' + esc(sig.title) : ''}</div></div>
+    <div class="stampbox">Official stamp</div>
   </div>`
 }
 
 function footer(d) {
-  return `<div class="foot">Generated by the Symanek Suite on ${esc(day(d.issued_at))} · Ref ${esc(ref(d))} · Queries: ${esc(d.college?.email || '')}</div>`
+  return `<div class="foot">Generated by the Symanek Suite · Ref ${esc(ref(d))} · Queries: ${esc(d.college?.email || '')}</div>`
 }
 
 const ref = (d) => {
@@ -119,25 +141,51 @@ function recordBody(d) {
     <p class="note">Only results published by the Examinations Board are shown. Final mark = 60% continuous assessment + 40% examination.</p>`
 }
 
+const DISCLAIMER = [
+  'This permit must be presented at the exam venue.',
+  'Students must arrive 30 minutes before the scheduled exam time.',
+  'Valid student ID must be presented along with this permit.',
+  'This permit is valid only for the specified modules and dates.',
+  'Any outstanding balance must be settled before the examination period.',
+  'The institution reserves the right to deny exam entry if requirements are not met.',
+]
+const mark = (v) => (v == null ? '—' : Number(v).toFixed(2))
+
+// Layout follows the college's own permit template (EduCIMS): student block,
+// study period, registered modules & exam details, balance notice, disclaimer.
 function permitBody(d) {
+  const s = d.student || {}; const p = d.period || {}
   const ss = d.sittings || []
-  return `${studentFacts(d.student)}
+  const bal = d.balance == null ? null : Number(d.balance)
+  const qual = s.programme ? `${s.programme}${s.nqf ? ` (${/nqf/i.test(s.nqf) ? s.nqf : 'NQF ' + s.nqf})` : ''}` : '—'
+  return `<table class="facts">
+      <tr><td>Student name</td><td>${esc(s.full_name)}</td><td>Student number</td><td>${esc(s.student_no || '—')}</td></tr>
+      <tr><td>ID number</td><td>${esc(s.id_number || '—')}</td><td>Student year</td><td>${s.year >= 1 && s.year <= 10 ? 'Year ' + esc(s.year) : '—'}</td></tr>
+      <tr><td>Qualification</td><td colspan="3">${esc(qual)}</td></tr>
+      <tr><td>Intake</td><td>${esc(cap(s.intake) || '—')}${s.academic_year ? ' ' + esc(s.academic_year) : ''}</td><td>Campus</td><td>${esc(s.campus || '—')}</td></tr>
+      <tr><td>Date of issue</td><td>${esc(day(d.issued_at))}</td><td>Outstanding balance</td><td class="${bal > 0 ? 'bal' : ''}">${bal == null ? '—' : esc(fmtN(bal))}</td></tr>
+    </table>
+    <div class="period">Study period(s): ${esc(semLabel(p.semester_no))}${p.academic_year ? ' · ' + esc(p.academic_year) : ''}</div>
+    <div class="subtitle">REGISTERED MODULES &amp; EXAM DETAILS</div>
     ${d.hold ? '<p class="alert">A hold on this account blocks examination admission. Please contact the college before the examinations.</p>' : ''}
-    ${ss.length ? `<table class="data"><thead><tr><th>Date &amp; time</th><th>Module</th><th>Venue</th><th class="num">Attendance</th><th>Status</th></tr></thead><tbody>
-      ${ss.map((x) => `<tr><td>${esc(when(x.at))}</td><td><strong>${esc(x.code)}</strong> ${esc(x.title)}</td><td>${esc(x.venue || 'TBA')}</td>
-        <td class="num">${x.attendance == null ? '—' : esc(Number(x.attendance).toFixed(0)) + '%'}</td>
-        <td>${x.admitted ? '<span class="ok">ADMITTED</span>' : `<span class="no">NOT ADMITTED</span><br><small>${esc(x.reason || '')}</small>`}</td></tr>`).join('')}
+    ${ss.length ? `<table class="data permit"><thead><tr><th>Module</th><th class="num nw">CA mark</th><th class="num nw">Attendance</th><th>Qualified</th><th class="nw">Exam type</th><th class="nw">Exam date</th><th>Time</th><th>Venue</th></tr></thead><tbody>
+      ${ss.map((x) => `<tr><td><strong>${esc(x.title)}</strong><br><small>${esc(x.code)}</small></td>
+        <td class="num nw">${mark(x.ca)}</td>
+        <td class="num nw">${x.attendance == null ? '—' : esc(Number(x.attendance).toFixed(0)) + '%'}</td>
+        <td>${x.admitted ? '<span class="ok">Qualified</span>' : `<span class="no nw">Not qualified</span><br><small>${esc(x.reason || '')}</small>`}</td>
+        <td>Final</td><td class="nw">${esc(examDay(x.at))}</td><td class="nw">${esc(examTime(x.at))}</td><td>${esc(x.venue || 'TBA')}</td></tr>`).join('')}
       </tbody></table>`
       : '<p class="alert">No examinations are scheduled for this student\'s current modules.</p>'}
-    <p class="note">Bring this permit and your ID card to every examination. You may only write the examinations marked ADMITTED (at least 80% class attendance on the module and no hold on your account).</p>`
+    ${bal > 0 ? `<p class="alert"><strong>OUTSTANDING BALANCE NOTICE:</strong> This student has an outstanding balance of ${esc(fmtN(bal))}. Please settle it with the Finance Office before the examination period.</p>` : ''}
+    <div class="disclaimer"><strong>IMPORTANT DISCLAIMER:</strong><ul>${DISCLAIMER.map((l) => `<li>${esc(l)}</li>`).join('')}</ul></div>`
 }
 
 const BODY = { proof_of_registration: proofBody, academic_record: recordBody, exam_permit: permitBody }
 
 function page(d, origin) {
-  return `<section class="page">${letterhead(d.college)}
-    <h2>${esc(DOC_TITLES[d.type].toUpperCase())}</h2><div class="ref">Ref ${esc(ref(d))} · Issued ${esc(day(d.issued_at))}</div>
-    ${BODY[d.type](d)}${signature(d, origin)}${footer(d)}</section>`
+  return `<section class="page">${letterhead(d.college, origin)}
+    <h2>${esc(DOC_TITLES[d.type].toUpperCase())}</h2><div class="ref">Ref ${esc(ref(d))}${d.type === 'exam_permit' ? '' : ' · Issued ' + esc(day(d.issued_at))}</div>
+    ${BODY[d.type](d)}${signature(d)}${footer(d)}</section>`
 }
 
 // The full printable page for one document's data, without printing it.
