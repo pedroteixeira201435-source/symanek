@@ -30,7 +30,7 @@ from (values
   ('SYM-STF-002','Jeremia Fillemon','jeremiaf@symanekacademy.com','System Administrator / Campus Acting Manager','Administration'),
   ('SYM-STF-003','Melkisedek Job','jobnangolo@symanekacademy.com','Debtors & Creditors Clerk','Finance'),
   ('SYM-STF-004','Katrina Inkembwa','katrinai@symanekacademy.com','Lecturer — Nursing','Nursing'),
-  ('SYM-STF-005','Rebbeka Shilongo','rebbekas@symanekacademy.com','Administration Assistant','Administration'),
+  ('SYM-STF-005','Rebbeka Shilongo','rebbekas@symanekacademy.com','Administrative Assistant','Administration'),
   ('SYM-STF-006','Muhuka Ratukara','ratukaram@symanekacademy.com','Lecturer — Nursing','Nursing'),
   ('SYM-STF-007','Shimunyengu Dortea','dshimunyengu@symanekacademy.com','Instructor — OHS','Occupational Health & Safety')
 ) as v(no,name,email,role,dept)

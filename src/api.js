@@ -1059,7 +1059,7 @@ const COLLEGE_SETTINGS_DEFAULT = {
 }
 const SIGNATORIES_DEFAULT = [
   { role_key: 'ceo', name: 'Mrs. Olivia Nelumbu', title: 'Chief Executive Officer' },
-  { role_key: 'registrar', name: 'Ms. Rebbeka Shilongo', title: 'Administration Assistant, Office of the Registrar' },
+  { role_key: 'registrar', name: 'Ms. Rebbeka Shilongo', title: 'Administrative Assistant, Office of the Registrar' },
   { role_key: 'admin_assistant', name: 'Ms. Michelle Guchas', title: 'Administrative Assistant' },
 ]
 

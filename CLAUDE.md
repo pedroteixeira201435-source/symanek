@@ -21,7 +21,7 @@ A **monorepo for Symanek Specialized College** (private Namibian higher-ed) with
 
 > **Mock-elimination / "empty-by-default" pass — DONE (2026-08-24).** Production carries ZERO mock data:
 > every module reads/writes the real backend, starting empty and populated through CRUD forms. All the
-> migrations below are **APPLIED to the cloud** (tracker in sync through `20261117120000`).
+> migrations below are **APPLIED to the cloud** (tracker in sync through `20261118120000`).
 > - **`src/data.js` is DELETED.** Import formatting/logic from `src/lib/*`: `format.js` (`fmtN`,
 >   `staffEmail`), `academics.js` (`gradeOf`, editable grade bands via `setGradeBands`), `institution.js`
 >   (`SCHOOL`, `INSTITUTION_HIDE`, `getInstType`). Never reference `data.js` — it no longer exists.
