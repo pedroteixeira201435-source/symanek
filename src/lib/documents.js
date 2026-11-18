@@ -33,7 +33,7 @@ const CSS = `
   .head { display: flex; justify-content: space-between; align-items: center; gap: 16px; border-bottom: 3px solid #2f4f63; padding-bottom: 8px; }
   .head h1 { font-size: 15pt; margin: 0 0 2px; color: #2f4f63; letter-spacing: .3px; }
   .head .sub { font-size: 8.5pt; color: #51636f; line-height: 1.4; }
-  .head .logo { height: 22mm; width: auto; flex: none; }
+  .head .logo { height: 30mm; width: auto; flex: none; }
   h2 { text-align: center; font-size: 13pt; letter-spacing: 2px; margin: 10px 0 2px; }
   .ref { text-align: center; font-size: 8.5pt; color: #51636f; margin-bottom: 8px; }
   .facts { width: 100%; border-collapse: collapse; margin: 4px 0 10px; }
@@ -53,7 +53,7 @@ const CSS = `
   .sign .sig { flex: 1; max-width: 95mm; }
   .sign .sig .space { height: 10mm; }
   .sign .sig .line { border-top: 1px solid #1d2a33; padding-top: 3px; font-size: 9.5pt; }
-  .sign .stampbox { width: 48mm; height: 20mm; border: 1px dashed #9aa8b2; color: #9aa8b2; font-size: 8pt; text-align: center; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 3px; }
+  .sign .stampbox { width: 70mm; height: 18mm; }
   .period { text-align: center; font-weight: 700; margin: 2px 0 0; }
   .subtitle { text-align: center; font-weight: 700; font-size: 10pt; letter-spacing: 1px; margin: 4px 0 3px; }
   table.permit { font-size: 8pt; }
@@ -93,7 +93,7 @@ function signature(d) {
   const sig = d.signatory || { name: 'Office of the Registrar', title: '' }
   return `<div class="sign">
     <div class="sig"><div class="space"></div><div class="line">Signature<br><strong>${esc(sig.name)}</strong>${sig.title ? '<br>' + esc(sig.title) : ''}</div></div>
-    <div class="stampbox">Official stamp</div>
+    <div class="stampbox"></div>
   </div>`
 }
 

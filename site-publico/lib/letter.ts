@@ -38,7 +38,7 @@ export async function buildApprovalLetter(opts: {
   // Header: address on the left, logo on the right
   const logo = await loadLogo(doc);
   if (logo) {
-    const lh = 68;
+    const lh = 85;
     const lw = (logo.width / logo.height) * lh;
     page.drawImage(logo, { x: width - M - lw, y: height - 36 - lh, width: lw, height: lh });
   }
@@ -50,7 +50,7 @@ export async function buildApprovalLetter(opts: {
   y -= 12;
   text(`Reg. No: ${college.registrationNumber}  ·  Tax No: ${college.taxNumber}`, M, y, 9, font, muted);
 
-  y -= 28;
+  y -= 36;
   page.drawLine({ start: { x: M, y }, end: { x: width - M, y }, thickness: 1, color: rgb(0.85, 0.88, 0.9) });
   y -= 34;
 
@@ -123,7 +123,6 @@ export async function buildApprovalLetter(opts: {
   );
 
   y -= 4;
-  const sigY = y;
   text("Yours sincerely,", M, y, 11, font, ink);
   y -= 18;
   text("Office of the Registrar", M, y, 11, bold, ink);
@@ -131,13 +130,7 @@ export async function buildApprovalLetter(opts: {
   text(college.name, M, y, 11, font, muted);
 
   // No stamp image: the college stamps and signs the printed letter at school.
-  const bw = 140;
-  const bh = 64;
-  page.drawRectangle({
-    x: width - M - bw, y: sigY - bh + 10, width: bw, height: bh,
-    borderColor: rgb(0.6, 0.66, 0.7), borderWidth: 0.8, borderDashArray: [3, 3],
-  });
-  text("Official stamp", width - M - bw + 8, sigY - bh + 16, 8, font, muted);
+  // (blank space on the right of the signature: the college stamps wherever it fits)
 
   return doc.save();
 }
