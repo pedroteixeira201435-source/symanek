@@ -21,7 +21,7 @@ A **monorepo for Symanek Specialized College** (private Namibian higher-ed) with
 
 > **Mock-elimination / "empty-by-default" pass — DONE (2026-08-24).** Production carries ZERO mock data:
 > every module reads/writes the real backend, starting empty and populated through CRUD forms. All the
-> migrations below are **APPLIED to the cloud** (tracker in sync through `20261118120000`).
+> migrations below are **APPLIED to the cloud** (tracker in sync through `20261119120000`).
 > - **`src/data.js` is DELETED.** Import formatting/logic from `src/lib/*`: `format.js` (`fmtN`,
 >   `staffEmail`), `academics.js` (`gradeOf`, editable grade bands via `setGradeBands`), `institution.js`
 >   (`SCHOOL`, `INSTITUTION_HIDE`, `getInstType`). Never reference `data.js` — it no longer exists.
@@ -254,7 +254,7 @@ Reference examples: `Graduation.jsx`, `Library.jsx`, `Accounting.jsx`, `Accommod
   6-line "IMPORTANT DISCLAIMER" (`20261117120000`). CA mark = the saved `results.ca`, else the CA % computed from the
   module's assessments by `_student_ca` (same formula as `course_gradebook`, rounded to a whole number like "Fill CA
   from assessments"). Balance = open `invoices` (`_student_balance`); a student with no invoice shows "—", not N$ 0.
-  "Qualified" = ≥ 80% attendance and no hold (the only admission rule in the system; there is no CA threshold).
+  "Qualified" = ≥ 80% attendance AND a recorded CA ≥ 50% AND no hold (`20261119120000`; no CA recorded = not qualified).
   Keep one student on one A4 page: the layout was measured at ~245 mm of the 271 mm available for 6–8 sittings.
 - **React gotcha that broke the Marks tab**: never count inside a `setState` updater (`n++` in `setRows(rs => …)`) and
   read `n` afterwards — React runs updaters later, so `n` was 0, `setDirty(true)` never ran and "Save marks"
