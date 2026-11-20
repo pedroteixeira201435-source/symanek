@@ -5,6 +5,7 @@ import { gradeOf } from '../lib/academics.js'
 import { evaluateResult, POLICY_SUMMARY } from '../lib/academics.js'
 import { ATTENDANCE_MIN } from '../lib/controls.js'
 import * as api from '../api.js'
+import { printCourseSheet } from '../lib/documents.js'
 import { AssessmentsTab } from './Assessments.jsx'
 import { LiveClassesTab } from './LiveClasses.jsx'
 
@@ -104,6 +105,7 @@ function AttendanceTab({ course }) {
           <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)} />
             <input type="number" min="0.5" step="0.5" value={hours} onChange={(e) => setHours(e.target.value)} style={{ width: 64 }} title="Contact hours" />
+            <button className="btn ghost sm" onClick={() => printCourseSheet(course.id, 'attendance').catch((e) => showToast('Could not print' + (e?.message ? `: ${e.message}` : '')))} title="Print the attendance register of every recorded session, for filing">Print register</button>
             {editing && <button className="btn ghost sm" onClick={newRegister}>New register</button>}
             <button className="btn primary sm" onClick={save} disabled={busy}>{busy ? 'Saving…' : editing ? 'Save changes' : 'Save register'}</button>
           </span>

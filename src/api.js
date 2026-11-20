@@ -1086,6 +1086,8 @@ export async function getSignatories() {
 // The server applies the rules (holds, 80% attendance); src/lib/documents.js prints.
 export const getStudentDocument = (type, studentId = null) => one('student_document', { p_type: type, p_student: studentId })
 export const getExamPermits = () => one('exam_permits')
+// Lecturer printouts for one module: CA sheet + attendance register (20261120120000).
+export const getCourseSheet = (courseId) => one('course_print_sheet', { p_course: courseId })
 
 // ============================ AUTH / SESSION ============================
 // Phase 1: pick a role card (no password). Phase 2: real credentials + JWT/session,

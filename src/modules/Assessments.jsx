@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Panel, Badge, Modal, Toast, useToast, Icon } from '../ui.jsx'
 import * as api from '../api.js'
+import { printCourseSheet } from '../lib/documents.js'
 import { QuizBuilder, QuizGoLive, QuizMonitor, QUIZ_STATUS } from './Quizzes.jsx'
 
 // Tests, quizzes & other assessments per module. The lecturer defines each
@@ -34,7 +35,9 @@ export function AssessmentsTab({ course }) {
         <div>Create each <strong>test, quiz or practical</strong> here, then enter the students' marks — or add <strong>Questions</strong> (multiple choice, true/false, matching, short answer, paragraph, or a PDF question paper with scanned answer sheets) and run it as a <strong>live online quiz</strong>. Objective questions mark themselves; you mark paragraphs and answer sheets from the monitor. Graded assignments appear automatically. The <strong>CA %</strong> is the weighted average of everything marked so far — copy it into the Marks tab with “Fill CA from assessments”.</div>
       </div>
       <Panel title={`Assessments — ${course.code}`} subtitle={cols.length ? `${cols.length} in the gradebook` : undefined}
-        actions={<button className="btn primary sm" onClick={() => setEdit({})}>+ New test / quiz</button>} flush>
+        actions={<span style={{ display: 'flex', gap: 8 }}>
+          <button className="btn ghost sm" onClick={() => printCourseSheet(course.id, 'ca').catch((e) => showToast('Could not print' + (e?.message ? `: ${e.message}` : '')))} title="Print every assessment per student with the CA %, for filing">Print CA sheet</button>
+          <button className="btn primary sm" onClick={() => setEdit({})}>+ New test / quiz</button></span>} flush>
         {loading ? <Empty>Loading…</Empty> : cols.length === 0 ? <Empty>No assessments yet. Click “New test / quiz” to create the first one.</Empty> : (
           <table className="data">
             <thead><tr><th>Assessment</th><th>Type</th><th>Date</th><th className="num">Out of</th><th className="num">Weight</th><th className="num">Marked</th><th style={{ width: 330 }}>Action</th></tr></thead>
