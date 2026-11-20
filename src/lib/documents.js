@@ -237,12 +237,12 @@ export async function printExamPermits(only = null) {
 // over several pages (the student columns repeat) so nothing gets tiny.
 // ---------------------------------------------------------------------------
 const SHEET_CSS = `
-  @page { size: A4 landscape; margin: 10mm 12mm 12mm; }
-  .head .logo { height: 17mm; }
+  @page { size: A4 landscape; margin: 7mm 12mm 7mm; }
+  .head .logo { height: 30mm; }
   .head { padding-bottom: 5px; }
   h2 { margin: 4px 0 1px; font-size: 12pt; }
   table.sheet { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 8.5pt; table-layout: auto; }
-  table.sheet th, table.sheet td { border: 1px solid #9fb0bb; padding: 2px 4px; line-height: 1.2; }
+  table.sheet th, table.sheet td { border: 1px solid #9fb0bb; padding: 1.5px 4px; line-height: 1.15; }
   table.sheet th { background: #e8eef2; font-weight: 700; text-align: center; }
   table.sheet td.c { text-align: center; }
   table.sheet td.n, table.sheet th.n { text-align: left; white-space: nowrap; }
